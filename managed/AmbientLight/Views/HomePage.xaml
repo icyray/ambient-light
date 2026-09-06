@@ -65,7 +65,8 @@
                     <TextBlock x:Name="ModeTagText" Text="" Opacity="0.55" FontSize="11"
                                HorizontalAlignment="Right" VerticalAlignment="Bottom" />
                 </Grid>
-                <controls:LedRingView x:Name="Ring" Height="200" Margin="0,10,0,0" />
+                <!-- 高度由 LedRingView 按灯数/边数自适应 (纵向列不截断) -->
+                <controls:LedRingView x:Name="Ring" MinHeight="150" Margin="0,10,0,0" />
             </StackPanel>
         </ui:Card>
 

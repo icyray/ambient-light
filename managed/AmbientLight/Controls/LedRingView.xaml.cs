@@ -18,7 +18,9 @@ public partial class LedRingView : UserControl
     /// <summary>中心区提示副标题 (如 "MCU 特效由固件渲染")</summary>
     public void SetHint(string text) => HintText.Text = text;
 
-    /// <summary>布局变化 (灯数/边数/方向) 时重建椭圆; 签名相同则跳过</summary>
+    /// <summary>布局变化 (灯数/边数/方向) 时重建椭圆; 签名相同则跳过。
+    /// 椭圆尺寸同时受横向 (540px 预算) 与纵向 (340px 预算) 约束, 组件高度按
+    /// 纵向实际需要自适应 —— 固定高度会让左右列被截断。</summary>
     public void Configure(int ledCount, int sides, int direction)
     {
         int sig = ledCount | (sides << 10) | (direction << 14);
@@ -26,15 +28,19 @@ public partial class LedRingView : UserControl
         _signature = sig;
 
         var (top, bottom, left, right, maxPerSide) = BuildLayout(ledCount, sides, direction);
-        double size = Math.Clamp(540.0 / Math.Max(maxPerSide, 1) - 3.0, 4.0, 14.0);
-        _top = MakeStrip(top, size);
-        _bottom = MakeStrip(bottom, size);
-        _left = MakeStrip(left, size);
-        _right = MakeStrip(right, size);
+        int maxVert = Math.Max(Math.Max(left.Count, right.Count), 1);
+        double cell = Math.Clamp(
+            Math.Min(540.0 / Math.Max(maxPerSide, 1), 340.0 / (maxVert + 2)) - 3.0, 3.0, 14.0);
+        _top = MakeStrip(top, cell - 3.0);
+        _bottom = MakeStrip(bottom, cell - 3.0);
+        _left = MakeStrip(left, cell - 3.0);
+        _right = MakeStrip(right, cell - 3.0);
         TopStrip.ItemsSource = _top;
         BottomStrip.ItemsSource = _bottom;
         LeftStrip.ItemsSource = _left;
         RightStrip.ItemsSource = _right;
+        // 高度 = 左右列 (maxVert 颗) + 顶/底行各 1 颗的格位 + 余量
+        Height = Math.Clamp((maxVert + 2) * cell + 10, 150, 400);
     }
 
     /// <summary>按物理位置刷新颜色; rgb 为 543B 线帧 payload (RGB 序) 的前段</summary>
@@ -83,7 +89,7 @@ public partial class LedRingView : UserControl
         var list = new List<Ellipse>(indices.Count);
         foreach (var i in indices)
         {
-            double s = Math.Max(3.0, size - (indices.Count > 40 ? 1.5 : 0));
+            double s = Math.Max(2.5, size);
             list.Add(new Ellipse
             {
                 Width = s,
