@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/managed/">
+    <Project Path="managed/AmbientLight/AmbientLight.csproj" />
+  </Folder>
+</Solution>

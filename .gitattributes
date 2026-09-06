@@ -1,0 +1,20 @@
+# 换行策略: Windows 仓库; build.cmd 必须 CRLF (LF 会被 cmd 误解析)
+* text=auto
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.slnx text eol=crlf
+*.cs text eol=crlf
+*.xaml text eol=crlf
+*.cpp text eol=crlf
+*.h text eol=crlf
+*.md text eol=crlf
+*.json text eol=crlf
+*.manifest text eol=crlf
+*.csproj text eol=crlf
+
+# 二进制
+*.ico binary
+*.dll binary
+*.pdb binary
+*.png binary
