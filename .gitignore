@@ -7,3 +7,6 @@ native/AmbientCore/obj/
 managed/AmbientLight/log/
 config/
 *.aps
+
+# 本地构建的临时诊断 exe
+native/AmbientCore/test_enum.exe
