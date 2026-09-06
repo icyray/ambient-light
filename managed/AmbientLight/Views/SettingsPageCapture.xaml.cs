@@ -18,13 +18,16 @@ public partial class SettingsPageCapture : Page
     public SettingsPageCapture()
     {
         InitializeComponent();
+        Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
+        // 订阅放在 InitializeComponent 之后: 解析期 Value="60" 不会触发处理程序
+        LedCountBox.ValueChanged += (_, _) => OnLedCountValueChanged();
         Loaded += (_, _) => { _loading = true; LoadFromConfig(); _loading = false; };
     }
 
     private void LoadFromConfig()
     {
         var dev = ConfigStore.Device;
-        LedCountSlider.Value = Math.Clamp(dev.LedCount, 1, 180);
+        LedCountBox.Value = Math.Clamp(dev.LedCount, 1, 180);
         SidesCombo.SelectedIndex = Math.Clamp(dev.Sides, 2, 4) - 2;
         DirectionCombo.SelectedIndex = dev.Direction != 0 ? 1 : 0;
         CaptureRangeSlider.Value = Math.Clamp(dev.CaptureRange, 5, 40);
@@ -72,12 +75,14 @@ public partial class SettingsPageCapture : Page
         App.Instance.ApplyConfigDebounced();
     }
 
-    private void OnLedCountChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    private void OnLedCountValueChanged()
     {
-        if (LedCountValue != null) LedCountValue.Text = $"{(int)e.NewValue}";
         if (_loading) return;
-        ConfigStore.Device.LedCount = (int)e.NewValue;
-        App.Instance.ApplyConfigDebounced();
+        if (LedCountBox.Value is double v)
+        {
+            ConfigStore.Device.LedCount = (int)Math.Round(v);
+            App.Instance.ApplyConfigDebounced();
+        }
     }
 
     private void OnSidesChanged(object sender, SelectionChangedEventArgs e)

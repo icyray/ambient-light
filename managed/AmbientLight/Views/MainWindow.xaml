@@ -17,7 +17,8 @@
 
         <ui:NavigationView Grid.Row="1" x:Name="RootNav"
                            PaneDisplayMode="Left" IsBackButtonVisible="Collapsed"
-                           OpenPaneLength="160">
+                           OpenPaneLength="160"
+                           IsTopSeparatorVisible="False" IsFooterSeparatorVisible="False">
             <ui:NavigationView.MenuItems>
                 <ui:NavigationViewItem Content="主页" Icon="{ui:SymbolIcon Home24}"
                                        TargetPageType="{x:Type views:HomePage}" />

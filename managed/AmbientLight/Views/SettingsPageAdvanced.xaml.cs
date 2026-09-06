@@ -17,6 +17,7 @@ public partial class SettingsPageAdvanced : Page
     public SettingsPageAdvanced()
     {
         InitializeComponent();
+        Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
         Loaded += OnLoaded;
         Unloaded += (_, _) => App.Instance.PatternChanged -= OnPatternChanged;
     }

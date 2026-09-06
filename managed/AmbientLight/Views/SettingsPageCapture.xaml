@@ -1,128 +1,125 @@
 <Page x:Class="AmbientLight.Views.SettingsPageCapture"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:controls="clr-namespace:AmbientLight.Controls">
     <!-- 采集设置: 范围对齐厂商 FormSettings (captureRange 5-40 / 黑边等级 0-20 /
          平滑=采样步长 0,3,4,5px / fpsCap 对齐厂商 UpdateRate 5-20ms ≈ 50-200fps) -->
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="16,4,16,16" MaxWidth="760" HorizontalAlignment="Left">
+    <StackPanel Margin="16,4,16,16">
 
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="显示器" FontWeight="SemiBold" />
-                        <ui:Button Content="重新枚举" Appearance="Secondary" HorizontalAlignment="Right"
-                                   Click="OnRefreshMonitors" />
-                    </Grid>
-                    <ComboBox x:Name="MonitorCombo" Margin="0,8,0,0"
-                              DisplayMemberPath="Label" SelectionChanged="OnMonitorChanged" />
-                    <TextBlock Text="追光画面来源; 拓扑变化后核心自动回退主屏并在主页提示。"
-                               Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-                </StackPanel>
-            </ui:Card>
-
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="灯数" FontWeight="SemiBold" />
-                        <TextBlock x:Name="LedCountValue" Text="60" HorizontalAlignment="Right" />
-                    </Grid>
-                    <Slider x:Name="LedCountSlider" Minimum="1" Maximum="180" Value="60"
-                            ValueChanged="OnLedCountChanged" Margin="0,8,0,0" />
-                    <TextBlock Text="固件定长帧上限 180 灯; 横竖边按屏幕宽高比自动分配。"
-                               Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-                </StackPanel>
-            </ui:Card>
-
-            <ui:Card Margin="0,0,0,8">
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                        <TextBlock Text="灯带布局" FontWeight="SemiBold" />
-                        <ComboBox x:Name="SidesCombo" Margin="0,8,0,0" SelectionChanged="OnSidesChanged">
-                            <ComboBoxItem Content="(2 边) 左、右" />
-                            <ComboBoxItem Content="(3 边) 左、右、上" />
-                            <ComboBoxItem Content="(4 边) 左、右、上、下" />
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                        <TextBlock Text="起始方向" FontWeight="SemiBold" />
-                        <ComboBox x:Name="DirectionCombo" Margin="0,8,0,0" SelectionChanged="OnDirectionChanged">
-                            <ComboBoxItem Content="逆时针 (右下起)" />
-                            <ComboBoxItem Content="顺时针 (左下起)" />
-                        </ComboBox>
-                    </StackPanel>
+                    <TextBlock Text="显示器" FontWeight="SemiBold" />
+                    <ui:Button Content="重新枚举" Appearance="Secondary" HorizontalAlignment="Right"
+                               Click="OnRefreshMonitors" />
                 </Grid>
-            </ui:Card>
+                <ComboBox x:Name="MonitorCombo" Margin="0,8,0,0"
+                          DisplayMemberPath="Label" SelectionChanged="OnMonitorChanged" />
+                <TextBlock Text="追光画面来源; 拓扑变化后核心自动回退主屏并在主页提示。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
 
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="追光范围" FontWeight="SemiBold" />
-                        <TextBlock x:Name="CaptureRangeValue" Text="15" HorizontalAlignment="Right" />
-                    </Grid>
-                    <Slider x:Name="CaptureRangeSlider" Minimum="5" Maximum="40" Value="15"
-                            ValueChanged="OnCaptureRangeChanged" Margin="0,8,0,0" />
-                    <TextBlock Text="取色带深度系数: 深度 = H/100 × 范围/2。范围越大, 远离边缘的画面也参与取色。"
-                               Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-                </StackPanel>
-            </ui:Card>
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock Text="灯数" FontWeight="SemiBold" />
+                <ui:NumberBox x:Name="LedCountBox" Minimum="1" Maximum="180" Value="60"
+                              SmallChange="1" MaxDecimalPlaces="0" Width="160"
+                              HorizontalAlignment="Left" Margin="0,8,0,0" />
+                <TextBlock Text="固件定长帧上限 180 灯; 横竖边按屏幕宽高比自动分配。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
 
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <TextBlock Text="追光平滑" FontWeight="SemiBold" />
-                    <ComboBox x:Name="SmoothingCombo" Margin="0,8,0,0" SelectionChanged="OnSmoothingChanged">
-                        <ComboBoxItem Content="关闭 (逐灯采样, 细节最准)" />
-                        <ComboBoxItem Content="平滑 (性能影响最低)" />
-                        <ComboBoxItem Content="更平滑 (性能影响中等)" />
-                        <ComboBoxItem Content="最平滑 (性能影响最大)" />
+        <ui:Card Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                    <TextBlock Text="灯带布局" FontWeight="SemiBold" />
+                    <ComboBox x:Name="SidesCombo" Margin="0,8,0,0" SelectionChanged="OnSidesChanged">
+                        <ComboBoxItem Content="(2 边) 左、右" />
+                        <ComboBoxItem Content="(3 边) 左、右、上" />
+                        <ComboBoxItem Content="(4 边) 左、右、上、下" />
                     </ComboBox>
-                    <TextBlock Text="相邻灯共享采样点 (步长 3/4/5 px), 更平滑但失去追光细节。"
-                               Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
                 </StackPanel>
-            </ui:Card>
-
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <TextBlock Text="刷新率上限" FontWeight="SemiBold" />
-                    <ComboBox x:Name="FpsCapCombo" Margin="0,8,0,0" SelectionChanged="OnFpsCapChanged">
-                        <ComboBoxItem Content="不限 (事件驱动)" />
-                        <ComboBoxItem Content="240 fps" />
-                        <ComboBoxItem Content="165 fps" />
-                        <ComboBoxItem Content="144 fps" />
-                        <ComboBoxItem Content="120 fps" />
-                        <ComboBoxItem Content="90 fps" />
-                        <ComboBoxItem Content="60 fps" />
-                        <ComboBoxItem Content="30 fps" />
+                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                    <TextBlock Text="起始方向" FontWeight="SemiBold" />
+                    <ComboBox x:Name="DirectionCombo" Margin="0,8,0,0" SelectionChanged="OnDirectionChanged">
+                        <ComboBoxItem Content="逆时针 (右下起)" />
+                        <ComboBoxItem Content="顺时针 (左下起)" />
                     </ComboBox>
-                    <TextBlock Text="限制核心处理帧率以降低 CPU/串口占用。"
-                               Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
                 </StackPanel>
-            </ui:Card>
+            </Grid>
+        </ui:Card>
 
-            <ui:Card>
-                <StackPanel>
-                    <Grid>
-                        <StackPanel>
-                            <TextBlock Text="黑边自适应" FontWeight="SemiBold" />
-                            <TextBlock Text="画面有黑边 (电影/宽屏) 时自动收缩取色边框"
-                                       Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
-                        </StackPanel>
-                        <ui:ToggleSwitch x:Name="BlackBarsToggle" HorizontalAlignment="Right"
-                                         IsChecked="True" Click="OnBlackBarsChanged" />
-                    </Grid>
-                    <Grid Margin="0,10,0,0">
-                        <TextBlock Text="黑边判定等级" />
-                        <TextBlock x:Name="BlackBarLevelValue" Text="3" HorizontalAlignment="Right" />
-                    </Grid>
-                    <Slider x:Name="BlackBarLevelSlider" Minimum="0" Maximum="20" Value="3"
-                            ValueChanged="OnBlackBarLevelChanged" Margin="0,8,0,0" />
-                </StackPanel>
-            </ui:Card>
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="追光范围" FontWeight="SemiBold" />
+                    <TextBlock x:Name="CaptureRangeValue" Text="15" HorizontalAlignment="Right" />
+                </Grid>
+                <Slider x:Name="CaptureRangeSlider" controls:SliderJump.Enabled="True" Minimum="5" Maximum="40" Value="15"
+                        ValueChanged="OnCaptureRangeChanged" Margin="0,8,0,0" />
+                <TextBlock Text="取色带深度系数: 深度 = H/100 × 范围/2。范围越大, 远离边缘的画面也参与取色。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
 
-        </StackPanel>
-    </ScrollViewer>
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock Text="追光平滑" FontWeight="SemiBold" />
+                <ComboBox x:Name="SmoothingCombo" Margin="0,8,0,0" SelectionChanged="OnSmoothingChanged">
+                    <ComboBoxItem Content="关闭 (逐灯采样, 细节最准)" />
+                    <ComboBoxItem Content="平滑 (性能影响最低)" />
+                    <ComboBoxItem Content="更平滑 (性能影响中等)" />
+                    <ComboBoxItem Content="最平滑 (性能影响最大)" />
+                </ComboBox>
+                <TextBlock Text="相邻灯共享采样点 (步长 3/4/5 px), 更平滑但失去追光细节。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
+
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock Text="刷新率上限" FontWeight="SemiBold" />
+                <ComboBox x:Name="FpsCapCombo" Margin="0,8,0,0" SelectionChanged="OnFpsCapChanged">
+                    <ComboBoxItem Content="不限 (事件驱动)" />
+                    <ComboBoxItem Content="240 fps" />
+                    <ComboBoxItem Content="165 fps" />
+                    <ComboBoxItem Content="144 fps" />
+                    <ComboBoxItem Content="120 fps" />
+                    <ComboBoxItem Content="90 fps" />
+                    <ComboBoxItem Content="60 fps" />
+                    <ComboBoxItem Content="30 fps" />
+                </ComboBox>
+                <TextBlock Text="限制核心处理帧率以降低 CPU/串口占用。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
+
+        <ui:Card>
+            <StackPanel>
+                <Grid>
+                    <StackPanel>
+                        <TextBlock Text="黑边自适应" FontWeight="SemiBold" />
+                        <TextBlock Text="画面有黑边 (电影/宽屏) 时自动收缩取色边框"
+                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ui:ToggleSwitch x:Name="BlackBarsToggle" HorizontalAlignment="Right"
+                                     IsChecked="True" Click="OnBlackBarsChanged" />
+                </Grid>
+                <Grid Margin="0,10,0,0">
+                    <TextBlock Text="黑边判定等级" />
+                    <TextBlock x:Name="BlackBarLevelValue" Text="3" HorizontalAlignment="Right" />
+                </Grid>
+                <Slider x:Name="BlackBarLevelSlider" controls:SliderJump.Enabled="True" Minimum="0" Maximum="20" Value="3"
+                        ValueChanged="OnBlackBarLevelChanged" Margin="0,8,0,0" />
+            </StackPanel>
+        </ui:Card>
+
+    </StackPanel>
 </Page>

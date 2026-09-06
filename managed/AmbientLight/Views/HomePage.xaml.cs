@@ -20,6 +20,7 @@ public partial class HomePage : Page
     public HomePage()
     {
         InitializeComponent();
+        Controls.WheelScroll.Attach(this);      // 滚轮滚动由外层滚动器承担
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -215,60 +216,10 @@ public partial class HomePage : Page
     private void OnToggle(object sender, RoutedEventArgs e) => App.Instance.ToggleCore();
 
     // ---- 亮度 (节流下发: 首次立即生效, 拖动中每 40ms 一次, 收尾补发最终值) ----
+    // 轨道点击跳转/跟手拖动由 SliderJump 附加行为接管 (与设置页滑条一致)
     private const double BrightnessThrottleMs = 40;
     private DateTime _lastBrightnessApply = DateTime.MinValue;
     private DispatcherTimer? _brightnessFlushTimer;
-    private bool _trackDragActive;              // 轨道点击拖动中 (鼠标已被 Slider 捕获)
-
-    // "指哪打哪": 按下轨道 → 跳到点击点并捕获鼠标; 移动 → 持续跟随; 松开 → 释放。
-    // 点在滑块上则不接管, 交给原生 Thumb 拖动。
-    private void BrightnessSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ChangedButton != MouseButton.Left ||
-            sender is not Slider s ||
-            s.Template?.FindName("PART_Track", s) is not System.Windows.Controls.Primitives.Track t ||
-            t.Thumb == null || t.Thumb.IsMouseOver)
-            return;
-
-        _trackDragActive = true;
-        s.CaptureMouse();
-        JumpTrackValue(t, e);
-        e.Handled = true;                       // 吞掉事件, 轨道 RepeatButton 不再参与
-    }
-
-    private void BrightnessSlider_PreviewMouseMove(object sender, MouseEventArgs e)
-    {
-        if (!_trackDragActive) return;
-        if (sender is Slider s &&
-            s.Template?.FindName("PART_Track", s) is System.Windows.Controls.Primitives.Track t)
-            JumpTrackValue(t, e);
-    }
-
-    private void BrightnessSlider_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ChangedButton != MouseButton.Left) return;
-        _trackDragActive = false;
-        if (sender is Slider s && s.IsMouseCaptured)
-            s.ReleaseMouseCapture();
-    }
-
-    private void BrightnessSlider_LostMouseCapture(object? sender, MouseEventArgs e)
-        => _trackDragActive = false;            // 捕获意外丢失 (如 alt-tab) 时终止拖动
-
-    private void JumpTrackValue(System.Windows.Controls.Primitives.Track t, MouseEventArgs e)
-    {
-        // 不用 Track.ValueFromPoint: 它是 Track.Value+delta 的增量式计算, 依赖最近一次
-        // arrange 缓存的 ThumbCenterOffset/Density, 在 WPF-UI 模板下与实际几何不一致
-        // (实测点击轨道正中会得到 0)。这里用纯几何自算: 滑块中心对准点击点。
-        var pt = e.GetPosition(t);
-        double w = t.Thumb?.ActualWidth ?? 0.0;
-        double len = t.ActualWidth;
-        if (len <= 0) return;
-        double ratio = (pt.X - w / 2.0) / Math.Max(1.0, len - w);
-        ratio = Math.Clamp(ratio, 0.0, 1.0);
-        BrightnessSlider.Value = BrightnessSlider.Minimum +
-                                 ratio * (BrightnessSlider.Maximum - BrightnessSlider.Minimum);
-    }
 
     private void OnBrightnessChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {

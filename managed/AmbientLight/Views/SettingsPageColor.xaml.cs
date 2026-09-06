@@ -24,6 +24,7 @@ public partial class SettingsPageColor : Page
     public SettingsPageColor()
     {
         InitializeComponent();
+        Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
         Loaded += (_, _) => { _loading = true; LoadFromConfig(); _loading = false; };
         BuildPresets();
     }

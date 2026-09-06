@@ -3,130 +3,124 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:AmbientLight.Controls">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="16,4,16,16" MaxWidth="760" HorizontalAlignment="Left">
+    <StackPanel Margin="16,4,16,16">
 
-            <!-- 总开关 + 状态 -->
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock x:Name="StateText" Text="已停止" FontSize="20" FontWeight="SemiBold" />
-                            <TextBlock x:Name="PortText" Text="未连接设备" Opacity="0.7" Margin="0,2,0,0" />
-                        </StackPanel>
-                        <ui:Button x:Name="ToggleBtn" Grid.Column="1" Appearance="Primary"
-                                   Content="开启" Padding="24,8" Click="OnToggle" VerticalAlignment="Center" />
-                    </Grid>
-                    <TextBlock x:Name="DiagText" Text="" Opacity="0.6" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Visibility="Collapsed" />
-                </StackPanel>
-            </ui:Card>
-
-            <!-- 运行指标 -->
-            <ui:Card Margin="0,0,0,8">
+        <!-- 总开关 + 状态 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="帧率" Opacity="0.6" FontSize="11" />
-                        <TextBlock x:Name="FpsText" Text="0.0" FontSize="16" />
+                        <TextBlock x:Name="StateText" Text="已停止" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock x:Name="PortText" Text="未连接设备" Opacity="0.7" Margin="0,2,0,0" />
                     </StackPanel>
-                    <StackPanel Grid.Column="1">
-                        <TextBlock Text="已发帧" Opacity="0.6" FontSize="11" />
-                        <TextBlock x:Name="FramesText" Text="0" FontSize="16" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="处理耗时" Opacity="0.6" FontSize="11" />
-                        <TextBlock x:Name="ProcText" Text="0 ms" FontSize="16" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="3">
-                        <TextBlock Text="串口写入" Opacity="0.6" FontSize="11" />
-                        <TextBlock x:Name="WireText" Text="0 ms" FontSize="16" />
-                    </StackPanel>
+                    <ui:Button x:Name="ToggleBtn" Grid.Column="1" Appearance="Primary"
+                               Content="开启" Padding="24,8" Click="OnToggle" VerticalAlignment="Center" />
                 </Grid>
-            </ui:Card>
+                <TextBlock x:Name="DiagText" Text="" Opacity="0.6" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Visibility="Collapsed" />
+            </StackPanel>
+        </ui:Card>
 
-            <!-- 异常提示 (显示器回退 / 全黑帧) -->
-            <TextBlock x:Name="WarnText" Text="" Foreground="Orange" TextWrapping="Wrap"
-                       Margin="4,0,4,8" Visibility="Collapsed" />
-
-            <!-- 灯带预览 -->
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="灯带预览" FontWeight="SemiBold" />
-                        <TextBlock x:Name="ModeTagText" Text="" Opacity="0.55" FontSize="11"
-                                   HorizontalAlignment="Right" VerticalAlignment="Bottom" />
-                    </Grid>
-                    <controls:LedRingView x:Name="Ring" Height="200" Margin="0,10,0,0" />
+        <!-- 运行指标 -->
+        <ui:Card Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="帧率" Opacity="0.6" FontSize="11" />
+                    <TextBlock x:Name="FpsText" Text="0.0" FontSize="16" />
                 </StackPanel>
-            </ui:Card>
-
-            <!-- 亮度 -->
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="亮度" FontWeight="SemiBold" />
-                        <TextBlock x:Name="BrightnessValueText" Text="100%" HorizontalAlignment="Right" />
-                    </Grid>
-                    <!-- 轨道点击/拖动由代码接管 (Preview 事件 + 鼠标捕获): 跳到点击点
-                         并按住跟手拖动; LargeChange=0 兜底防 RepeatButton 多走一步。
-                         ValueChanged 不能在 XAML 接线: InitializeComponent 设初值时
-                         会在读取配置前触发 OnBrightnessChanged, 把默认值写进配置文件 -->
-                    <Slider x:Name="BrightnessSlider" Minimum="0" Maximum="100" Value="100"
-                            LargeChange="0"
-                            PreviewMouseLeftButtonDown="BrightnessSlider_PreviewMouseLeftButtonDown"
-                            PreviewMouseMove="BrightnessSlider_PreviewMouseMove"
-                            PreviewMouseLeftButtonUp="BrightnessSlider_PreviewMouseLeftButtonUp"
-                            LostMouseCapture="BrightnessSlider_LostMouseCapture"
-                            Margin="0,8,0,0" />
-                    <TextBlock Text="主机渲染模式 (屏幕追光/纯色) 生效; MCU 特效由固件自渲染。"
-                               Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="已发帧" Opacity="0.6" FontSize="11" />
+                    <TextBlock x:Name="FramesText" Text="0" FontSize="16" />
                 </StackPanel>
-            </ui:Card>
-
-            <!-- 模式选择 -->
-            <ui:Card Margin="0,0,0,8">
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="模式" FontWeight="SemiBold" />
-                        <TextBlock Text="MCU 特效由灯带固件渲染, 主机仅发 3 字节命令"
-                                   Opacity="0.45" FontSize="11" HorizontalAlignment="Right"
-                                   VerticalAlignment="Bottom" />
-                    </Grid>
-                    <UniformGrid x:Name="ModeGrid" Columns="4" Margin="0,10,0,0" />
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="处理耗时" Opacity="0.6" FontSize="11" />
+                    <TextBlock x:Name="ProcText" Text="0 ms" FontSize="16" />
                 </StackPanel>
-            </ui:Card>
-
-            <!-- 设备 / 显示器 -->
-            <ui:Card>
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="设备" FontWeight="SemiBold" />
-                        <ui:Button Content="刷新" Appearance="Secondary" HorizontalAlignment="Right"
-                                   Click="OnRefreshDevices" />
-                    </Grid>
-                    <TextBlock x:Name="DevicesText" Text="点击刷新探测灯带…" Margin="0,8,0,0"
-                               TextWrapping="Wrap" FontSize="12" />
-                    <Separator Margin="0,10" />
-                    <TextBlock Text="显示器" FontWeight="SemiBold" />
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <TextBlock x:Name="MonitorsText" Text="" TextWrapping="Wrap" FontSize="12"
-                                   VerticalAlignment="Center" />
-                        <ui:Button x:Name="MonRefreshBtn" Content="重新枚举" Appearance="Secondary"
-                                   Margin="8,0,0,0" Click="OnRefreshMonitorsClick" />
-                    </StackPanel>
+                <StackPanel Grid.Column="3">
+                    <TextBlock Text="串口写入" Opacity="0.6" FontSize="11" />
+                    <TextBlock x:Name="WireText" Text="0 ms" FontSize="16" />
                 </StackPanel>
-            </ui:Card>
+            </Grid>
+        </ui:Card>
 
-        </StackPanel>
-    </ScrollViewer>
+        <!-- 异常提示 (显示器回退 / 全黑帧) -->
+        <TextBlock x:Name="WarnText" Text="" Foreground="Orange" TextWrapping="Wrap"
+                   Margin="4,0,4,8" Visibility="Collapsed" />
+
+        <!-- 灯带预览 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="灯带预览" FontWeight="SemiBold" />
+                    <TextBlock x:Name="ModeTagText" Text="" Opacity="0.55" FontSize="11"
+                               HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                </Grid>
+                <controls:LedRingView x:Name="Ring" Height="200" Margin="0,10,0,0" />
+            </StackPanel>
+        </ui:Card>
+
+        <!-- 亮度 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="亮度" FontWeight="SemiBold" />
+                    <TextBlock x:Name="BrightnessValueText" Text="100%" HorizontalAlignment="Right" />
+                </Grid>
+                <!-- 轨道点击/拖动由 SliderJump 附加行为接管: 跳到点击点并按住
+                     跟手拖动; LargeChange=0 兜底防 RepeatButton 多走一步。
+                     ValueChanged 不能在 XAML 接线: InitializeComponent 设初值时
+                     会在读取配置前触发 OnBrightnessChanged, 把默认值写进配置文件 -->
+                <Slider x:Name="BrightnessSlider" Minimum="0" Maximum="100" Value="100"
+                        LargeChange="0" controls:SliderJump.Enabled="True"
+                        Margin="0,8,0,0" />
+                <TextBlock Text="主机渲染模式 (屏幕追光/纯色) 生效; MCU 特效由固件自渲染。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
+
+        <!-- 模式选择 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="模式" FontWeight="SemiBold" />
+                    <TextBlock Text="MCU 特效由灯带固件渲染, 主机仅发 3 字节命令"
+                               Opacity="0.45" FontSize="11" HorizontalAlignment="Right"
+                               VerticalAlignment="Bottom" />
+                </Grid>
+                <UniformGrid x:Name="ModeGrid" Columns="4" Margin="0,10,0,0" />
+            </StackPanel>
+        </ui:Card>
+
+        <!-- 设备 / 显示器 -->
+        <ui:Card>
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="设备" FontWeight="SemiBold" />
+                    <ui:Button Content="刷新" Appearance="Secondary" HorizontalAlignment="Right"
+                               Click="OnRefreshDevices" />
+                </Grid>
+                <TextBlock x:Name="DevicesText" Text="点击刷新探测灯带…" Margin="0,8,0,0"
+                           TextWrapping="Wrap" FontSize="12" />
+                <Separator Margin="0,10" />
+                <TextBlock Text="显示器" FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <TextBlock x:Name="MonitorsText" Text="" TextWrapping="Wrap" FontSize="12"
+                               VerticalAlignment="Center" />
+                    <ui:Button x:Name="MonRefreshBtn" Content="重新枚举" Appearance="Secondary"
+                               Margin="8,0,0,0" Click="OnRefreshMonitorsClick" />
+                </StackPanel>
+            </StackPanel>
+        </ui:Card>
+
+    </StackPanel>
 </Page>
