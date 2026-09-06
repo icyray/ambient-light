@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>AmbientLight</RootNamespace>
+    <AssemblyName>AmbientLight</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+    <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- 发布形态: self-contained 目录 + AmbientCore.dll 裸放旁边; 单文件 exe 暂缓 (用户决策) -->
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <!-- native 核心: 源码变化时自动 cl 重建 -->
+  <Target Name="BuildNativeCore" BeforeTargets="BeforeBuild"
+          Inputs="..\..\native\AmbientCore\AmbientCore.cpp;..\..\native\AmbientCore\capture.cpp;..\..\native\AmbientCore\colorchain.cpp;..\..\native\AmbientCore\serial.cpp;..\..\native\AmbientCore\log.cpp;..\..\native\AmbientCore\AmbientCore.h;..\..\native\AmbientCore\capture.h;..\..\native\AmbientCore\colorchain.h;..\..\native\AmbientCore\serial.h;..\..\native\AmbientCore\log.h"
+          Outputs="..\..\native\AmbientCore\bin\AmbientCore.dll">
+    <Exec Command="..\..\native\AmbientCore\build.cmd" />
+  </Target>
+
+  <!-- 产物复制到输出目录 (exe 旁裸放); None 项进 publish 管线, Copy 目标保证 Build 每次都刷新 -->
+  <ItemGroup>
+    <None Include="..\..\native\AmbientCore\bin\AmbientCore.dll"
+          Condition="Exists('..\..\native\AmbientCore\bin\AmbientCore.dll')"
+          CopyToOutputDirectory="PreserveNewest" Link="AmbientCore.dll" Visible="false" />
+  </ItemGroup>
+  <Target Name="CopyNativeCore" AfterTargets="Build"
+          Condition="Exists('..\..\native\AmbientCore\bin\AmbientCore.dll')">
+    <Copy SourceFiles="..\..\native\AmbientCore\bin\AmbientCore.dll"
+          DestinationFiles="$(OutDir)AmbientCore.dll"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
