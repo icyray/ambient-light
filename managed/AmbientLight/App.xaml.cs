@@ -2,6 +2,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using AmbientLight.Interop;
 using AmbientLight.Services;
 using AmbientLight.Views;
@@ -47,6 +48,21 @@ public partial class App : Application
 
         base.OnStartup(e);
         _instance = this;
+
+        // UI 线程兜底: 记录日志并提示 (M4 将扩展 AppDomain.UnhandledException 全量兜底)
+        DispatcherUnhandledException += (_, e) =>
+        {
+            try
+            {
+                var logDir = ConfigStore.ConfigDir.Length > 0 ? ConfigStore.ConfigDir : ".";
+                File.AppendAllText(Path.Combine(logDir, "crash.log"),
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {e.Exception}\r\n");
+            }
+            catch { /* 日志失败不再抛 */ }
+            MessageBox.Show($"界面线程异常: {e.Exception.Message}\n{e.Exception.StackTrace}",
+                "AmbientLight", MessageBoxButton.OK, MessageBoxImage.Error);
+            e.Handled = true;
+        };
 
         ConfigStore.Load();
         InitTray();
@@ -111,6 +127,33 @@ public partial class App : Application
         if (_coreRunning)
             AmbientCore.SetConfig(ref cfg);
         ConfigStore.SaveDevice();
+    }
+
+    private DispatcherTimer? _applyDebounce;
+
+    /// <summary>设置页滑条防抖应用 (停止变更 200ms 后热更+落盘一次)</summary>
+    public void ApplyConfigDebounced(double ms = 200)
+    {
+        if (_applyDebounce == null)
+        {
+            _applyDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ms) };
+            _applyDebounce.Tick += (_, _) => { _applyDebounce!.Stop(); ApplyConfig(); };
+        }
+        _applyDebounce.Interval = TimeSpan.FromMilliseconds(ms);
+        _applyDebounce.Stop();
+        _applyDebounce.Start();
+    }
+
+    // ---- 测试图 (高级页; 覆盖正常内容, 再点同钮关闭) --------------------
+    public int ActivePattern { get; private set; }
+    public event Action? PatternChanged;
+
+    public void SetPattern(int mode)
+    {
+        int next = ActivePattern == mode ? 0 : mode;
+        AmbientCore.SetTestPattern(next);
+        ActivePattern = next;
+        PatternChanged?.Invoke();
     }
 
     private void OnCoreStateChanged(int oldState, int newState)

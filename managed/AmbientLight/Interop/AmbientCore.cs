@@ -36,6 +36,39 @@ public static unsafe partial class AmbientCore
     public const int ErrAlreadyRunning = 5;
     public const int ErrInternal = 6;
 
+    public const int MaxLeds = 180;                 // 固件定长帧上限
+
+    // ---- 模式表 (modeIndex → 名称, 与厂商 lang/zh 一致) ----
+    public static readonly (int Index, string Name, string Kind)[] Modes =
+    {
+        (0,  "屏幕追光", "主机渲染"),
+        (1,  "拾音律动", "M3"),
+        (2,  "彩虹跳跃", "MCU"),
+        (3,  "海浪潮汐", "MCU"),
+        (4,  "电闪雷鸣", "MCU"),
+        (5,  "呼吸心跳", "MCU"),
+        (6,  "火焰燃烧", "MCU"),
+        (7,  "南极光彩", "MCU"),
+        (8,  "粒子碰撞", "MCU"),
+        (9,  "圣诞节日", "MCU"),
+        (10, "变幻莫测", "MCU"),
+        (11, "纯色灯光", "主机渲染"),
+        (12, "浓情夏日", "MCU"),
+        (13, "北极冰山", "MCU"),
+    };
+
+    /// <summary>MCU 特效模式 (3B 命令透传, 特效由固件渲染)</summary>
+    public static bool IsMcuMode(int m) => (m >= 2 && m <= 10) || m == 12 || m == 13;
+
+    /// <summary>主机渲染灯帧的模式 (ACStatus.ledRgb 有实时数据)</summary>
+    public static bool IsHostFrameMode(int m) => m == 0 || m == 11;
+
+    public static string ModeName(int m)
+    {
+        foreach (var (i, name, _) in Modes) if (i == m) return name;
+        return $"未知 ({m})";
+    }
+
     // ---- 原生导出 ----
     [LibraryImport(Lib)]
     private static partial uint AC_Version();
@@ -221,6 +254,7 @@ public unsafe struct ACStatus
     public float cpuPercent;
     public fixed int margins[4];
     public uint frameCounter;
+    public fixed byte ledRgb[540];              // MaxLeds*3: 最近下发帧 RGB (主机渲染模式)
 
     public string ComPort
     {
@@ -233,6 +267,17 @@ public unsafe struct ACStatus
                 return Encoding.UTF8.GetString(p, n);
             }
         }
+    }
+
+    /// <summary>ledRgb 快照拷贝 (540B, 前 ledCount*3 有效; 主机渲染模式)</summary>
+    public byte[] CopyLedRgb()
+    {
+        var buf = new byte[AmbientCore.MaxLeds * 3];
+        fixed (byte* p = ledRgb)
+        {
+            Marshal.Copy((IntPtr)p, buf, 0, buf.Length);
+        }
+        return buf;
     }
 }
 

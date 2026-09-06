@@ -1,6 +1,7 @@
-// AmbientCore.h — 公共 C ABI (v1.0, x64 cdecl, 未修饰导出)
+// AmbientCore.h — 公共 C ABI (v1.2, x64 cdecl, 未修饰导出)
 // 合同来源: docs/AmbientCore_API.md。规则:
-//   - 结构体以 structSize 开头, 新增字段只能追加在末尾 (v1.1 增补: colorfix/sfloor, 见末尾注释)
+//   - 结构体以 structSize 开头, 新增字段只能追加在末尾
+//     (v1.1 增补: ACConfig.colorfix/sfloor; v1.2 增补: ACStatus.ledRgb)
 //   - 字符串一律 UTF-8, 缓冲由调用方分配, DLL 不跨边界分配/释放
 //   - v1 明确不做: 回调、跨 ABI 分配、宽字符接口、x86
 #pragma once
@@ -20,6 +21,7 @@
 #define AC_MAX_DEVICES  8
 #define AC_PORT_LEN     16      // "COM5"
 #define AC_NAME_LEN     32
+#define AC_MAX_LEDS     180     // 固件定长帧上限 (3+180*3=543B)
 
 // 设备类型 = 握手应答字节解码 (0x80 | type<<2 | devId)
 typedef enum {
@@ -102,6 +104,10 @@ typedef struct ACStatus {
     float    cpuPercent;        // 核心线程 CPU% (预留, M2)
     int32_t  margins[4];        // 黑边 margin {底,右,顶,左}
     uint32_t frameCounter;      // 已发送帧数 (UI 判断是否在动)
+    // v1.2 增补 (M2): 最近一帧实际下发的 LED 颜色, 前 ledCount*3 字节有效 (RGB 序,
+    // 已过颜色链与输出色序, 即串口帧 payload); 追光/纯色/测试图模式随帧刷新,
+    // MCU 特效模式 (2..10,12,13) 由 MCU 自渲染, 恒为 0
+    uint8_t  ledRgb[AC_MAX_LEDS * 3];
 } ACStatus;
 
 // ---- 显示器 / 设备枚举 ------------------------------------------------

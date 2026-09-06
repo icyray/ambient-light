@@ -1,0 +1,93 @@
+// SettingsPageAdvanced.xaml.cs — 高级设置: minB/熄屏策略/colorfix + 测试图 + 配置目录
+using System.Diagnostics;
+using System.Windows;
+using System.Windows.Controls;
+using AmbientLight.Interop;
+using AmbientLight.Services;
+using Wpf.Ui.Controls;
+
+namespace AmbientLight.Views;
+
+public partial class SettingsPageAdvanced : Page
+{
+    // ComboBox 显示序 (熄灭/最暗/保持) ↔ 配置值 (2/1/0)
+    private static readonly int[] PolicyChoices = [2, 1, 0];
+    private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
+
+    public SettingsPageAdvanced()
+    {
+        InitializeComponent();
+        Loaded += OnLoaded;
+        Unloaded += (_, _) => App.Instance.PatternChanged -= OnPatternChanged;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _loading = true;
+        var dev = ConfigStore.Device;
+        MinBrightnessSlider.Value = Math.Clamp(dev.MinBrightness, 1, 25);
+        WaitDispCombo.SelectedIndex = Array.IndexOf(PolicyChoices, dev.WaitDispPolicy) is >= 0 and int i ? i : 0;
+        ColorfixToggle.IsChecked = dev.Colorfix;
+        SfloorSlider.Value = Math.Clamp(dev.Sfloor, 0, 255);
+        ConfigDirText.Text = $"{ConfigStore.ConfigDir}  ({ConfigStore.ConfigDirSource})";
+        VersionText.Text = $"AmbientLight {GetType().Assembly.GetName().Version?.ToString(3)} · AmbientCore v{(AmbientCore.Version() >> 16) & 0xFF}.{(AmbientCore.Version() >> 8) & 0xFF}.{AmbientCore.Version() & 0xFF}";
+        _loading = false;
+
+        RefreshPatternButtons();
+        App.Instance.PatternChanged += OnPatternChanged;
+    }
+
+    private void OnPatternChanged() => RefreshPatternButtons();
+
+    private void RefreshPatternButtons()
+    {
+        int active = App.Instance.ActivePattern;
+        PatternQuadBtn.Appearance = active == 1 ? ControlAppearance.Primary : ControlAppearance.Secondary;
+        PatternMagentaBtn.Appearance = active == 2 ? ControlAppearance.Primary : ControlAppearance.Secondary;
+    }
+
+    private void OnMinBrightnessChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (MinBrightnessValue != null) MinBrightnessValue.Text = $"{(int)e.NewValue}";
+        if (_loading) return;
+        ConfigStore.Device.MinBrightness = (int)e.NewValue;
+        App.Instance.ApplyConfigDebounced();
+    }
+
+    private void OnWaitDispChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || WaitDispCombo.SelectedIndex < 0) return;
+        ConfigStore.Device.WaitDispPolicy = PolicyChoices[WaitDispCombo.SelectedIndex];
+        App.Instance.ApplyConfigDebounced();
+    }
+
+    private void OnColorfixChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        ConfigStore.Device.Colorfix = ColorfixToggle.IsChecked == true;
+        App.Instance.ApplyConfigDebounced();
+    }
+
+    private void OnSfloorChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (SfloorValue != null) SfloorValue.Text = $"{(int)e.NewValue}";
+        if (_loading) return;
+        ConfigStore.Device.Sfloor = (int)e.NewValue;
+        App.Instance.ApplyConfigDebounced();
+    }
+
+    // ---- 测试图 ----------------------------------------------------------
+    private void OnPatternQuad(object sender, RoutedEventArgs e) => App.Instance.SetPattern(1);
+
+    private void OnPatternMagenta(object sender, RoutedEventArgs e) => App.Instance.SetPattern(2);
+
+    // ---- 配置目录 --------------------------------------------------------
+    private void OnOpenConfigDir(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ConfigStore.ConfigDir}\""));
+        }
+        catch { /* 忽略 */ }
+    }
+}

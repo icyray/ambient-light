@@ -35,7 +35,7 @@ using namespace std::chrono;
 
 namespace {
 
-constexpr uint32_t kVersion = (1u << 16) | (0u << 8) | 0u;   // 1.0.0
+constexpr uint32_t kVersion = (1u << 16) | (2u << 8) | 0u;   // 1.2.0 (M2: MCU 特效 + ledRgb 扩展帧)
 
 ACConfig DefaultConfig()
 {
@@ -158,8 +158,8 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
 {
     if (!in || in->structSize != sizeof(ACConfig)) return 1;
     *out = *in;
-    // M1 实现范围: 0=屏幕追光 11=纯色; 1=拾音(M3) / 2..10,12,13=MCU 特效(M2) 暂拒
-    if (out->modeIndex != 0 && out->modeIndex != 11) return 1;
+    // 0=屏幕追光 11=纯色 2..10,12,13=MCU 特效透传; 1=拾音 M3 实现, 暂拒
+    if (out->modeIndex == 1 || out->modeIndex < 0 || out->modeIndex > 13) return 1;
     out->ledCount     = std::clamp(out->ledCount, 1, 512);
     out->sides        = std::clamp(out->sides, 2, 4);
     out->direction    = out->direction ? 1 : 0;
@@ -283,8 +283,12 @@ void CoreLoopInner()
     double procEma = 0, wireEma = 0;
     uint32_t allBlackRun = 0;
     uint32_t frameCounter = 0;
+    // MCU 特效透传状态: 模式切换立即发命令, 之后 1Hz 心跳重发
+    int  lastMcuMode = -1;
+    auto lastMcuCmd = steady_clock::now() - seconds(10);
 
     auto EffLeds = [](const ACConfig& c) { return std::min(c.ledCount, serial::kMaxLedCount); };
+    auto IsMcuMode = [](int m) { return (m >= 2 && m <= 10) || m == 12 || m == 13; };
 
     auto MakeCaptureParams = [](const ACConfig& c) {
         capture::Params p;
@@ -320,6 +324,14 @@ void CoreLoopInner()
             frame.assign((size_t)serial::kFrameLen, 0);
             frame[0] = 'A'; frame[1] = 'd'; frame[2] = 'a';
         }
+    };
+
+    // 最近下发帧快照 → ACStatus.ledRgb (LedRingView 预览数据源)
+    auto SnapshotFrame = [&](const std::vector<uint8_t>& f, const ACConfig& c) {
+        int n = std::min<int>((int)f.size() - 3, EffLeds(c) * 3);
+        if (n <= 0) return;
+        std::unique_lock lk(g->stMx);
+        memcpy(g->st.ledRgb, f.data() + 3, (size_t)n);
     };
 
     auto SendOff = [&]() {
@@ -493,13 +505,15 @@ void CoreLoopInner()
         int mp = g->monitorPower.load();
         if (mp != monPowerSeen) {
             monPowerSeen = mp;
-            if (mp == 0 && phase == AC_STATE_RUNNING && !waitDisp)
+            // 仅追光模式受熄屏影响 (画面源熄灭); 纯色/MCU 特效由主机/MCU 持续渲染
+            if (mp == 0 && phase == AC_STATE_RUNNING && !waitDisp && applied.modeIndex == 0)
                 EnterWaitDisp("monitor power off");
         }
 
         // ============ 4. 串口连接 ============
         if (!serialOpen) {
             if (TryConnect(applied)) {
+                lastMcuMode = -1;           // 重连后固件特效已清, 强制重发 MCU 命令
                 phase = (capValid || applied.modeIndex != 0) ? AC_STATE_RUNNING : AC_STATE_STARTING;
                 SetPhase(phase);
             } else {
@@ -524,6 +538,7 @@ void CoreLoopInner()
                     frame[3 + i * 3 + 0] = 255; frame[3 + i * 3 + 1] = 0; frame[3 + i * 3 + 2] = 255;
                 }
             }
+            SnapshotFrame(frame, applied);
             if (!sp.Write(frame.data(), (DWORD)frame.size())) { WireFail("write failed"); continue; }
             uint8_t sb;
             if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
@@ -582,6 +597,7 @@ void CoreLoopInner()
                 frame[3 + i * 3 + 1] = rgb[1];
                 frame[3 + i * 3 + 2] = rgb[2];
             }
+            SnapshotFrame(frame, applied);
             auto tw = steady_clock::now();
             if (!sp.Write(frame.data(), (DWORD)frame.size())) { WireFail("write failed"); continue; }
             wireEma = wireEma == 0 ? duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count()
@@ -598,6 +614,31 @@ void CoreLoopInner()
             } else {
                 WaitStop(33);
             }
+        } else if (IsMcuMode(applied.modeIndex)) {
+            // ---- MCU 特效透传: 3B 命令 Ad+(0x61+mode), 模式切换立即发, 之后 1Hz
+            //      心跳重发; MCU 每秒回 1B 状态 (bit0=供电)。特效由 MCU 自渲染,
+            //      主机不发灯帧, ledRgb 预览清零。
+            auto now1 = steady_clock::now();
+            if (applied.modeIndex != lastMcuMode || now1 - lastMcuCmd >= seconds(1)) {
+                if (applied.modeIndex != lastMcuMode) {
+                    std::unique_lock lk(g->stMx);
+                    memset(g->st.ledRgb, 0, sizeof(g->st.ledRgb));
+                    lastMcuMode = applied.modeIndex;
+                }
+                const uint8_t cmd[3] = { 'A', 'd', (uint8_t)(0x61 + applied.modeIndex) };
+                auto tw = steady_clock::now();
+                if (!sp.Write(cmd, 3)) { WireFail("write failed"); continue; }
+                double wireMs = duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count();
+                wireEma = wireEma == 0 ? wireMs : wireEma * 0.9 + wireMs * 0.1;
+                lastMcuCmd = now1;
+                frameCounter++;
+                fpsWindow++;
+                if (waitDisp) { waitDisp = false; ACLOGI("MCU mode -> exit WAIT_DISP"); }
+                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(phase); }
+            }
+            uint8_t sb;
+            if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
+            WaitStop(50);
         } else if (applied.modeIndex == 0 && capValid) {
             // ---- 屏幕追光: 事件驱动帧循环
             auto t0 = steady_clock::now();
@@ -614,6 +655,7 @@ void CoreLoopInner()
                     frame[3 + i * 3 + 1] = px[1];
                     frame[3 + i * 3 + 2] = px[2];
                 }
+                SnapshotFrame(frame, applied);
                 allBlackRun = (cap.LastFrameAllBlack() && cap.LastFrameHadUpdate()) ? allBlackRun + 1 : 0;
 
                 auto tw = steady_clock::now();
