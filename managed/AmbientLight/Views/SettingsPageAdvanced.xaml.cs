@@ -30,6 +30,9 @@ public partial class SettingsPageAdvanced : Page
         WaitDispCombo.SelectedIndex = Array.IndexOf(PolicyChoices, dev.WaitDispPolicy) is >= 0 and int i ? i : 0;
         ColorfixToggle.IsChecked = dev.Colorfix;
         SfloorSlider.Value = Math.Clamp(dev.Sfloor, 0, 255);
+        AutoStartToggle.IsChecked = ConfigStore.App.AutoStart;
+        AutoStartPathText.Text = AutoStart.ShortcutPath;
+        StartMinimizedToggle.IsChecked = ConfigStore.App.StartMinimized;
         ConfigDirText.Text = $"{ConfigStore.ConfigDir}  ({ConfigStore.ConfigDirSource})";
         VersionText.Text = $"AmbientLight {GetType().Assembly.GetName().Version?.ToString(3)} · AmbientCore v{(AmbientCore.Version() >> 16) & 0xFF}.{(AmbientCore.Version() >> 8) & 0xFF}.{AmbientCore.Version() & 0xFF}";
         _loading = false;
@@ -75,6 +78,32 @@ public partial class SettingsPageAdvanced : Page
         if (_loading) return;
         ConfigStore.Device.Sfloor = (int)e.NewValue;
         App.Instance.ApplyConfigDebounced();
+    }
+
+    // ---- 开机自启 / 启动收托盘 ------------------------------------------
+    private void OnAutoStartChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool on = AutoStartToggle.IsChecked == true;
+        string? err = on ? AutoStart.Enable() : AutoStart.Disable();
+        if (err != null)
+        {
+            _loading = true;                        // 失败回滚开关显示
+            AutoStartToggle.IsChecked = !on;
+            _loading = false;
+            System.Windows.MessageBox.Show($"开机自启设置失败: {err}", "AmbientLight",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+        ConfigStore.App.AutoStart = on;
+        ConfigStore.SaveApp();
+    }
+
+    private void OnStartMinimizedChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        ConfigStore.App.StartMinimized = StartMinimizedToggle.IsChecked == true;
+        ConfigStore.SaveApp();
     }
 
     // ---- 测试图 ----------------------------------------------------------

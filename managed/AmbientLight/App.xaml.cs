@@ -65,6 +65,11 @@ public partial class App : Application
         };
 
         ConfigStore.Load();
+        // 开机自启自愈: app.json 的 AutoStart 是事实源, 快捷方式丢失/残留都对齐
+        if (ConfigStore.App.AutoStart && !AutoStart.IsActive())
+            AutoStart.Enable();
+        else if (!ConfigStore.App.AutoStart && AutoStart.IsActive())
+            AutoStart.Disable();
         InitTray();
 
         _poller = new PollingService();
