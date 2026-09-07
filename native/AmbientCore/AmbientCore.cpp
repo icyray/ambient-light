@@ -1,16 +1,22 @@
 // AmbientCore.cpp — 导出 + 核心线程 (可靠性状态机) + 设备监视线程 + 电源事件
 //
-// 线程模型: DLL 内部仅 2 个线程 (核心流线程 / 1s 设备监视线程), 全部重建路径
-// 在核心线程内串行执行 (厂商双端口争用的教训)。电源回调只置原子标志。
+// 线程模型 (v1.3): 1 条设备监视线程 (全局) + 每会话 1 条核心流线程 (最多 8 slot)
+//                  + 拾音模式时 1 条 WASAPI 回环捕获线程 (进程单例, 多会话共享)。
+//                  全部重建路径在各自核心线程内串行执行 (厂商双端口争用的教训)。
+//                  电源回调只置原子标志。
 //
 // 状态机 (API 文档 3.1/3.6): 采集侧任何故障绝不传导为串口断开;
 //   WAIT_DISP  = 采集暂不可用 (锁屏/拓扑切换/独占全屏/熄屏), 串口保持, 500ms 重试
 //   DEV_LOST   = 串口侧故障, 恢复后按 VID/PID 身份跟随 (COM 号可变), 500ms×5 → 2s
 //   ERROR      = D3D/资源硬错误, 5s 慢速重试
+//
+// 多会话 (M3): AC_Start/Stop/SetConfig/GetStatus = slot 0 的兼容别名;
+//   AC_*Ex(slot, ...) 按槽位独立启停。监视线程全局共享, 每会话独立重连。
 #include "AmbientCore.h"
 #include "capture.h"
 #include "colorchain.h"
 #include "serial.h"
+#include "audio.h"
 #include "log.h"
 
 #include <windows.h>
@@ -35,7 +41,7 @@ using namespace std::chrono;
 
 namespace {
 
-constexpr uint32_t kVersion = (1u << 16) | (2u << 8) | 0u;   // 1.2.0 (M2: MCU 特效 + ledRgb 扩展帧)
+constexpr uint32_t kVersion = (1u << 16) | (3u << 8) | 0u;   // 1.3.0 (M3: 拾音 + 多会话)
 
 ACConfig DefaultConfig()
 {
@@ -63,6 +69,13 @@ ACConfig DefaultConfig()
     c.waitDispPolicy = 2;
     c.colorfix = 0;
     c.sfloor = 24.0;
+    c.audioSource = 0;
+    c.audioGain = 1.0;
+    c.audioRelease = 0.30;
+    c.audioGate = 0.003;
+    c.audioBass = 0.35;
+    c.audioAgc = 1;
+    c.audioFollowVolume = 0;
     return c;
 }
 
@@ -84,12 +97,9 @@ std::wstring Utf8ToWide(const std::string& s)
     return w;
 }
 
-// ---- 全局单实例 (Start/Stop 由 UI 线程串行调用) -----------------------
-std::mutex g_lifeMx;
-bool g_running = false;
-
-struct Core {
-    std::thread coreThread, monitorThread;
+// ---- 会话 (每 slot 一份) / 全局单例 ----------------------------------
+struct Sess {
+    std::thread thread;
     HANDLE evStop = nullptr;                    // manual-reset
 
     // 配置原子快照
@@ -102,34 +112,96 @@ struct Core {
     ACStatus st{};
     char diag[256] = { 0 };
 
-    // 跨线程信号 (只置位, 核心线程消费)
+    std::atomic<int> active{ 0 };
+    std::atomic<int> started{ 0 };              // 曾启动过 (区分"从未运行"的零状态)
+};
+
+struct Core {
+    std::thread monitorThread;
+    HANDLE evStopMon = nullptr;                 // manual-reset
+
+    // 跨线程信号 (只置位, 各核心线程消费)
     std::atomic<uint32_t> deviceChanged{ 0 };   // 监视线程: VID/PID 端口集合变化
     std::atomic<uint32_t> topologyVer{ 0 };     // 监视线程: 显示器拓扑变化
     std::atomic<int> suspendEvt{ 0 }, resumeEvt{ 0 };
     std::atomic<int> monitorPower{ -1 };        // 1=亮 0=熄 -1=未知 (DPMS)
-    std::atomic<int> testPattern{ 0 };
+    std::atomic<int> testPattern{ 0 };          // 测试图: 施加于所有活动会话
 
     HPOWERNOTIFY hSuspend = nullptr, hMonPower = nullptr;
+
+    Sess slots[AC_MAX_DEVICES];
+
+    int ActiveCount() const
+    {
+        int n = 0;
+        for (auto& s : slots) if (s.active.load()) n++;
+        return n;
+    }
 };
 
+std::mutex g_lifeMx;
 Core* g = nullptr;   // 一经创建不销毁 (Stop 后保留状态供 UI 查询)
 
-bool WaitStop(DWORD ms) { return WaitForSingleObject(g->evStop, ms) == WAIT_OBJECT_0; }
+// 拾音音源单例 (进程至多一条捕获线程, 多会话共享包络; users 引用计数)
+std::mutex g_meterMx;
+audio::Meter* g_meter = nullptr;
+int g_meterUsers = 0;
 
-std::shared_ptr<const ACConfig> SnapCfg()
+void MeterAcquire()
+{
+    std::lock_guard lk(g_meterMx);
+    if (!g_meter) g_meter = new audio::Meter();
+    g_meterUsers++;
+    g_meter->Start();
+}
+
+void MeterRelease()
+{
+    std::lock_guard lk(g_meterMx);
+    if (--g_meterUsers <= 0) {
+        g_meterUsers = 0;
+        if (g_meter) g_meter->Stop();
+    }
+}
+
+void MeterPushParams(const ACConfig& c)
+{
+    std::lock_guard lk(g_meterMx);
+    if (g_meter && g_meter->Running()) {
+        audio::Params p;
+        p.release = c.audioRelease;
+        p.gate = c.audioGate;
+        p.bass = c.audioBass;
+        p.agc = c.audioAgc != 0;
+        g_meter->SetParams(p);
+    }
+}
+
+void MeterRead(uint8_t* env, float* master)
+{
+    std::lock_guard lk(g_meterMx);
+    if (g_meter && env) *env = g_meter->EnvelopeByte();
+    if (g_meter && master) *master = g_meter->MasterVolume();
+}
+
+// 以下函数的 g 参数 = 会话指针 (CoreLoop 内以 g 影蔽命名, 全局事件仍经
+// 全局 g 访问 — 见 CoreLoop 的调用约定)
+bool WaitStop(Sess* g, DWORD ms) { return WaitForSingleObject(g->evStop, ms) == WAIT_OBJECT_0; }
+
+std::shared_ptr<const ACConfig> SnapCfg(Sess* g)
 {
     std::shared_lock lk(g->cfgMx);
     return g->cfg;
 }
 
-void SetPhase(int state)
+void SetPhase(Sess* g, int state)
 {
     std::unique_lock lk(g->stMx);
     g->st.state = state;
 }
 
-// 记录最近诊断文本 (UI 经 AC_GetLastDiag 读取) 并落日志
-void SetDiag(const char* lvl, const char* fmt, ...)
+// 记录最近诊断文本 (UI 经 AC_GetLastDiagEx 读取) 并落日志
+void SetDiag(Sess* g, const char* lvl, const char* fmt, ...)
 {
     char msg[256];
     va_list ap;
@@ -158,8 +230,8 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
 {
     if (!in || in->structSize != sizeof(ACConfig)) return 1;
     *out = *in;
-    // 0=屏幕追光 11=纯色 2..10,12,13=MCU 特效透传; 1=拾音 M3 实现, 暂拒
-    if (out->modeIndex == 1 || out->modeIndex < 0 || out->modeIndex > 13) return 1;
+    // 0=屏幕追光 1=拾音(M3 已实现) 11=纯色 2..10,12,13=MCU 特效透传
+    if (out->modeIndex < 0 || out->modeIndex > 13) return 1;
     out->ledCount     = std::clamp(out->ledCount, 1, 512);
     out->sides        = std::clamp(out->sides, 2, 4);
     out->direction    = out->direction ? 1 : 0;
@@ -176,6 +248,13 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
     out->sfloor       = std::clamp(out->sfloor, 0.0, 255.0);
     out->baudRate     = std::clamp(out->baudRate, 9600u, 4000000u);
     out->comPort[AC_PORT_LEN - 1] = 0;
+    out->audioSource  = out->audioSource ? 1 : 0;
+    out->audioGain    = std::clamp(out->audioGain, 0.1, 5.0);
+    out->audioRelease = std::clamp(out->audioRelease, 0.05, 1.0);
+    out->audioGate    = std::clamp(out->audioGate, 0.0, 0.1);
+    out->audioBass    = std::clamp(out->audioBass, 0.0, 1.0);
+    out->audioAgc     = out->audioAgc ? 1 : 0;
+    out->audioFollowVolume = out->audioFollowVolume ? 1 : 0;
     for (uint32_t v : out->reserved) if (v) return 1;
     return 0;
 }
@@ -206,7 +285,7 @@ void MonitorLoopInner()
     std::vector<std::wstring> lastPorts, lastTopo;
     bool firstPorts = true, firstTopo = true;
     for (;;) {
-        DWORD w = WaitForSingleObject(g->evStop, 1000);
+        DWORD w = WaitForSingleObject(g->evStopMon, 1000);
         if (w != WAIT_TIMEOUT) break;
 
         // 1) 灯带在位性 (VID_2E3C&PID_5740 的 COM 口)
@@ -247,11 +326,14 @@ void MonitorLoop()
     }
 }
 
-// ---- 核心线程 --------------------------------------------------------
-void CoreLoopInner()
+// ---- 核心线程 (每会话一条; g = 本会话) --------------------------------
+// 命名约定: 参数名 g 影蔽全局单例指针, 会话级状态 (cfg/st/evStop/diag) 全走 g->;
+// 全局事件 (deviceChanged/topologyVer/电源/测试图) 同名成员在 Core 上, 访问形式
+// 相同 — Core 上恰好没有会话级成员, 不会混。
+void CoreLoopInner(Sess* g)
 {
     SetThreadDescription(GetCurrentThread(), L"AmbientCore-Stream");
-    ACLOGI("core thread enter");
+    ACLOGI("core thread enter (slot session)");
 
     serial::SerialPort sp;
     capture::CaptureSession cap;
@@ -270,11 +352,12 @@ void CoreLoopInner()
 
     int phase = AC_STATE_STARTING;
 
-    auto cfg = SnapCfg();
+    auto cfg = SnapCfg(g);
     ACConfig applied = *cfg;
     uint64_t appliedSerial = g->cfgSerial.load();
-    uint32_t seenDeviceChanged = g->deviceChanged.load();
-    uint32_t seenTopology = g->topologyVer.load();
+    Core* C = ::g;  // 全局事件经 C (参数 g 影蔽了全局单例)
+    uint32_t seenDeviceChanged = C->deviceChanged.load();
+    uint32_t seenTopology = C->topologyVer.load();
     int monPowerSeen = -1;
 
     // 统计
@@ -287,8 +370,18 @@ void CoreLoopInner()
     int  lastMcuMode = -1;
     auto lastMcuCmd = steady_clock::now() - seconds(10);
 
+    // 主机拾音 (WASAPI 回环) 会话持有; 音源参数只在 cfgSerial 变化时推送
+    bool audioOn = false;
+    uint64_t audioParamsSerial = 0;
+
     auto EffLeds = [](const ACConfig& c) { return std::min(c.ledCount, serial::kMaxLedCount); };
-    auto IsMcuMode = [](int m) { return (m >= 2 && m <= 10) || m == 12 || m == 13; };
+    auto IsMcuMode = [&](const ACConfig& c, int m) {
+        if ((m >= 2 && m <= 10) || m == 12 || m == 13) return true;
+        return m == 1 && c.audioSource == 1;              // MCU 自拾音 "Adb"
+    };
+    auto IsHostAudio = [](const ACConfig& c) {
+        return c.modeIndex == 1 && c.audioSource == 0;    // 主机拾音 "Adz"
+    };
 
     auto MakeCaptureParams = [](const ACConfig& c) {
         capture::Params p;
@@ -360,18 +453,18 @@ void CoreLoopInner()
             SendPolicyFrame(applied);
             lastPolicyResend = steady_clock::now();
         }
-        if (phase != AC_STATE_WAIT_DISP) { phase = AC_STATE_WAIT_DISP; SetPhase(phase); }
+        if (phase != AC_STATE_WAIT_DISP) { phase = AC_STATE_WAIT_DISP; SetPhase(g, phase); }
     };
 
     auto WireFail = [&](const char* why) {
         ACLOGE("serial %s on %ls -> DEV_LOST", why, activePort.c_str());
-        SetDiag("WARN ", "serial %s on %s, reconnecting", why, WideToUtf8(activePort).c_str());
+        SetDiag(g, "WARN ", "serial %s on %s, reconnecting", why, WideToUtf8(activePort).c_str());
         sp.Close();
         serialOpen = false;
         fastLeft = 3;
         waitDisp = false;
         phase = AC_STATE_DEV_LOST;
-        SetPhase(phase);
+        SetPhase(g, phase);
     };
 
     // 串口连接 (VID/PID 身份跟随): 返回 true = 已握手
@@ -401,7 +494,7 @@ void CoreLoopInner()
             for (auto& p : ports) candidates.push_back(p.port);          // 自动探测
         }
         for (auto& cand : candidates) {
-            if (WaitStop(0)) return false;                               // 停止时放弃
+            if (WaitStop(g, 0)) return false;                            // 停止时放弃
             if (!sp.Open(cand, c.baudRate)) {
                 ACLOGW("open %ls failed (busy or gone)", cand.c_str());
                 continue;
@@ -426,12 +519,12 @@ void CoreLoopInner()
         return false;
     };
 
-    SetPhase(phase);
+    SetPhase(g, phase);
     for (;;) {
-        if (WaitStop(0)) break;                      // 停止请求 → 走退出清理
+        if (WaitStop(g, 0)) break;                   // 停止请求 → 走退出清理
 
         // ============ 1. 挂起 / 恢复 ============
-        if (g->resumeEvt.exchange(0)) {
+        if (C->resumeEvt.exchange(0)) {
             ACLOGI("resume: full rebuild (adapter -> output -> D3D -> DDA -> serial)");
             cap.Destroy(); capValid = false;
             sp.Close(); serialOpen = false;
@@ -439,22 +532,23 @@ void CoreLoopInner()
             fastLeft = 5;                       // 唤醒后快速期优先
             hardGraceUntil = steady_clock::now() + seconds(3);
             phase = AC_STATE_STARTING;
-            SetPhase(phase);
+            SetPhase(g, phase);
         }
-        if (g->suspendEvt.exchange(0)) {
+        if (C->suspendEvt.exchange(0)) {
             ACLOGI("suspend: sending off-frame, stopping stream");
             SendOff();                          // 防半帧/端口消失中途写
+            if (audioOn) { audioOn = false; MeterRelease(); }   // 挂起期间停止音源重建循环
             cap.Destroy(); capValid = false;
             sp.Close(); serialOpen = false;
             waitDisp = false;
             phase = AC_STATE_STOPPED;
-            SetPhase(phase);
-            while (!WaitStop(200) && !g->resumeEvt.load()) {}
+            SetPhase(g, phase);
+            while (!WaitStop(g, 200) && !C->resumeEvt.load()) {}
             continue;
         }
 
         // ============ 2. 配置热更新 (原子快照 diff) ============
-        cfg = SnapCfg();
+        cfg = SnapCfg(g);
         uint64_t s = g->cfgSerial.load();
         if (s != appliedSerial) {
             const ACConfig& nc = *cfg;
@@ -484,17 +578,35 @@ void CoreLoopInner()
             appliedSerial = s;
             if (phase == AC_STATE_ERROR) {      // 配置变化给予重试机会
                 phase = AC_STATE_STARTING;
-                SetPhase(phase);
+                SetPhase(g, phase);
             }
         }
 
+        // ============ 2b. 主机拾音会话生命周期 (跟随配置, Start 即拾音也覆盖) =====
+        if (IsHostAudio(applied)) {
+            if (!audioOn) { audioOn = true; MeterAcquire(); }
+            if (audioParamsSerial != s) { MeterPushParams(applied); audioParamsSerial = s; }
+            if (capValid) {                     // 拾音不依赖显示器, 释放 DDA 会话
+                cap.Destroy();
+                capValid = false;
+            }
+            if (waitDisp) {                     // 拾音不受熄屏/锁屏策略影响
+                waitDisp = false;
+                ACLOGI("audio mode -> exit WAIT_DISP");
+            }
+        } else if (audioOn) {
+            audioOn = false;
+            MeterRelease();
+            audioParamsSerial = 0;
+        }
+
         // ============ 3. 事件: 热插拔 / 拓扑 / DPMS ============
-        uint32_t dc = g->deviceChanged.load();
+        uint32_t dc = C->deviceChanged.load();
         if (dc != seenDeviceChanged) {
             seenDeviceChanged = dc;
             fastLeft = 5;                       // 热插拔后快速重连
         }
-        uint32_t tv = g->topologyVer.load();
+        uint32_t tv = C->topologyVer.load();
         if (tv != seenTopology) {
             seenTopology = tv;
             if (capValid) {
@@ -502,10 +614,10 @@ void CoreLoopInner()
                 cap.Destroy(); capValid = false;   // 适配器级全量重建
             }
         }
-        int mp = g->monitorPower.load();
+        int mp = C->monitorPower.load();
         if (mp != monPowerSeen) {
             monPowerSeen = mp;
-            // 仅追光模式受熄屏影响 (画面源熄灭); 纯色/MCU 特效由主机/MCU 持续渲染
+            // 仅追光模式受熄屏影响 (画面源熄灭); 纯色/MCU/拾音的画面源不依赖显示器
             if (mp == 0 && phase == AC_STATE_RUNNING && !waitDisp && applied.modeIndex == 0)
                 EnterWaitDisp("monitor power off");
         }
@@ -515,20 +627,20 @@ void CoreLoopInner()
             if (TryConnect(applied)) {
                 lastMcuMode = -1;           // 重连后固件特效已清, 强制重发 MCU 命令
                 phase = (capValid || applied.modeIndex != 0) ? AC_STATE_RUNNING : AC_STATE_STARTING;
-                SetPhase(phase);
+                SetPhase(g, phase);
             } else {
                 if (phase != AC_STATE_DEV_LOST)
-                    SetDiag("WARN ", "device lost: no usable port (VID_2E3C&PID_5740)");
+                    SetDiag(g, "WARN ", "device lost: no usable port (VID_2E3C&PID_5740)");
                 phase = AC_STATE_DEV_LOST;
-                SetPhase(phase);
+                SetPhase(g, phase);
                 int delay = fastLeft > 0 ? (fastLeft--, 500) : 2000;
-                if (WaitStop((DWORD)delay)) break;   // 等待期间收到停止
+                if (WaitStop(g, (DWORD)delay)) break;   // 等待期间收到停止
                 continue;
             }
         }
 
         // ============ 5. 测试图 (校准/排障, 覆盖正常内容, ~30Hz) ============
-        int pat = g->testPattern.load();
+        int pat = C->testPattern.load();
         if (pat != 0) {
             EnsureFrame();
             if (pat == 1) {
@@ -548,7 +660,7 @@ void CoreLoopInner()
                 std::unique_lock lk(g->stMx);
                 g->st.frameCounter = frameCounter;
             }
-            WaitStop(33);
+            WaitStop(g, 33);
             continue;
         }
 
@@ -564,7 +676,7 @@ void CoreLoopInner()
                     waitDisp = false;
                     ACLOGI("capture built -> exit WAIT_DISP");
                 }
-                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(phase); }
+                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
                 ACLOGI("capture built: monitor %d%s (%dx%d hdr=%d)", applied.monitorIndex,
                        fb ? " (fallback->primary)" : "", cap.Width(), cap.Height(), 0);
             } else if (res == capture::CaptureSession::BUILD_TRANSIENT ||
@@ -572,13 +684,13 @@ void CoreLoopInner()
                 EnterWaitDisp(res == capture::CaptureSession::BUILD_TRANSIENT
                                   ? "capture unavailable"
                                   : "capture not ready (device warm-up)");
-                WaitStop(500);                  // 锁屏/无输出/驱动未就绪: 500ms 重试
+                WaitStop(g, 500);               // 锁屏/无输出/驱动未就绪: 500ms 重试
                 continue;
             } else {
-                SetDiag("ERROR", "capture build failed (D3D/resources), slow retry");
+                SetDiag(g, "ERROR", "capture build failed (D3D/resources), slow retry");
                 phase = AC_STATE_ERROR;
-                SetPhase(phase);
-                WaitStop(5000);
+                SetPhase(g, phase);
+                WaitStop(g, 5000);
                 continue;
             }
         }
@@ -607,17 +719,40 @@ void CoreLoopInner()
             frameCounter++;
             fpsWindow++;
             if (waitDisp) { waitDisp = false; ACLOGI("content resumed -> exit WAIT_DISP"); }
-            if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(phase); }
+            if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
             if (applied.fpsCap > 0) {
                 double need = 1000.0 / applied.fpsCap;
-                WaitStop((DWORD)std::max(0.0, need - 33.0));
+                WaitStop(g, (DWORD)std::max(0.0, need - 33.0));
             } else {
-                WaitStop(33);
+                WaitStop(g, 33);
             }
-        } else if (IsMcuMode(applied.modeIndex)) {
+        } else if (IsHostAudio(applied)) {
+            // ---- 拾音律动 (主机拾音): 5ms 节拍 "Adz"+音量×3; 不建 DDA, 与显示器无关
+            uint8_t env = 0;
+            float master = 1.0f;
+            MeterRead(&env, &master);
+            double v = (double)env * applied.audioGain *
+                       (applied.audioFollowVolume ? master : 1.0f);
+            uint8_t b = (uint8_t)std::clamp((int)(v + 0.5), 0, 255);
+            const uint8_t f6[6] = { 'A', 'd', 'z', b, b, b };
+            auto tw = steady_clock::now();
+            if (!sp.Write(f6, 6)) { WireFail("write failed"); continue; }
+            double wireMs = duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count();
+            wireEma = wireEma == 0 ? wireMs : wireEma * 0.9 + wireMs * 0.1;
+            uint8_t sb;
+            if (sp.PollStatusByte(sb)) {
+                std::unique_lock lk(g->stMx);
+                g->st.ledStatusByte = sb;
+                g->st.audioLevel = b;
+            }
+            frameCounter++;
+            fpsWindow++;
+            if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
+            WaitStop(g, 5);                     // timeBeginPeriod(1) 已开 → ~170-200Hz
+        } else if (IsMcuMode(applied, applied.modeIndex)) {
             // ---- MCU 特效透传: 3B 命令 Ad+(0x61+mode), 模式切换立即发, 之后 1Hz
             //      心跳重发; MCU 每秒回 1B 状态 (bit0=供电)。特效由 MCU 自渲染,
-            //      主机不发灯帧, ledRgb 预览清零。
+            //      主机不发灯帧, ledRgb 预览清零。mode 1 + audioSource=1 → "Adb"。
             auto now1 = steady_clock::now();
             if (applied.modeIndex != lastMcuMode || now1 - lastMcuCmd >= seconds(1)) {
                 if (applied.modeIndex != lastMcuMode) {
@@ -634,11 +769,11 @@ void CoreLoopInner()
                 frameCounter++;
                 fpsWindow++;
                 if (waitDisp) { waitDisp = false; ACLOGI("MCU mode -> exit WAIT_DISP"); }
-                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(phase); }
+                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
             }
             uint8_t sb;
             if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
-            WaitStop(50);
+            WaitStop(g, 50);
         } else if (applied.modeIndex == 0 && capValid) {
             // ---- 屏幕追光: 事件驱动帧循环
             auto t0 = steady_clock::now();
@@ -668,11 +803,11 @@ void CoreLoopInner()
                 frameCounter++;
                 fpsWindow++;
                 if (waitDisp) { waitDisp = false; ACLOGI("desktop resumed -> RUNNING"); }
-                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(phase); }
+                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
                 if (applied.fpsCap > 0) {       // 帧率上限 (timeBeginPeriod(1) 已开)
                     double need = 1000.0 / applied.fpsCap;
                     double el = duration_cast<duration<double, std::milli>>(steady_clock::now() - t0).count();
-                    if (el < need) WaitStop((DWORD)(need - el));
+                    if (el < need) WaitStop(g, (DWORD)(need - el));
                 }
             } else if (stp == capture::CaptureSession::STEP_TIMEOUT) {
                 // 静态屏/熄屏: 0 占用; DPMS 熄屏已由电源事件进入 WAIT_DISP
@@ -681,11 +816,11 @@ void CoreLoopInner()
                 capValid = false;
                 EnterWaitDisp(stp == capture::CaptureSession::STEP_ACCESS_DENIED ? "access denied (lock screen)"
                               : stp == capture::CaptureSession::STEP_ACCESS_LOST ? "access lost (topology)"
-                                                                 : "capture error");
-                WaitStop(200);                  // 拓扑切换抖动抑制
+                                                                                 : "capture error");
+                WaitStop(g, 200);               // 拓扑切换抖动抑制
             }
         } else {
-            WaitStop(50);
+            WaitStop(g, 50);
         }
 
         // ============ 8. WAIT_DISP 策略帧重发 (每 2s 防固件掉电丢帧) ============
@@ -701,12 +836,24 @@ void CoreLoopInner()
         {
             double el = duration_cast<duration<double>>(steady_clock::now() - fpsT0).count();
             std::unique_lock lk(g->stMx);
-            g->st.deviceChanged = g->deviceChanged.load();
+            g->st.deviceChanged = C->deviceChanged.load();
             g->st.monitorFallback = monitorFallback;
             g->st.allBlackFrames = allBlackRun;
             g->st.frameCounter = frameCounter;
             g->st.procMs = (float)procEma;
             g->st.wireMs = (float)wireEma;
+            if (audioOn) {                      // 拾音音源健康/端点名 (UI 拾音页显示)
+                std::lock_guard lk2(g_meterMx);
+                if (g_meter) {
+                    g->st.audioOk = g_meter->Healthy();
+                    std::string n = g_meter->EndpointName();
+                    strncpy_s(g->st.audioDev, n.c_str(), _TRUNCATE);
+                }
+            } else {
+                g->st.audioOk = 0;
+                g->st.audioDev[0] = 0;
+                g->st.audioLevel = 0;
+            }
             if (el >= 1.0) {
                 g->st.fps = (float)(fpsWindow / el);
                 fpsWindow = 0;
@@ -721,21 +868,92 @@ void CoreLoopInner()
     }
 
     // ---- 退出: 关灯帧 + 清理
+    if (audioOn) { audioOn = false; MeterRelease(); }
     SendOff();
     sp.Close();
     cap.Destroy();
-    SetPhase(AC_STATE_STOPPED);
+    SetPhase(g, AC_STATE_STOPPED);
     ACLOGI("core thread exit");
 }
 
-void CoreLoop()
+void CoreLoop(Sess* g)
 {
     SetThreadDescription(GetCurrentThread(), L"AmbientCore-Stream");
     __try {
-        CoreLoopInner();
+        CoreLoopInner(g);
     } __except (CrashFilter("core", GetExceptionInformation())) {
-        SetDiag("ERROR", "core thread crashed, see log/ambientcore.log");
-        SetPhase(AC_STATE_ERROR);
+        SetDiag(g, "ERROR", "core thread crashed, see log/ambientcore.log");
+        SetPhase(g, AC_STATE_ERROR);
+    }
+}
+
+// ---- slot 生命周期内部 (须持 g_lifeMx) --------------------------------
+int32_t StartSlotLocked(uint32_t slot, const ACConfig* cfgIn)
+{
+    if (slot >= AC_MAX_DEVICES) return 1;
+    ACConfig c{};
+    int vr = ValidateConfig(cfgIn, &c);
+    if (vr != 0) return vr;
+    if (!g) g = new Core();
+
+    Sess& s = g->slots[slot];
+    if (s.active.load()) return 5;                 // 该 slot 已在运行
+    if (!s.evStop) s.evStop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    else ResetEvent(s.evStop);
+    {
+        std::unique_lock stlk(s.stMx);
+        memset(&s.st, 0, sizeof(s.st));
+        s.st.devType = -1;
+        s.st.devId = -1;
+        s.diag[0] = 0;
+        s.st.state = AC_STATE_STARTING;
+    }
+    {
+        std::unique_lock cfglk(s.cfgMx);
+        s.cfg = std::make_shared<const ACConfig>(c);
+    }
+    s.cfgSerial = 1;
+
+    if (g->ActiveCount() == 0) {                   // 首个会话: 全局资源
+        g->suspendEvt = 0; g->resumeEvt = 0; g->monitorPower = -1; g->testPattern = 0;
+        g_powerParams.Context = g;
+        if (!g->hSuspend)
+            PowerRegisterSuspendResumeNotification(DEVICE_NOTIFY_CALLBACK, &g_powerParams, &g->hSuspend);
+        if (!g->hMonPower)
+            PowerSettingRegisterNotification(&GUID_MONITOR_POWER_ON, DEVICE_NOTIFY_CALLBACK,
+                                             &g_powerParams, &g->hMonPower);
+        timeBeginPeriod(1);                        // Sleep 精度 15.6ms -> 1ms
+        if (!g->evStopMon) g->evStopMon = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        else ResetEvent(g->evStopMon);
+        g->monitorThread = std::thread(MonitorLoop);
+    }
+    s.active = 1;
+    s.started = 1;
+    s.thread = std::thread(CoreLoop, &s);
+    ACLOGI("AC_StartEx slot %u ok (mode %d, com '%s', leds %d)",
+           slot, c.modeIndex, c.comPort, c.ledCount);
+    return 0;
+}
+
+void StopSlotLocked(uint32_t slot)
+{
+    if (!g || slot >= AC_MAX_DEVICES) return;
+    Sess& s = g->slots[slot];
+    if (!s.active.load()) return;
+    ACLOGI("AC_StopEx slot %u", slot);
+    SetEvent(s.evStop);
+    if (s.thread.joinable()) s.thread.join();
+    s.active = 0;
+    {
+        std::unique_lock lk2(s.stMx);
+        s.st.state = AC_STATE_STOPPED;
+    }
+    if (g->ActiveCount() == 0) {                   // 最后一个会话: 释放全局资源
+        timeEndPeriod(1);
+        if (g->hSuspend) { PowerUnregisterSuspendResumeNotification(g->hSuspend); g->hSuspend = nullptr; }
+        if (g->hMonPower) { PowerUnregisterSuspendResumeNotification(g->hMonPower); g->hMonPower = nullptr; }
+        if (g->evStopMon) SetEvent(g->evStopMon);
+        if (g->monitorThread.joinable()) g->monitorThread.join();
     }
 }
 
@@ -747,92 +965,62 @@ void CoreLoop()
 
 AC_API uint32_t AC_Version(void) { return kVersion; }
 
-AC_API int32_t AC_Start(const ACConfig* cfgIn)
+// ---- 兼容别名: 单设备 = slot 0 ----------------------------------------
+AC_API int32_t AC_Start(const ACConfig* cfg)
 {
     std::lock_guard lk(g_lifeMx);
-    if (g_running) return 5;                       // 已有实例运行
-    ACConfig c{};
-    int vr = ValidateConfig(cfgIn, &c);
-    if (vr != 0) return vr;
-
-    if (!g) {
-        g = new Core();
-        g->evStop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-    } else {
-        ResetEvent(g->evStop);
-    }
-    {
-        std::unique_lock stlk(g->stMx);
-        memset(&g->st, 0, sizeof(g->st));
-        g->st.devType = -1;
-        g->st.devId = -1;
-        g->diag[0] = 0;
-        g->st.state = AC_STATE_STARTING;
-    }
-    {
-        std::unique_lock cfglk(g->cfgMx);
-        g->cfg = std::make_shared<const ACConfig>(c);
-    }
-    g->cfgSerial = 1;
-    g->testPattern = 0;
-
-    g_powerParams.Context = g;
-    if (!g->hSuspend)
-        PowerRegisterSuspendResumeNotification(DEVICE_NOTIFY_CALLBACK, &g_powerParams, &g->hSuspend);
-    if (!g->hMonPower)
-        PowerSettingRegisterNotification(&GUID_MONITOR_POWER_ON, DEVICE_NOTIFY_CALLBACK,
-                                         &g_powerParams, &g->hMonPower);
-    timeBeginPeriod(1);                            // Sleep 精度 15.6ms -> 1ms
-
-    g->coreThread = std::thread(CoreLoop);
-    g->monitorThread = std::thread(MonitorLoop);
-    g_running = true;
-    ACLOGI("AC_Start ok (mode %d, com '%s', leds %d, baud %u)",
-           c.modeIndex, c.comPort, c.ledCount, c.baudRate);
-    return 0;
+    return StartSlotLocked(0, cfg);
 }
 
 AC_API void AC_Stop(void)
 {
     std::lock_guard lk(g_lifeMx);
-    if (!g || !g_running) return;
-    ACLOGI("AC_Stop");
-    SetEvent(g->evStop);
-    if (g->coreThread.joinable()) g->coreThread.join();
-    if (g->monitorThread.joinable()) g->monitorThread.join();
-    if (g->hSuspend) { PowerUnregisterSuspendResumeNotification(g->hSuspend); g->hSuspend = nullptr; }
-    if (g->hMonPower) { PowerUnregisterSuspendResumeNotification(g->hMonPower); g->hMonPower = nullptr; }
-    timeEndPeriod(1);
-    {
-        std::unique_lock lk2(g->stMx);
-        g->st.state = AC_STATE_STOPPED;
-    }
-    g_running = false;
-    ACLOGI("AC_Stop complete");
+    if (!g) return;
+    for (uint32_t i = 0; i < AC_MAX_DEVICES; i++) StopSlotLocked(i);
 }
 
-AC_API int32_t AC_SetConfig(const ACConfig* cfgIn)
+AC_API int32_t AC_SetConfig(const ACConfig* cfg) { return AC_SetConfigEx(0, cfg); }
+
+AC_API void AC_GetStatus(ACStatus* out) { AC_GetStatusEx(0, out); }
+
+AC_API int32_t AC_GetLastDiag(char* buf, uint32_t cap) { return AC_GetLastDiagEx(0, buf, cap); }
+
+// ---- 多会话 (M3) -------------------------------------------------------
+AC_API int32_t AC_StartEx(uint32_t slot, const ACConfig* cfg)
 {
+    std::lock_guard lk(g_lifeMx);
+    return StartSlotLocked(slot, cfg);
+}
+
+AC_API void AC_StopEx(uint32_t slot)
+{
+    std::lock_guard lk(g_lifeMx);
+    StopSlotLocked(slot);
+}
+
+AC_API int32_t AC_SetConfigEx(uint32_t slot, const ACConfig* cfgIn)
+{
+    if (slot >= AC_MAX_DEVICES) return 1;
     if (!cfgIn) return 1;
     ACConfig c{};
     if (ValidateConfig(cfgIn, &c) != 0) return 1;
     std::lock_guard lk(g_lifeMx);
-    if (!g_running) return 0;                      // 未运行: 仅校验 (Start 时传入配置)
+    if (!g || !g->slots[slot].active.load()) return 0;   // 未运行: 仅校验 (Start 时传入配置)
     {
-        std::unique_lock lk2(g->cfgMx);
-        g->cfg = std::make_shared<const ACConfig>(c);
-        g->cfgSerial++;
+        std::unique_lock lk2(g->slots[slot].cfgMx);
+        g->slots[slot].cfg = std::make_shared<const ACConfig>(c);
+        g->slots[slot].cfgSerial++;
     }
-    ACLOGI("AC_SetConfig (serial %llu, mode %d, com '%s', leds %d)",
-           (unsigned long long)g->cfgSerial.load(), c.modeIndex, c.comPort, c.ledCount);
+    ACLOGI("AC_SetConfigEx slot %u (serial %llu, mode %d, com '%s', leds %d)",
+           slot, (unsigned long long)g->slots[slot].cfgSerial.load(), c.modeIndex, c.comPort, c.ledCount);
     return 0;
 }
 
-AC_API void AC_GetStatus(ACStatus* out)
+AC_API void AC_GetStatusEx(uint32_t slot, ACStatus* out)
 {
     if (!out) return;
     out->structSize = sizeof(ACStatus);
-    if (!g) {
+    if (!g || slot >= AC_MAX_DEVICES || !g->slots[slot].started.load()) {
         memset(out, 0, sizeof(*out));
         out->structSize = sizeof(ACStatus);
         out->devType = -1;
@@ -840,20 +1028,22 @@ AC_API void AC_GetStatus(ACStatus* out)
         out->state = AC_STATE_STOPPED;
         return;
     }
-    std::shared_lock lk(g->stMx);
-    ACStatus tmp = g->st;
+    Sess& s = g->slots[slot];
+    std::shared_lock lk(s.stMx);
+    ACStatus tmp = s.st;
     tmp.structSize = sizeof(ACStatus);
     *out = tmp;
 }
 
-AC_API int32_t AC_GetLastDiag(char* buf, uint32_t cap)
+AC_API int32_t AC_GetLastDiagEx(uint32_t slot, char* buf, uint32_t cap)
 {
     if (!buf || cap == 0) return 0;
     buf[0] = 0;
-    if (!g) return 0;
-    std::shared_lock lk(g->stMx);
-    strncpy_s(buf, cap, g->diag, _TRUNCATE);
-    return g->diag[0] ? 1 : 0;
+    if (!g || slot >= AC_MAX_DEVICES) return 0;
+    Sess& s = g->slots[slot];
+    std::shared_lock lk(s.stMx);
+    strncpy_s(buf, cap, s.diag, _TRUNCATE);
+    return s.diag[0] ? 1 : 0;
 }
 
 AC_API int32_t AC_GetMonitors(ACMonitorInfo* out, uint32_t max, int32_t* count)
@@ -899,7 +1089,7 @@ AC_API int32_t AC_GetDevices(ACDeviceInfo* out, uint32_t max, int32_t* count)
             uint8_t resp = 0;
             int pr = serial::ProbeDevice(p.port, 2000000, resp);
             if (pr == -1) {
-                d.inUse = 1;                       // 本核心或其它进程占用
+                d.inUse = 1;                       // 本核心或其他进程占用
             } else if (pr == 0) {
                 d.devType = (resp >> 2) & 3;
                 d.devId = resp & 3;

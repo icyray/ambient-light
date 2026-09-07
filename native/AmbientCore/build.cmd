@@ -19,7 +19,7 @@ if not exist obj mkdir obj
 if not exist bin mkdir bin
 
 cl /nologo /EHsc /O2 /W3 /std:c++17 /utf-8 /DNOMINMAX /D_UNICODE /DUNICODE /DAMBIENTCORE_BUILD /Zi /LD ^
-   AmbientCore.cpp capture.cpp colorchain.cpp serial.cpp log.cpp ^
+   AmbientCore.cpp capture.cpp colorchain.cpp serial.cpp audio.cpp log.cpp ^
    /Fe:bin\AmbientCore.dll /Fd:obj\AmbientCore.pdb /Fo:obj\
 if errorlevel 1 (
     echo [build] FAILED

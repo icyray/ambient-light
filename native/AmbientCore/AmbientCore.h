@@ -1,7 +1,8 @@
-// AmbientCore.h — 公共 C ABI (v1.2, x64 cdecl, 未修饰导出)
+// AmbientCore.h — 公共 C ABI (v1.3, x64 cdecl, 未修饰导出)
 // 合同来源: docs/AmbientCore_API.md。规则:
 //   - 结构体以 structSize 开头, 新增字段只能追加在末尾
-//     (v1.1 增补: ACConfig.colorfix/sfloor; v1.2 增补: ACStatus.ledRgb)
+//     (v1.1 增补: ACConfig.colorfix/sfloor; v1.2 增补: ACStatus.ledRgb;
+//      v1.3 增补: ACConfig.audio* 7 字段, ACStatus.audioLevel/audioOk/audioDev)
 //   - 字符串一律 UTF-8, 缓冲由调用方分配, DLL 不跨边界分配/释放
 //   - v1 明确不做: 回调、跨 ABI 分配、宽字符接口、x86
 #pragma once
@@ -84,6 +85,16 @@ typedef struct ACConfig {
     int32_t  colorfix;          // 0=厂商原链 (默认)  1=绝对色度噪声门限修正
     double   sfloor;            // colorfix 色度门限 (8bit max-min), 默认 24
 
+    // v1.3 增补 (M3 拾音)
+    int32_t  audioSource;       // 0=系统声音(主机 WASAPI 回环, "Adz" 5ms 节拍)
+                                // 1=MCU 自拾音("Adb", MCU 特效语义), 默认 0
+    double   audioGain;         // 灵敏度乘数, 默认 1.0 (0.1..5.0)
+    double   audioRelease;      // 包络回落时间常数(秒), 默认 0.30 (0.05..1.0)
+    double   audioGate;         // 底噪门限(原始全频 RMS), 默认 0.003 (0..0.1)
+    double   audioBass;         // 低频加权 0..1 (0=全频 1=纯低频), 默认 0.35
+    int32_t  audioAgc;          // 慢速峰值自动增益(安静音源抬升), 默认 1
+    int32_t  audioFollowVolume; // 音量字节跟随系统主音量标量, 默认 0
+
     uint32_t reserved[8];       // 必须置 0
 } ACConfig;
 
@@ -108,6 +119,11 @@ typedef struct ACStatus {
     // 已过颜色链与输出色序, 即串口帧 payload); 追光/纯色/测试图模式随帧刷新,
     // MCU 特效模式 (2..10,12,13) 由 MCU 自渲染, 恒为 0
     uint8_t  ledRgb[AC_MAX_LEDS * 3];
+    // v1.3 增补 (M3 拾音): 最近一帧 "Adz" 音量字节 (拾音模式随帧刷新, 其他模式 0);
+    // 音源会话健康 0=停止 1=正常 2=重建中; 当前捕获端点友好名 (UTF-8)
+    uint8_t  audioLevel;
+    int32_t  audioOk;
+    char     audioDev[AC_NAME_LEN];
 } ACStatus;
 
 // ---- 显示器 / 设备枚举 ------------------------------------------------
@@ -144,6 +160,15 @@ AC_API void       AC_Stop(void);                        // 阻塞至线程退出
 AC_API int32_t    AC_SetConfig(const ACConfig* cfg);    // 原子热更新, 全字段可热改
 AC_API void       AC_GetStatus(ACStatus* out);          // 非阻塞, 随时可调
 AC_API int32_t    AC_GetLastDiag(char* buf, uint32_t cap);  // 最近错误文本 (UTF-8); 返回 0=无诊断, 1=有
+
+// 多会话 (v1.3, M3): 每槽位独立会话线程; 上面的单设备接口 = slot 0 的别名。
+// slot ∈ [0, AC_MAX_DEVICES); 重复 Start 同一 slot 返回错误码 5;
+// 未启动过的 slot 的 GetStatusEx 返回 STOPPED + devType=-1。
+AC_API int32_t    AC_StartEx(uint32_t slot, const ACConfig* cfg);
+AC_API void       AC_StopEx(uint32_t slot);             // 阻塞至该会话退出, 发送关灯帧
+AC_API int32_t    AC_SetConfigEx(uint32_t slot, const ACConfig* cfg);
+AC_API void       AC_GetStatusEx(uint32_t slot, ACStatus* out);
+AC_API int32_t    AC_GetLastDiagEx(uint32_t slot, char* buf, uint32_t cap);
 
 // 枚举 (可在 Start 前调用; 设备枚举会短暂打开串口发握手, ~200ms/台)
 AC_API int32_t    AC_GetMonitors(ACMonitorInfo* out, uint32_t max, int32_t* count);
