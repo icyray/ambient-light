@@ -10,6 +10,7 @@ public sealed class AppOptions
     public string Lang { get; set; } = "zh";
     public bool StartMinimized { get; set; } = false;
     public bool AutoStart { get; set; } = false;   // shell:startup 快捷方式 (M4)
+    public string SelectedDevice { get; set; } = "0_1";   // 当前编辑的设备 key (M3)
 }
 
 public sealed class DeviceSettings
@@ -43,6 +44,15 @@ public sealed class DeviceSettings
     public int WaitDispPolicy { get; set; } = 2;
     public bool Colorfix { get; set; } = false;
     public double Sfloor { get; set; } = 24.0;
+
+    // v1.3 拾音 (M3): 对齐 ACConfig.audio* 字段
+    public int AudioSource { get; set; } = 0;          // 0=系统声音(主机拾音) 1=MCU 自拾音
+    public double AudioGain { get; set; } = 1.0;       // 灵敏度 0.1..5.0
+    public double AudioRelease { get; set; } = 0.30;   // 回落时间常数 s 0.05..1.0
+    public double AudioGate { get; set; } = 0.003;     // 底噪门限 0..0.1
+    public double AudioBass { get; set; } = 0.35;      // 低频加权 0..1
+    public bool AudioAgc { get; set; } = true;         // 慢速峰值自动增益
+    public bool AudioFollowVolume { get; set; } = false; // 音量字节跟随系统主音量
 
     public unsafe Interop.ACConfig ToCoreConfig()
     {
@@ -78,6 +88,13 @@ public sealed class DeviceSettings
         c.waitDispPolicy = WaitDispPolicy;
         c.colorfix = Colorfix ? 1 : 0;
         c.sfloor = Sfloor;
+        c.audioSource = AudioSource;
+        c.audioGain = AudioGain;
+        c.audioRelease = AudioRelease;
+        c.audioGate = AudioGate;
+        c.audioBass = AudioBass;
+        c.audioAgc = AudioAgc ? 1 : 0;
+        c.audioFollowVolume = AudioFollowVolume ? 1 : 0;
         return c;
     }
 
@@ -111,6 +128,13 @@ public sealed class DeviceSettings
         WaitDispPolicy = c.waitDispPolicy;
         Colorfix = c.colorfix != 0;
         Sfloor = c.sfloor;
+        AudioSource = c.audioSource;
+        AudioGain = c.audioGain;
+        AudioRelease = c.audioRelease;
+        AudioGate = c.audioGate;
+        AudioBass = c.audioBass;
+        AudioAgc = c.audioAgc != 0;
+        AudioFollowVolume = c.audioFollowVolume != 0;
     }
 
     private static (byte r, byte g, byte b) ParseColor(string hex, (byte r, byte g, byte b) fallback)
@@ -138,21 +162,75 @@ public static class ConfigStore
     };
 
     public static AppOptions App { get; private set; } = new();
-    public static DeviceSettings Device { get; private set; } = new();
+
+    // 多设备注册表 (M3): key = "<devType>_<devId>" (握手应答字节解码),
+    // 每设备独立文件 device_<key>.json, 字段命名对齐厂商便于迁移。
+    public static Dictionary<string, DeviceSettings> Devices { get; private set; } = new();
+
+    public static string SelectedKey { get; private set; } = "0_1";
+    public static event Action? SelectedChanged;
 
     public static string ConfigDir { get; private set; } = "";
     public static string ConfigDirSource { get; private set; } = "";   // "app" | "appdata"
+
+    /// <summary>当前选中设备的设置; 设置三页/主页直接绑定此实例</summary>
+    public static DeviceSettings Device => GetOrCreate(SelectedKey);
+
+    public static string FileNameOf(string key) => $"device_{key}.json";
+
+    public static DeviceSettings GetOrCreate(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) key = "0_1";
+        if (!Devices.TryGetValue(key, out var ds))
+        {
+            ds = new DeviceSettings();
+            Devices[key] = ds;
+        }
+        return ds;
+    }
+
+    /// <summary>切换当前编辑设备 (主页设备卡片触发); 设置页在下次导航时重读</summary>
+    public static void Select(string key)
+    {
+        key ??= "0_1";
+        GetOrCreate(key);
+        if (SelectedKey == key) return;
+        SelectedKey = key;
+        SelectedChanged?.Invoke();
+    }
 
     public static void Load()
     {
         ConfigDir = ResolveConfigDir();
         App = LoadJson<AppOptions>(Path.Combine(ConfigDir, "app.json")) ?? new AppOptions();
-        Device = LoadJson<DeviceSettings>(Path.Combine(ConfigDir, "device_0_1.json")) ?? new DeviceSettings();
+        Devices.Clear();
+        if (Directory.Exists(ConfigDir))
+        {
+            foreach (var f in Directory.GetFiles(ConfigDir, "device_*.json"))
+            {
+                var key = Path.GetFileNameWithoutExtension(f)["device_".Length..];
+                var ds = LoadJson<DeviceSettings>(f);
+                if (ds != null && key.Length > 0) Devices[key] = ds;
+            }
+        }
+        SelectedKey = string.IsNullOrWhiteSpace(App.SelectedDevice) ? "0_1" : App.SelectedDevice;
+        GetOrCreate(SelectedKey);           // 首次运行: 保证至少有一个默认设备
     }
 
-    public static void SaveApp() => WriteJson(Path.Combine(ConfigDir, "app.json"), App);
+    public static void SaveApp()
+    {
+        App.SelectedDevice = SelectedKey;
+        WriteJson(Path.Combine(ConfigDir, "app.json"), App);
+    }
 
-    public static void SaveDevice() => WriteJson(Path.Combine(ConfigDir, "device_0_1.json"), Device);
+    public static void SaveDevice() => WriteJson(Path.Combine(ConfigDir, FileNameOf(SelectedKey)), Device);
+
+    public static void SaveAll()
+    {
+        SaveApp();
+        foreach (var (key, ds) in Devices)
+            WriteJson(Path.Combine(ConfigDir, FileNameOf(key)), ds);
+    }
 
     private static string ResolveConfigDir()
     {

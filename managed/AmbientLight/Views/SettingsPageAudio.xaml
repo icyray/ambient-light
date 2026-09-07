@@ -1,0 +1,110 @@
+<Page x:Class="AmbientLight.Views.SettingsPageAudio"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:controls="clr-namespace:AmbientLight.Controls">
+    <!-- 拾音设置 (M3): 算法为自研包络链 (全频+低频 RMS → AGC → 门限 → 快起慢落),
+         参数热更新经 ApplyConfigDebounced; 音量表数据源 = ACStatus.audioLevel -->
+    <StackPanel Margin="16,4,16,16">
+
+        <!-- 实时音量 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="实时音量" FontWeight="SemiBold" />
+                    <TextBlock x:Name="LevelValueText" Text="0" HorizontalAlignment="Right" />
+                </Grid>
+                <ProgressBar x:Name="LevelBar" Minimum="0" Maximum="255" Value="0"
+                             Height="10" Margin="0,10,0,0" />
+                <TextBlock x:Name="AudioDevText" Text="音源: — (开启拾音模式后显示)"
+                           Opacity="0.6" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
+
+        <!-- 音源 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock Text="音源" FontWeight="SemiBold" />
+                <ComboBox x:Name="SourceCombo" Margin="0,8,0,0" SelectionChanged="OnSourceChanged">
+                    <ComboBoxItem Content="系统声音 (主机 WASAPI 回环拾音)" />
+                    <ComboBoxItem Content="灯带固件自拾音 (MCU 律动算法)" />
+                </ComboBox>
+                <TextBlock Text="主机拾音 = 按电脑播放的声音律动; 固件自拾音 = 灯带自己拾音, 主机仅发命令 (无需音源设置, 下方参数仅主机拾音生效)。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
+
+        <!-- 灵敏度 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <StackPanel>
+                        <TextBlock Text="自动增益" FontWeight="SemiBold" />
+                        <TextBlock Text="跟踪最近几秒的声音峰值自动归一, 安静音源也能满幅律动"
+                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ui:ToggleSwitch x:Name="AgcToggle" HorizontalAlignment="Right"
+                                     IsChecked="True" Click="OnAgcChanged" />
+                </Grid>
+                <Grid Margin="0,10,0,0">
+                    <TextBlock Text="灵敏度" />
+                    <TextBlock x:Name="GainValue" Text="×1.00" HorizontalAlignment="Right" />
+                </Grid>
+                <Slider x:Name="GainSlider" controls:SliderJump.Enabled="True"
+                        Minimum="0.1" Maximum="5.0" Value="1.0"
+                        ValueChanged="OnGainChanged" Margin="0,8,0,0" />
+            </StackPanel>
+        </ui:Card>
+
+        <!-- 律动手感 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="回落时长" FontWeight="SemiBold" />
+                    <TextBlock x:Name="ReleaseValue" Text="300 ms" HorizontalAlignment="Right" />
+                </Grid>
+                <Slider x:Name="ReleaseSlider" controls:SliderJump.Enabled="True"
+                        Minimum="50" Maximum="1000" Value="300"
+                        ValueChanged="OnReleaseChanged" Margin="0,8,0,0" />
+                <TextBlock Text="音量峰值消失后灯光熄灭的快慢。短 = 干脆利落, 长 = 余韵拖尾。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+
+                <Grid Margin="0,14,0,0">
+                    <TextBlock Text="低频加权" FontWeight="SemiBold" />
+                    <TextBlock x:Name="BassValue" Text="35%" HorizontalAlignment="Right" />
+                </Grid>
+                <Slider x:Name="BassSlider" controls:SliderJump.Enabled="True"
+                        Minimum="0" Maximum="100" Value="35"
+                        ValueChanged="OnBassChanged" Margin="0,8,0,0" />
+                <TextBlock Text="0% = 跟随整体响度; 100% = 只跟鼓点/贝斯。低频单独做峰值归一, 混音大小不影响权重。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
+
+        <!-- 门限与音量 -->
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="底噪门限" FontWeight="SemiBold" />
+                    <TextBlock x:Name="GateValue" Text="0.30%" HorizontalAlignment="Right" />
+                </Grid>
+                <Slider x:Name="GateSlider" controls:SliderJump.Enabled="True"
+                        Minimum="0" Maximum="100" Value="30"
+                        ValueChanged="OnGateChanged" Margin="0,8,0,0" />
+                <TextBlock Text="低于此响度的声音视为静默 (灯全灭)。出现底噪常亮就调大; 安静段落全灭太灵敏就调小。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+
+                <Grid Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Text="跟随系统音量" FontWeight="SemiBold" />
+                        <TextBlock Text="音量调低时灯光幅度同步变小 (关闭 = 只看内容不看音量)"
+                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ui:ToggleSwitch x:Name="FollowVolumeToggle" HorizontalAlignment="Right"
+                                     IsChecked="False" Click="OnFollowVolumeChanged" />
+                </Grid>
+            </StackPanel>
+        </ui:Card>
+
+    </StackPanel>
+</Page>

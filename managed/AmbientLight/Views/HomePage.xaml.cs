@@ -67,7 +67,6 @@ public partial class HomePage : Page
                 },
                 Margin = new Thickness(0, 0, 6, 6),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                IsEnabled = index != 1,             // 拾音律动 M3 实现
             };
             btn.Click += (_, _) => SetMode(index);
             ModeGrid.Children.Add(btn);
@@ -177,6 +176,14 @@ public partial class HomePage : Page
         {
             Ring.Update(st.CopyLedRgb(), dev.LedCount);
         }
+        else if (st.state == AmbientCore.StateRunning && dev.ModeIndex == 1)
+        {
+            // 拾音: Adz 帧只有音量字节, 无逐灯颜色 → 预览区显示实时音量
+            Ring.Clear();
+            Ring.SetHint($"拾音律动中 · 音量 {st.audioLevel}/255" +
+                         (st.audioOk == 2 ? " · 音源重建中…" : "") +
+                         (st.audioOk == 0 ? " · 音源未就绪" : ""));
+        }
         else if (st.state == AmbientCore.StateStopped)
         {
             Ring.Clear();
@@ -188,6 +195,10 @@ public partial class HomePage : Page
     {
         if (AmbientCore.IsMcuMode(mode))
             Ring.SetHint("MCU 特效由灯带固件渲染, 主机无帧数据可预览");
+        else if (mode == 1)
+            Ring.SetHint(ConfigStore.Device.AudioSource == 1
+                ? "固件自拾音: 灯带自己渲染律动, 主机无帧数据"
+                : "主机拾音: 灵敏度等参数在「拾音」页调节");
         else if (mode == 11)
             Ring.SetHint("纯色模式: 显示最近下发的纯色帧");
         else
@@ -275,20 +286,115 @@ public partial class HomePage : Page
 
     private async Task RefreshDevicesAsync()
     {
-        if (DevicesText == null) return;
-        DevicesText.Text = "探测中… (打开串口握手, ~0.2s/台)";
+        if (DevicesPanel == null) return;
+        DevicesPanel.Children.Clear();
+        DevicesPanel.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = "探测中… (打开串口握手, ~0.2s/台)",
+            Opacity = 0.6,
+            FontSize = 12,
+        });
         try
         {
             var devices = await Task.Run(AmbientCore.GetDevices).ConfigureAwait(true);
-            DevicesText.Text = devices.Length == 0
-                ? "未发现灯带 (VID_2E3C & PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口"
-                : string.Join("\n", devices.Select(d =>
-                    $"{d.ComPort}  {DevTypeName(d.devType)}  id={d.devId}" +
-                    (d.inUse == 1 ? "  [端口被占用]" : "")));
+            DevicesPanel.Children.Clear();
+            if (devices.Length == 0)
+            {
+                DevicesPanel.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = "未发现灯带 (VID_2E3C & PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口",
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                });
+                return;
+            }
+            foreach (var d in devices)
+            {
+                // 本核心会话占用的端口必然探测为 [端口被占用][未应答] —
+                // 类型/编号/运行态改从该会话的 ACStatus 取
+                ACStatus? sess = null;
+                foreach (var slot in App.Instance.Slots.Keys)
+                {
+                    var st = AmbientCore.GetStatusEx(slot);
+                    if (st.state != AmbientCore.StateStopped && st.ComPort == d.ComPort)
+                    {
+                        sess = st;
+                        break;
+                    }
+                }
+                DevicesPanel.Children.Add(BuildDeviceRow(d, sess));
+            }
         }
         catch (Exception ex)
         {
-            DevicesText.Text = $"探测失败: {ex.Message}";
+            DevicesPanel.Children.Clear();
+            DevicesPanel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = $"探测失败: {ex.Message}",
+                FontSize = 12,
+            });
         }
+    }
+
+    // 每台设备一行: 信息 + 开启/关闭 + 设为当前 (多设备会话管理入口)。
+    // sess = 该端口被本核心会话占用时的会话状态 (探测拿不到握手, 类型取自会话)
+    private UIElement BuildDeviceRow(ACDeviceInfo d, ACStatus? sess)
+    {
+        bool managedHere = sess != null;
+        int devType = sess?.devType ?? d.devType;
+        int devId = sess?.devId ?? d.devId;
+        bool usable = managedHere || (d.devType >= 0 && d.inUse == 0);
+        string key = $"{devType}_{devId}";
+        int slot = managedHere ? App.Instance.SlotOf(key) : -1;
+        bool selected = usable && ConfigStore.SelectedKey == key;
+
+        var info = new System.Windows.Controls.TextBlock
+        {
+            Text = $"{d.ComPort}  {DevTypeName(devType)}  id={devId}" +
+                   (slot >= 0 ? "  · 运行中" : "") +
+                   (!managedHere && d.inUse == 1 ? "  [端口被占用]" : "") +
+                   (!managedHere && d.devType < 0 ? "  [未应答]" : ""),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var toggle = new Wpf.Ui.Controls.Button
+        {
+            Content = slot >= 0 ? "关闭" : "开启",
+            Appearance = slot >= 0 ? ControlAppearance.Secondary : ControlAppearance.Primary,
+            Margin = new Thickness(0, 0, 6, 0),
+            IsEnabled = usable,
+            MinWidth = 64,
+        };
+        toggle.Click += (_, _) =>
+        {
+            if (App.Instance.SlotOf(key) >= 0) App.Instance.StopDevice(key);
+            else App.Instance.StartDevice(key);
+            _ = RefreshDevicesAsync();
+        };
+        var select = new Wpf.Ui.Controls.Button
+        {
+            Content = selected ? "当前" : "设为当前",
+            IsEnabled = usable && !selected,
+            Appearance = ControlAppearance.Secondary,
+            MinWidth = 76,
+        };
+        select.Click += (_, _) =>
+        {
+            ConfigStore.Select(key);
+            _ = RefreshDevicesAsync();
+        };
+
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(info, 0);
+        Grid.SetColumn(toggle, 1);
+        Grid.SetColumn(select, 2);
+        grid.Children.Add(info);
+        grid.Children.Add(toggle);
+        grid.Children.Add(select);
+        return grid;
     }
 }

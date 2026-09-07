@@ -22,6 +22,8 @@
             <ui:NavigationView.MenuItems>
                 <ui:NavigationViewItem Content="主页" Icon="{ui:SymbolIcon Home24}"
                                        TargetPageType="{x:Type views:HomePage}" />
+                <ui:NavigationViewItem Content="拾音" Icon="{ui:SymbolIcon SoundWaveCircle24}"
+                                       TargetPageType="{x:Type views:SettingsPageAudio}" />
                 <ui:NavigationViewItem Content="采集" Icon="{ui:SymbolIcon Desktop24}"
                                        TargetPageType="{x:Type views:SettingsPageCapture}" />
                 <ui:NavigationViewItem Content="颜色" Icon="{ui:SymbolIcon Color24}"

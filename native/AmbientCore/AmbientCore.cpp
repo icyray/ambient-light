@@ -373,6 +373,7 @@ void CoreLoopInner(Sess* g)
     // 主机拾音 (WASAPI 回环) 会话持有; 音源参数只在 cfgSerial 变化时推送
     bool audioOn = false;
     uint64_t audioParamsSerial = 0;
+    bool audioCleared = false;          // 进入拾音时清预览帧/处理耗时 (一次性)
 
     auto EffLeds = [](const ACConfig& c) { return std::min(c.ledCount, serial::kMaxLedCount); };
     auto IsMcuMode = [&](const ACConfig& c, int m) {
@@ -586,6 +587,12 @@ void CoreLoopInner(Sess* g)
         if (IsHostAudio(applied)) {
             if (!audioOn) { audioOn = true; MeterAcquire(); }
             if (audioParamsSerial != s) { MeterPushParams(applied); audioParamsSerial = s; }
+            if (!audioCleared) {            // 预览帧清零 + procEma 归零 (拾音不走采集路径)
+                std::unique_lock lk(g->stMx);
+                memset(g->st.ledRgb, 0, sizeof(g->st.ledRgb));
+                procEma = 0;
+                audioCleared = true;
+            }
             if (capValid) {                     // 拾音不依赖显示器, 释放 DDA 会话
                 cap.Destroy();
                 capValid = false;
@@ -594,10 +601,13 @@ void CoreLoopInner(Sess* g)
                 waitDisp = false;
                 ACLOGI("audio mode -> exit WAIT_DISP");
             }
-        } else if (audioOn) {
-            audioOn = false;
-            MeterRelease();
-            audioParamsSerial = 0;
+        } else {
+            audioCleared = false;
+            if (audioOn) {
+                audioOn = false;
+                MeterRelease();
+                audioParamsSerial = 0;
+            }
         }
 
         // ============ 3. 事件: 热插拔 / 拓扑 / DPMS ============

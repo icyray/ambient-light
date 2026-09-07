@@ -42,7 +42,7 @@ public static unsafe partial class AmbientCore
     public static readonly (int Index, string Name, string Kind)[] Modes =
     {
         (0,  "屏幕追光", "主机渲染"),
-        (1,  "拾音律动", "M3"),
+        (1,  "拾音律动", "主机拾音"),
         (2,  "彩虹跳跃", "MCU"),
         (3,  "海浪潮汐", "MCU"),
         (4,  "电闪雷鸣", "MCU"),
@@ -97,6 +97,22 @@ public static unsafe partial class AmbientCore
     [LibraryImport(Lib)]
     private static partial int AC_SetTestPattern(int mode);
 
+    // ---- 多会话 (v1.3, M3): slot 0 = 上面单设备接口的别名 ----
+    [LibraryImport(Lib)]
+    private static partial int AC_StartEx(uint slot, ref ACConfig cfg);
+
+    [LibraryImport(Lib)]
+    private static partial void AC_StopEx(uint slot);
+
+    [LibraryImport(Lib)]
+    private static partial int AC_SetConfigEx(uint slot, ref ACConfig cfg);
+
+    [LibraryImport(Lib)]
+    private static partial void AC_GetStatusEx(uint slot, ref ACStatus status);
+
+    [LibraryImport(Lib)]
+    private static partial int AC_GetLastDiagEx(uint slot, byte[] buf, uint cap);
+
     // ---- 友好封装 ----
     public static uint Version() => AC_Version();
 
@@ -105,6 +121,29 @@ public static unsafe partial class AmbientCore
     public static void Stop() => AC_Stop();
 
     public static int SetConfig(ref ACConfig cfg) => AC_SetConfig(ref cfg);
+
+    public static int StartEx(int slot, ref ACConfig cfg) => AC_StartEx((uint)slot, ref cfg);
+
+    public static void StopEx(int slot) => AC_StopEx((uint)slot);
+
+    public static int SetConfigEx(int slot, ref ACConfig cfg) => AC_SetConfigEx((uint)slot, ref cfg);
+
+    public static ACStatus GetStatusEx(int slot)
+    {
+        var st = default(ACStatus);
+        st.structSize = (uint)sizeof(ACStatus);
+        AC_GetStatusEx((uint)slot, ref st);
+        return st;
+    }
+
+    public static string LastDiagEx(int slot)
+    {
+        var buf = new byte[256];
+        int r = AC_GetLastDiagEx((uint)slot, buf, (uint)buf.Length);
+        int n = Array.IndexOf(buf, (byte)0);
+        if (n < 0) n = buf.Length;
+        return r == 1 ? Encoding.UTF8.GetString(buf, 0, n) : "";
+    }
 
     public static int SetTestPattern(int mode) => AC_SetTestPattern(mode);
 
@@ -180,6 +219,13 @@ public unsafe struct ACConfig
     public int waitDispPolicy;
     public int colorfix;
     public double sfloor;
+    public int audioSource;
+    public double audioGain;
+    public double audioRelease;
+    public double audioGate;
+    public double audioBass;
+    public int audioAgc;
+    public int audioFollowVolume;
     public fixed uint reserved[8];
 
     public string ComPort
@@ -233,6 +279,13 @@ public unsafe struct ACConfig
         waitDispPolicy = 2,
         colorfix = 0,
         sfloor = 24.0,
+        audioSource = 0,
+        audioGain = 1.0,
+        audioRelease = 0.30,
+        audioGate = 0.003,
+        audioBass = 0.35,
+        audioAgc = 1,
+        audioFollowVolume = 0,
     };
 }
 
@@ -255,6 +308,9 @@ public unsafe struct ACStatus
     public fixed int margins[4];
     public uint frameCounter;
     public fixed byte ledRgb[540];              // MaxLeds*3: 最近下发帧 RGB (主机渲染模式)
+    public byte audioLevel;                     // v1.3: 拾音模式最近音量字节 0..255
+    public int audioOk;                         // v1.3: 音源会话 0=停 1=正常 2=重建中
+    public fixed byte audioDev[32];             // v1.3: 当前捕获端点友好名 (UTF-8)
 
     public string ComPort
     {
@@ -264,6 +320,19 @@ public unsafe struct ACStatus
             {
                 int n = 0;
                 while (n < 16 && p[n] != 0) n++;
+                return Encoding.UTF8.GetString(p, n);
+            }
+        }
+    }
+
+    public string AudioDev
+    {
+        get
+        {
+            fixed (byte* p = audioDev)
+            {
+                int n = 0;
+                while (n < 32 && p[n] != 0) n++;
                 return Encoding.UTF8.GetString(p, n);
             }
         }

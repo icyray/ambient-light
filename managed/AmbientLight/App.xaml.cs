@@ -23,7 +23,6 @@ public partial class App : Application
     private MenuItem? _trayToggle;
     private PollingService? _poller;
     private MainWindow? _main;
-    private bool _coreRunning;
 
     public PollingService Poller => _poller!;
     public MainWindow MainWin => _main!;
@@ -82,55 +81,125 @@ public partial class App : Application
             _main.Show();
         _poller.Start();
 
-        if (ConfigStore.Device.AutoStartCore)
-            StartCore();
+        if (ConfigStore.Devices.Values.Any(d => d.AutoStartCore))
+            _ = StartAllAsync();
     }
 
-    // ---- 核心生命周期 -----------------------------------------------
-    public bool CoreRunning => _coreRunning;
+    // ---- 核心生命周期 (M3: 每设备一个 slot 会话) ---------------------
+    private readonly Dictionary<int, string> _slots = new();   // slot → 设备 key
 
-    public bool StartCore()
+    public bool CoreRunning => _slots.Count > 0;
+
+    /// <summary>slot → 设备 key 快照 (UI 设备卡片/轮询用)</summary>
+    public IReadOnlyDictionary<int, string> Slots => _slots;
+
+    public int SlotOf(string key)
     {
-        if (_coreRunning) return true;
-        var cfg = ConfigStore.Device.ToCoreConfig();
-        int rc = AmbientCore.Start(ref cfg);
-        if (rc != AmbientCore.ErrOk)
+        foreach (var (slot, k) in _slots) if (k == key) return slot;
+        return -1;
+    }
+
+    public string? KeyOf(int slot) => _slots.TryGetValue(slot, out var k) ? k : null;
+
+    public bool StartDevice(string key)
+    {
+        if (SlotOf(key) >= 0) return true;
+        int slot = -1;
+        for (int i = 0; i < Interop.AmbientCore.MaxDevices; i++)
+            if (!_slots.ContainsKey(i)) { slot = i; break; }
+        if (slot < 0)
         {
-            string reason = rc switch
-            {
-                AmbientCore.ErrInvalid => "配置参数无效 (modeIndex 等)",
-                AmbientCore.ErrAlreadyRunning => "核心已在运行",
-                _ => $"错误码 {rc}",
-            };
-            MessageBox.Show($"启动失败: {reason}\n{AmbientCore.LastDiag()}", "AmbientLight",
+            MessageBox.Show($"设备数超过上限 ({Interop.AmbientCore.MaxDevices})", "AmbientLight",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
-        _coreRunning = true;
+        var cfg = ConfigStore.GetOrCreate(key).ToCoreConfig();
+        int rc = Interop.AmbientCore.StartEx(slot, ref cfg);
+        if (rc != Interop.AmbientCore.ErrOk)
+        {
+            string reason = rc switch
+            {
+                Interop.AmbientCore.ErrInvalid => "配置参数无效",
+                Interop.AmbientCore.ErrAlreadyRunning => "该会话已在运行",
+                _ => $"错误码 {rc}",
+            };
+            MessageBox.Show($"启动 {key} 失败: {reason}\n{Interop.AmbientCore.LastDiagEx(slot)}",
+                "AmbientLight", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+        _slots[slot] = key;
         UpdateTrayToggle();
         return true;
     }
 
-    public void StopCore()
+    public void StopDevice(string key)
     {
-        if (!_coreRunning) return;
-        AmbientCore.Stop();
-        _coreRunning = false;
+        int slot = SlotOf(key);
+        if (slot < 0) return;
+        Interop.AmbientCore.StopEx(slot);
+        _slots.Remove(slot);
         UpdateTrayToggle();
     }
 
+    public void StopAllDevices()
+    {
+        foreach (var slot in _slots.Keys.ToList())
+        {
+            Interop.AmbientCore.StopEx(slot);
+            _slots.Remove(slot);
+        }
+        UpdateTrayToggle();
+    }
+
+    /// <summary>总开关: 枚举在位设备, 为 AutoStartCore 的设备各建会话;
+    /// 一台都没枚举到时占住选中设备的 slot 等 DEV_LOST 自动重连</summary>
+    public async Task StartAllAsync()
+    {
+        if (CoreRunning) return;
+        try
+        {
+            var devices = await Task.Run(Interop.AmbientCore.GetDevices);
+            bool any = false;
+            foreach (var d in devices)
+            {
+                if (d.devType < 0 || d.inUse == 1) continue;   // 未应答/端口被占
+                var key = $"{d.devType}_{d.devId}";
+                if (ConfigStore.GetOrCreate(key).AutoStartCore && StartDevice(key))
+                    any = true;
+            }
+            if (!any && ConfigStore.Device.AutoStartCore)
+                StartDevice(ConfigStore.SelectedKey);
+        }
+        catch
+        {
+            // 枚举失败按未在位处理: 占住选中设备 slot, 状态机自动重试
+            if (ConfigStore.Device.AutoStartCore) StartDevice(ConfigStore.SelectedKey);
+        }
+        UpdateTrayToggle();
+    }
+
+    public bool StartCore()
+    {
+        if (CoreRunning) return true;
+        _ = StartAllAsync();
+        return true;
+    }
+
+    public void StopCore() => StopAllDevices();
+
     public void ToggleCore()
     {
-        if (_coreRunning) StopCore();
+        if (CoreRunning) StopCore();
         else StartCore();
     }
 
-    /// <summary>配置变更 (亮度滑条等) → 原子热更新 + 落盘</summary>
+    /// <summary>配置变更 (亮度滑条等) → 选中设备原子热更新 + 落盘</summary>
     public void ApplyConfig()
     {
         var cfg = ConfigStore.Device.ToCoreConfig();
-        if (_coreRunning)
-            AmbientCore.SetConfig(ref cfg);
+        int slot = SlotOf(ConfigStore.SelectedKey);
+        if (slot >= 0)
+            Interop.AmbientCore.SetConfigEx(slot, ref cfg);
         ConfigStore.SaveDevice();
     }
 
@@ -170,7 +239,7 @@ public partial class App : Application
     private void UpdateTrayToggle()
     {
         if (_trayToggle != null)
-            _trayToggle.Header = _coreRunning ? "关闭氛围灯" : "开启氛围灯";
+            _trayToggle.Header = CoreRunning ? "关闭氛围灯" : "开启氛围灯";
     }
 
     // ---- 托盘 ---------------------------------------------------------
@@ -209,18 +278,17 @@ public partial class App : Application
     private void ExitApp()
     {
         if (_main != null) _main.AllowClose = true;
-        StopCore();
+        StopAllDevices();
         Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        StopCore();
+        StopAllDevices();
         if (ConfigStore.ConfigDir.Length > 0)
         {
             // 第二实例守卫退出时尚未 Load (ConfigDir 为空), 不能用默认值覆盖已存配置
-            ConfigStore.SaveApp();
-            ConfigStore.SaveDevice();
+            ConfigStore.SaveAll();
         }
         _tray?.Dispose();
         _poller?.Dispose();
