@@ -164,11 +164,12 @@ public partial class HomePage : Page
     private void UpdateRing(ACStatus st)
     {
         var dev = ConfigStore.Device;
-        int sig = dev.ModeIndex | (dev.LedCount << 5) | (dev.Sides << 15) | (dev.Direction << 18) | ((int)st.state << 20);
+        int sig = dev.ModeIndex | (dev.LedCount << 5) | (dev.Sides << 15) | (dev.Direction << 18)
+                | ((int)st.state << 20) | ((dev.LedRotate + 256) << 24);
         if (sig != _lastRingSig)
         {
             _lastRingSig = sig;
-            Ring.Configure(dev.LedCount, dev.Sides, dev.Direction);
+            Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, dev.LedRotate);
             UpdateRingHint(dev.ModeIndex);
             ModeTagText.Text = $"{AmbientCore.ModeName(dev.ModeIndex)} · {dev.LedCount} 灯";
         }

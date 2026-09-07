@@ -49,7 +49,7 @@ namespace {
 static const PROPERTYKEY kPKEY_Name = { { 0xa45c254e, 0xdf1c, 0x4efd,
                                           { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 14 };
 
-constexpr uint32_t kVersion = (1u << 16) | (3u << 8) | 0u;   // 1.3.0 (M3: 拾音 + 多会话)
+constexpr uint32_t kVersion = (1u << 16) | (4u << 8) | 0u;   // 1.4.0 (M4: ledRotate 校准)
 
 ACConfig DefaultConfig()
 {
@@ -280,6 +280,11 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
     out->audioAgc     = out->audioAgc ? 1 : 0;
     out->audioFollowVolume = out->audioFollowVolume ? 1 : 0;
     out->audioSoft    = std::clamp(out->audioSoft, 0.0, 1.0);
+    {   // 灯序偏移钳制 (同厂商 LedRotate: ±灯数 12%; 灯数 <10 无意义直接 0)
+        int n = std::min(out->ledCount, serial::kMaxLedCount);
+        int maxRot = n >= 10 ? n * 12 / 100 : 0;
+        out->ledRotate  = std::clamp(out->ledRotate, -maxRot, maxRot);
+    }
     for (uint32_t v : out->reserved) if (v) return 1;
     return 0;
 }
@@ -420,6 +425,7 @@ void CoreLoopInner(Sess* g)
         p.depthOverride = c.depthOverride;
         p.taps = c.taps;
         p.smoothing = c.smoothing;
+        p.ledRotate = c.ledRotate;
         p.blackbars = c.blackBars != 0;
         p.barlevel = c.blackBarLevel;
         return p;

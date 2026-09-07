@@ -252,6 +252,7 @@ public unsafe struct ACConfig
     public double audioSoft;
     public fixed byte audioDevId[64];           // 麦克风源目标输入端点, 空=跟随默认
     public fixed byte audioOutDevId[64];        // 回环源目标输出端点, 空=跟随默认
+    public int ledRotate;                       // v1.4: 灯序偏移 (核心再钳 ±灯数12%), 默认 0
     public fixed uint reserved[8];
 
     public string ComPort
@@ -357,6 +358,7 @@ public unsafe struct ACConfig
         audioAgc = 1,
         audioFollowVolume = 0,
         audioSoft = 0.5,
+        ledRotate = 0,
     };
 }
 

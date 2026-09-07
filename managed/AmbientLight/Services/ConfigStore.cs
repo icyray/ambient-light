@@ -11,6 +11,8 @@ public sealed class AppOptions
     public bool StartMinimized { get; set; } = false;
     public bool AutoStart { get; set; } = false;   // shell:startup 快捷方式 (M4)
     public string SelectedDevice { get; set; } = "0_1";   // 当前编辑的设备 key (M3)
+    public bool AutoOnEnabled { get; set; } = false;   // 定时开关灯 (M4): 到点自动开, 时刻前保持灭
+    public string AutoOnTime { get; set; } = "17:00";  // HH:mm, 每天 (跨零点自动归为"未到时间"→关)
 }
 
 public sealed class DeviceSettings
@@ -23,6 +25,7 @@ public sealed class DeviceSettings
     public int LedCount { get; set; } = 60;
     public int Sides { get; set; } = 4;
     public int Direction { get; set; } = 0;
+    public int LedRotate { get; set; } = 0;      // 灯序偏移 (M4 校准, 核心钳 ±灯数12%)
     public int CaptureRange { get; set; } = 15;
     public int DepthOverride { get; set; } = 0;
     public int Taps { get; set; } = 8;
@@ -67,6 +70,7 @@ public sealed class DeviceSettings
         c.ledCount = LedCount;
         c.sides = Sides;
         c.direction = Direction;
+        c.ledRotate = LedRotate;
         c.captureRange = CaptureRange;
         c.depthOverride = DepthOverride;
         c.taps = Taps;
@@ -113,6 +117,7 @@ public sealed class DeviceSettings
         LedCount = c.ledCount;
         Sides = c.sides;
         Direction = c.direction;
+        LedRotate = c.ledRotate;
         CaptureRange = c.captureRange;
         DepthOverride = c.depthOverride;
         Taps = c.taps;

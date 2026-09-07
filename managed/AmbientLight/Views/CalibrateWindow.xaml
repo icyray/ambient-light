@@ -1,0 +1,59 @@
+<Window x:Class="AmbientLight.Views.CalibrateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:controls="clr-namespace:AmbientLight.Controls"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="Manual" Background="Black"
+        Topmost="True" Title="AmbientLight - 屏幕校准"
+        PreviewKeyDown="OnPreviewKeyDown">
+    <!-- 全屏四色校准 (厂商 FormCalibrate 同构): 灯带以屏幕追光模式采集本屏,
+         每颗灯应显示其取色区所在象限的颜色; 中央面板不进取色带 (校准期间取色带临时调窄)。 -->
+    <Grid>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Border x:Name="QuadTL" Grid.Column="0" Grid.Row="0" Background="#FFFF0000" />
+            <Border x:Name="QuadTR" Grid.Column="1" Grid.Row="0" Background="#FF00FF00" />
+            <Border x:Name="QuadBL" Grid.Column="0" Grid.Row="1" Background="#FF0000FF" />
+            <Border x:Name="QuadBR" Grid.Column="1" Grid.Row="1" Background="#FFFFFF00" />
+        </Grid>
+
+        <Border HorizontalAlignment="Center" VerticalAlignment="Center" Width="520"
+                Background="#E6141418" CornerRadius="12" Padding="22">
+            <StackPanel>
+                <Grid>
+                    <TextBlock Text="屏幕校准" FontSize="20" FontWeight="SemiBold" />
+                    <ui:Button Content="关闭" Appearance="Secondary" HorizontalAlignment="Right"
+                               Click="OnClose" KeyboardNavigation.IsTabStop="True" />
+                </Grid>
+                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Opacity="0.8"
+                           Text="灯带需处于「屏幕追光」模式: 屏幕四角分别显示四种颜色, 每颗灯的颜色 = 其取色区落在的象限。顺时针观察灯带, 颜色顺序应为 左上→右上→左下→右下 (按物理位置)。错位少量灯珠用「灯序偏移」微调, 绕向反了回采集页改「起始方向」。" />
+                <Separator Margin="0,12" />
+
+                <TextBlock x:Name="SchemeText" Text="" Opacity="0.75" />
+                <TextBlock x:Name="ResText" Text="" Opacity="0.75" Margin="0,4,0,0" />
+                <TextBlock x:Name="RotateText" Text="" Opacity="0.75" Margin="0,4,0,0" />
+                <TextBlock x:Name="IndexText" Text="" Opacity="0.75" Margin="0,4,0,0" />
+                <TextBlock x:Name="StatusText" Text="" Opacity="0.5" Margin="0,4,0,0" />
+
+                <controls:LedRingView x:Name="Ring" MinHeight="150" Margin="0,12,0,0" />
+
+                <UniformGrid Columns="4" Margin="0,12,0,0">
+                    <ui:Button x:Name="RotLeftBtn" Content="← 左移" Margin="0,0,6,0" Click="OnRotLeft" />
+                    <ui:Button x:Name="RotRightBtn" Content="右移 →" Margin="0,0,6,0" Click="OnRotRight" />
+                    <ui:Button x:Name="RotResetBtn" Content="重置" Margin="0,0,6,0" Click="OnRotReset" />
+                    <ui:Button Content="换色" Click="OnRotateColors" />
+                </UniformGrid>
+                <TextBlock Text="偏移立即生效并保存; 每步 1 颗灯, 范围 ±灯数的 12%。Esc 或「关闭」退出并恢复校准前的取色设置。"
+                           Opacity="0.45" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

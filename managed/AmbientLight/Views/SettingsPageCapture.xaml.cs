@@ -30,6 +30,7 @@ public partial class SettingsPageCapture : Page
         LedCountBox.Value = Math.Clamp(dev.LedCount, 1, 180);
         SidesCombo.SelectedIndex = Math.Clamp(dev.Sides, 2, 4) - 2;
         DirectionCombo.SelectedIndex = dev.Direction != 0 ? 1 : 0;
+        RefreshRotateClamp(dev.LedCount);
         CaptureRangeSlider.Value = Math.Clamp(dev.CaptureRange, 5, 40);
         int sm = Array.IndexOf(SmoothingChoices, dev.Smoothing);
         SmoothingCombo.SelectedIndex = sm < 0 ? 0 : sm;
@@ -81,6 +82,31 @@ public partial class SettingsPageCapture : Page
         if (LedCountBox.Value is double v)
         {
             ConfigStore.Device.LedCount = (int)Math.Round(v);
+            RefreshRotateClamp(ConfigStore.Device.LedCount);   // 灯数变化 → 偏移范围联动
+            App.Instance.ApplyConfigDebounced();
+        }
+    }
+
+    // ---- 灯序偏移 (M4 校准): 范围 = ±灯数 12% (与核心 ValidateConfig 同公式) ----
+    private void RefreshRotateClamp(int ledCount)
+    {
+        int n = Math.Min(ledCount, Interop.AmbientCore.MaxLeds);
+        int maxRot = n >= 10 ? n * 12 / 100 : 0;
+        RotateBox.Minimum = -maxRot;
+        RotateBox.Maximum = maxRot;
+        RotateBox.Value = Math.Clamp(ConfigStore.Device.LedRotate, -maxRot, maxRot);
+        RotateBox.IsEnabled = maxRot > 0;
+        RotateHintText.Text = maxRot > 0
+            ? $"校正灯带物理起点与协议起点的少量错位 (±{maxRot}); 全屏校准向导里可直接试出正确值。"
+            : "灯数少于 10 时无需灯序偏移。";
+    }
+
+    private void OnRotateChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        if (RotateBox.Value is double v)
+        {
+            ConfigStore.Device.LedRotate = (int)Math.Round(v);
             App.Instance.ApplyConfigDebounced();
         }
     }

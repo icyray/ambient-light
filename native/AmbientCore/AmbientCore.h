@@ -1,8 +1,9 @@
-// AmbientCore.h — 公共 C ABI (v1.3, x64 cdecl, 未修饰导出)
+// AmbientCore.h — 公共 C ABI (v1.4, x64 cdecl, 未修饰导出)
 // 合同来源: docs/AmbientCore_API.md。规则:
 //   - 结构体以 structSize 开头, 新增字段只能追加在末尾
 //     (v1.1 增补: ACConfig.colorfix/sfloor; v1.2 增补: ACStatus.ledRgb;
-//      v1.3 增补: ACConfig.audio* 7 字段, ACStatus.audioLevel/audioOk/audioDev)
+//      v1.3 增补: ACConfig.audio* 7 字段, ACStatus.audioLevel/audioOk/audioDev;
+//      v1.4 增补: ACConfig.ledRotate)
 //   - 字符串一律 UTF-8, 缓冲由调用方分配, DLL 不跨边界分配/释放
 //   - v1 明确不做: 回调、跨 ABI 分配、宽字符接口、x86
 #pragma once
@@ -102,6 +103,11 @@ typedef struct ACConfig {
                                            // 空 = 跟随系统默认输入; 设备拔出自动回退默认, 重插切回
     char     audioOutDevId[AC_AUDIO_ID_LEN]; // 回环源: 目标输出端点 ID, 空 = 跟随系统默认输出;
                                            // 可选非默认输出 (听 B 设备时灯跟 B); 回退语义同上
+
+    // v1.4 增补 (M4 校准)
+    int32_t  ledRotate;         // 灯序偏移: LED i 显示段 (i+rotate) mod N 的取色区
+                                //   (校正灯带物理起点与协议起点不一致的少量错位);
+                                //   钳到 ±N*12/100 (N<10 → 0, 同厂商 LedRotate), 默认 0
 
     uint32_t reserved[8];       // 必须置 0
 } ACConfig;

@@ -22,6 +22,8 @@ unsafe
     cfg.baudRate = 2000000;
     cfg.modeIndex = 0;
     cfg.ledCount = 60;
+    cfg.sides = 4;              // 不设会被核心钳到 2 (左右两边), 四象限分段随边数变化
+    cfg.direction = 0;
     // 颜色链默认值 (UI 侧 ConfigStore 默认; 不设则 brightness=0 → 全黑帧)
     cfg.brightness = 1.0;
     cfg.vibrance = 9.0;
@@ -31,8 +33,8 @@ unsafe
     cfg.colorCut = 1;
     cfg.minBrightness = 1;
 
-    Console.WriteLine($"version: 1.{(Native.AC_Version() >> 8) & 0xFF}.{Native.AC_Version() & 0xFF} (expect 1.3.0)");
-    Check("version 1.3.0", Native.AC_Version() == ((1u << 16) | (3u << 8)));
+    Console.WriteLine($"version: 1.{(Native.AC_Version() >> 8) & 0xFF}.{Native.AC_Version() & 0xFF} (expect 1.4.0)");
+    Check("version 1.4.0", Native.AC_Version() == ((1u << 16) | (4u << 8)));
 
     int rc = Native.AC_Start(ref cfg);
     Console.WriteLine($"AC_Start (mode 0) -> {rc}");
@@ -124,7 +126,48 @@ unsafe
     Check("ledRgb = 纯色帧 (全灯均匀)", solidOk,
           $"led0={st.ledRgb[0]},{st.ledRgb[1]},{st.ledRgb[2]} nonzero={CountNonZero(st)}");
 
-    // ---- 测试图 + Stop ----
+    // ---- M4: ledRotate 灯序偏移 (四象限测试图下逐段验证; 测试图不过颜色链,
+    //         ledRgb 即象限原色) + 测试图开关 + Stop ----
+    // 60 灯 sides=4 dir=0 虚拟 16:9 分段 (160x90, cx<80/cy<45 分界):
+    //   右 0-5 黄 6-10 绿 | 顶 11-20 绿 21-29 红 | 左 30-34 红 35-40 蓝 | 底 41-49 蓝 50-59 黄
+    cfg.modeIndex = 0;
+    Native.AC_SetTestPattern(1);
+    Check("SetConfig rotate=0", Native.AC_SetConfig(ref cfg) == 0);
+    st = Poll(1200);
+    Check("四象限 rotate=0 基准", st.state == 2
+          && Is(st, 0, 255, 255, 0) && Is(st, 6, 0, 255, 0) && Is(st, 21, 255, 0, 0)
+          && Is(st, 35, 0, 0, 255) && Is(st, 51, 255, 255, 0),
+          $"led0={Px(st, 0)} led6={Px(st, 6)} led21={Px(st, 21)} led35={Px(st, 35)} led51={Px(st, 51)}");
+
+    cfg.ledRotate = 2;
+    Check("SetConfig rotate=+2", Native.AC_SetConfig(ref cfg) == 0);
+    st = Poll(1200);
+    Check("rotate=+2 → LED i 显示段 i+2", st.state == 2
+          && Is(st, 19, 255, 0, 0) && Is(st, 33, 0, 0, 255) && Is(st, 49, 255, 255, 0),
+          $"led19={Px(st, 19)} (红=原段21) led33={Px(st, 33)} (蓝=原段35) led49={Px(st, 49)} (黄=原段51)");
+
+    cfg.ledRotate = -2;
+    Check("SetConfig rotate=-2", Native.AC_SetConfig(ref cfg) == 0);
+    st = Poll(1200);
+    Check("rotate=-2 → 反向偏移", st.state == 2
+          && Is(st, 21, 0, 255, 0) && Is(st, 35, 255, 0, 0) && Is(st, 51, 0, 0, 255),
+          $"led21={Px(st, 21)} (绿=原段19) led35={Px(st, 35)} (红=原段33) led51={Px(st, 51)} (蓝=原段49)");
+
+    cfg.ledRotate = 100;   // 越界 → 核心钳到 +7 (60*12/100)
+    Check("SetConfig rotate=+100 (待钳制)", Native.AC_SetConfig(ref cfg) == 0);
+    st = Poll(1200);
+    Check("rotate=+100 钳到 +7", st.state == 2 && Is(st, 19, 255, 0, 0) && Is(st, 14, 255, 0, 0),
+          $"led19={Px(st, 19)} led14={Px(st, 14)} (均=原段21/26 红)");
+
+    cfg.ledRotate = -100;
+    Check("SetConfig rotate=-100 (待钳制)", Native.AC_SetConfig(ref cfg) == 0);
+    st = Poll(1200);
+    Check("rotate=-100 钳到 -7", st.state == 2 && Is(st, 40, 255, 0, 0),
+          $"led40={Px(st, 40)} (红=原段33; -2 时应为原段38 蓝)");
+
+    cfg.ledRotate = 0;
+    Check("SetConfig rotate=0 复位", Native.AC_SetConfig(ref cfg) == 0);
+
     Native.AC_SetTestPattern(2);
     st = Poll(1000);
     Check("pattern 2 (洋红) 运行", st.state == 2 && st.frameCounter > 0);
@@ -170,6 +213,13 @@ static unsafe int CountNonZero(ACStatus st)
     for (int i = 0; i < 540; i++) if (st.ledRgb[i] != 0) n++;
     return n;
 }
+
+// ledRgb 第 led 颗灯是否为指定 RGB (四象限测试图 payload 不过颜色链, 即原色)
+static unsafe bool Is(ACStatus st, int led, byte r, byte g, byte b)
+    => st.ledRgb[led * 3] == r && st.ledRgb[led * 3 + 1] == g && st.ledRgb[led * 3 + 2] == b;
+
+static unsafe string Px(ACStatus st, int led)
+    => $"{st.ledRgb[led * 3]},{st.ledRgb[led * 3 + 1]},{st.ledRgb[led * 3 + 2]}";
 
 static unsafe string ReadDev(ACStatus st)
 {
@@ -311,6 +361,7 @@ internal unsafe struct ACConfig
     public double audioSoft;
     public fixed byte audioDevId[64];
     public fixed byte audioOutDevId[64];
+    public int ledRotate;
     public fixed uint reserved[8];
 }
 

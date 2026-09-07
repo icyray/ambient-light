@@ -18,6 +18,10 @@ public partial class SettingsPageAdvanced : Page
     {
         InitializeComponent();
         Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
+        // TimePicker 无公开 change 事件, 用 DP 描述符监听
+        System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
+            Wpf.Ui.Controls.TimePicker.TimeProperty, typeof(Wpf.Ui.Controls.TimePicker))
+            .AddValueChanged(AutoOnTimePicker, OnAutoOnTimeChanged);
         Loaded += OnLoaded;
         Unloaded += (_, _) => App.Instance.PatternChanged -= OnPatternChanged;
     }
@@ -34,6 +38,10 @@ public partial class SettingsPageAdvanced : Page
         AutoStartPathText.Text = AutoStart.ShortcutPath;
         StartMinimizedToggle.IsChecked = ConfigStore.App.StartMinimized;
         AutoStartCoreToggle.IsChecked = ConfigStore.Device.AutoStartCore;
+        AutoOnToggle.IsChecked = ConfigStore.App.AutoOnEnabled;
+        AutoOnTimePicker.Time = TimeSpan.TryParseExact(ConfigStore.App.AutoOnTime, @"hh\:mm",
+            null, out var t) ? t : new TimeSpan(17, 0, 0);
+        AutoOnTimePicker.IsEnabled = ConfigStore.App.AutoOnEnabled;
         ConfigDirText.Text = $"{ConfigStore.ConfigDir}  ({ConfigStore.ConfigDirSource})";
         VersionText.Text = $"AmbientLight {GetType().Assembly.GetName().Version?.ToString(3)} · AmbientCore v{(AmbientCore.Version() >> 16) & 0xFF}.{(AmbientCore.Version() >> 8) & 0xFF}.{AmbientCore.Version() & 0xFF}";
         _loading = false;
@@ -113,6 +121,29 @@ public partial class SettingsPageAdvanced : Page
         ConfigStore.Device.AutoStartCore = AutoStartCoreToggle.IsChecked == true;
         ConfigStore.SaveDevice();
     }
+
+    // ---- 定时开启 + 校准 -------------------------------------------------
+    private void OnAutoOnChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        bool on = AutoOnToggle.IsChecked == true;
+        ConfigStore.App.AutoOnEnabled = on;
+        AutoOnTimePicker.IsEnabled = on;
+        ConfigStore.SaveApp();
+        // 立即对齐一次状态 (开关定时功能影响本次会话的启动语义已过, 只影响后续到点拉起)
+    }
+
+    private void OnAutoOnTimeChanged(object? sender, EventArgs e)
+    {
+        if (_loading) return;
+        if (AutoOnTimePicker.Time is TimeSpan t)
+        {
+            ConfigStore.App.AutoOnTime = $"{(int)t.TotalHours:00}:{t.Minutes:00}";
+            ConfigStore.SaveApp();
+        }
+    }
+
+    private void OnCalibrate(object sender, RoutedEventArgs e) => CalibrateWindow.TryOpen();
 
     // ---- 测试图 ----------------------------------------------------------
     private void OnPatternQuad(object sender, RoutedEventArgs e) => App.Instance.SetPattern(1);

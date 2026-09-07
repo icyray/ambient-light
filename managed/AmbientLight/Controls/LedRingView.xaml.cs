@@ -18,16 +18,16 @@ public partial class LedRingView : UserControl
     /// <summary>中心区提示副标题 (如 "MCU 特效由固件渲染")</summary>
     public void SetHint(string text) => HintText.Text = text;
 
-    /// <summary>布局变化 (灯数/边数/方向) 时重建椭圆; 签名相同则跳过。
+    /// <summary>布局变化 (灯数/边数/方向/灯序偏移) 时重建椭圆; 签名相同则跳过。
     /// 椭圆尺寸同时受横向 (540px 预算) 与纵向 (340px 预算) 约束, 组件高度按
     /// 纵向实际需要自适应 —— 固定高度会让左右列被截断。</summary>
-    public void Configure(int ledCount, int sides, int direction)
+    public void Configure(int ledCount, int sides, int direction, int rotate = 0)
     {
-        int sig = ledCount | (sides << 10) | (direction << 14);
+        int sig = ledCount | (sides << 10) | (direction << 14) | ((Math.Clamp(rotate, -255, 255) + 255) << 16);
         if (sig == _signature) return;
         _signature = sig;
 
-        var (top, bottom, left, right, maxPerSide) = BuildLayout(ledCount, sides, direction);
+        var (top, bottom, left, right, maxPerSide) = BuildLayout(ledCount, sides, direction, rotate);
         int maxVert = Math.Max(Math.Max(left.Count, right.Count), 1);
         double cell = Math.Clamp(
             Math.Min(540.0 / Math.Max(maxPerSide, 1), 340.0 / (maxVert + 2)) - 3.0, 3.0, 14.0);
@@ -58,6 +58,23 @@ public partial class LedRingView : UserControl
         var off = Frozen(30, 30, 34);
         foreach (var e in _top.Concat(_bottom).Concat(_left).Concat(_right))
             e.Fill = off;
+    }
+
+    /// <summary>当前布局下各物理边的 LED 序号范围 (灯数核对用), 如 "右 0-19 · 顶 20-39 …"。
+    /// 空边跳过; 仅在 Configure 之后有意义。</summary>
+    public string DescribeIndices()
+    {
+        static string Range(List<Ellipse> strip, string name)
+        {
+            if (strip.Count == 0) return null;
+            var idx = strip.Select(e => (int)e.Tag).ToList();
+            return $"{name} {idx.Min()}-{idx.Max()}";
+        }
+        var parts = new[] {
+            (Range(_top, "顶"), 1), (Range(_bottom, "底"), 2),
+            (Range(_left, "左"), 3), (Range(_right, "右"), 4),
+        }.Where(p => p.Item1 != null).OrderBy(p => p.Item2).Select(p => p.Item1);
+        return string.Join(" · ", parts);
     }
 
     private static void Fill(List<Ellipse> strip, ReadOnlySpan<byte> rgb, int ledCount)
@@ -105,9 +122,10 @@ public partial class LedRingView : UserControl
     // ---- 布局复刻 (capture.cpp BuildRects, 虚拟 16:9 屏) -------------------
     // dir=0: 右(B→T) → 顶(R→L) → 左(T→B) → 底(L→R), #0 = 右下角
     // dir=1: 左(B→T) → 顶(L→R) → 右(T→B) → 底(R→L), #0 = 左下角
+    // rotate: 灯序偏移 (capture.cpp 同构): LED i 的位置 = 段 (i+rotate) mod N
     // sides=3 时核心通过 rects.resize(leds) 截掉尾段 (无底边)
     private static (List<int> top, List<int> bottom, List<int> left, List<int> right, int maxPerSide)
-        BuildLayout(int leds, int sides, int direction)
+        BuildLayout(int leds, int sides, int direction, int rotate)
     {
         const double W = 16, H = 9;
         int horiz, vert;
@@ -156,6 +174,19 @@ public partial class LedRingView : UserControl
             VSeg(vert, false, false); HSeg(horiz, true, false);
         }
         if (pts.Count > leds) pts.RemoveRange(leds, pts.Count - leds);
+
+        // 灯序偏移: LED i 显示段 (i+rotate) mod N → 位置表按此重排 (与核心一致)
+        if (rotate != 0 && leds > 0)
+        {
+            var rotated = new List<(int idx, double cx, double cy)>(leds);
+            for (int i = 0; i < leds; i++)
+            {
+                int j = (i + rotate) % leds;
+                if (j < 0) j += leds;
+                rotated.Add((i, pts[j].cx, pts[j].cy));
+            }
+            pts = rotated;
+        }
 
         // 显示序 = 物理序: 顶/底左→右, 左/右顶→底 (与绕向无关, 按 cx/cy 排)
         var top = pts.Where(p => p.cy == 0).OrderBy(p => p.cx).Select(p => p.idx).ToList();

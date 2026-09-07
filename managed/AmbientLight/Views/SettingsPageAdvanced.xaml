@@ -59,15 +59,40 @@
 
         <ui:Card Margin="0,0,0,8">
             <StackPanel>
-                <TextBlock Text="测试图 (校准/排障)" FontWeight="SemiBold" />
+                <TextBlock Text="测试图 / 屏幕校准" FontWeight="SemiBold" />
                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                     <ui:Button x:Name="PatternQuadBtn" Content="四象限色块" Margin="0,0,8,0"
                                Click="OnPatternQuad" />
-                    <ui:Button x:Name="PatternMagentaBtn" Content="洋红常亮"
+                    <ui:Button x:Name="PatternMagentaBtn" Content="洋红常亮" Margin="0,0,8,0"
                                Click="OnPatternMagenta" />
+                    <ui:Button x:Name="CalibrateBtn" Content="全屏校准向导…" Appearance="Secondary"
+                               Click="OnCalibrate" />
                 </StackPanel>
-                <TextBlock Text="测试图覆盖正常追光画面; 再次点击同一按钮关闭。四象限色块用于核对方向/灯数/分段, 与厂商校准图同构。"
+                <TextBlock Text="测试图覆盖正常追光画面; 再次点击同一按钮关闭。四象限色块用于核对方向/灯数/分段, 与厂商校准图同构。全屏校准向导在目标显示器上铺四色大图, 就近微调灯序偏移。"
                            Opacity="0.6" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </ui:Card>
+
+        <ui:Card Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <StackPanel>
+                        <TextBlock Text="定时开启" FontWeight="SemiBold" />
+                        <TextBlock Text="每天到点自动开启灯带 (当天只自动开一次, 手动关闭不会被再次拉起); 时刻未到时应用启动不亮灯。"
+                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ui:ToggleSwitch x:Name="AutoOnToggle" HorizontalAlignment="Right"
+                                     Click="OnAutoOnChanged" />
+                </Grid>
+                <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="开启时刻" VerticalAlignment="Center" Margin="0,0,12,0" />
+                    <ui:TimePicker x:Name="AutoOnTimePicker" Grid.Column="1" Width="140"
+                                   ClockIdentifier="Clock24Hour" HorizontalAlignment="Left" />
+                </Grid>
             </StackPanel>
         </ui:Card>
 

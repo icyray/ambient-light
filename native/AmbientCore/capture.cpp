@@ -133,7 +133,7 @@ static void ComputeCounts(int leds, int sides, int W, int H, int* horiz, int* ve
     }
 }
 
-static void BuildRects(int leds, int sides, int direction, int depth, int W, int H,
+static void BuildRects(int leds, int sides, int direction, int depth, int rotate, int W, int H,
                        const int m[4], std::vector<Float4>& rects)
 {
     rects.clear();
@@ -175,6 +175,17 @@ static void BuildRects(int leds, int sides, int direction, int depth, int W, int
         hseg(horiz, true,  false);
     }
     rects.resize(leds);
+
+    // 灯序偏移 (M4): LED i 的取色区 = 段 (i+rotate) mod N; 校准窗用于微调灯带起点错位。
+    // 取模对负 rotate 同样成立; rotate=0 时零开销。
+    if (rotate != 0 && leds > 0) {
+        std::vector<Float4> tmp = rects;
+        for (int i = 0; i < leds; i++) {
+            int j = (i + rotate) % leds;
+            if (j < 0) j += leds;
+            rects[i] = tmp[j];
+        }
+    }
 }
 
 } // namespace layout
@@ -284,7 +295,7 @@ bool CaptureSession::RecreateResources()
     outBuf_.Reset(); stageBuf_.Reset(); outUAV_.Reset(); cbParams_.Reset();
 
     const UINT N = p_.leds;
-    layout::BuildRects(N, p_.sides, p_.direction, EffectiveDepth(p_, H_), W_, H_, margins_, rects_);
+    layout::BuildRects(N, p_.sides, p_.direction, EffectiveDepth(p_, H_), p_.ledRotate, W_, H_, margins_, rects_);
 
     HRESULT hr;
     {
@@ -472,7 +483,7 @@ CaptureSession::StepResult CaptureSession::Step(uint32_t timeoutMs, Float4* cols
             else if (allBlack && margins_[s] + 15 < dimMax[s]) { margins_[s] += 15; changed = true; }
         }
         if (changed) {
-            layout::BuildRects(p_.leds, p_.sides, p_.direction, EffectiveDepth(p_, H_),
+            layout::BuildRects(p_.leds, p_.sides, p_.direction, EffectiveDepth(p_, H_), p_.ledRotate,
                                W_, H_, margins_, rects_);
             PushRects();
         }
@@ -487,7 +498,7 @@ void CaptureSession::BuildPatternFrame(const Params& p, std::vector<uint8_t>& fr
     const uint8_t palette[4][3] = { {255,0,0}, {0,255,0}, {0,0,255}, {255,255,0} };
     int mzero[4] = { 0, 0, 0, 0 };
     std::vector<Float4> rects;
-    layout::BuildRects(p.leds, p.sides, p.direction, 30, 160, 90, mzero, rects);
+    layout::BuildRects(p.leds, p.sides, p.direction, 30, p.ledRotate, 160, 90, mzero, rects);
     for (int i = 0; i < (int)p.leds; i++) {
         double cx = (rects[i].x + rects[i].z) / 2.0, cy = (rects[i].y + rects[i].w) / 2.0;
         int quad = (cy < 45.0 ? 0 : 2) + (cx < 80.0 ? 0 : 1);   // 0=TL 1=TR 2=BL 3=BR

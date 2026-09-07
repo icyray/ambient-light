@@ -32,6 +32,7 @@ struct Params {
     int  depthOverride = 0;     // >0 直接指定深度 px
     int  taps          = 8;     // smoothing>0 时被换算覆盖
     int  smoothing     = 0;
+    int  ledRotate     = 0;     // 灯序偏移: LED i 用段 (i+rotate) mod N 的取色区 (已钳制)
     bool blackbars     = true;
     int  barlevel      = 3;
 };
