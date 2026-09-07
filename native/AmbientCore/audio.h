@@ -47,7 +47,8 @@ public:
 
     void SetParams(const Params& p);                // 任意线程, 下一包生效
     void SetSource(bool microphone);                // 任意线程: false=回环(默认) true=麦克风; 变更触发重建
-    void SetTargetDevice(const char* endpointId);   // 任意线程: UTF-8 端点 ID, 空=跟随默认; 变更触发重建
+    void SetTargetDevice(const char* micEndpointId, const char* loopEndpointId);
+                                                    // 任意线程: UTF-8 端点 ID, 空=跟随默认; 变更触发重建
     uint8_t EnvelopeByte() const { return envByte_.load(std::memory_order_relaxed); }
     float   MasterVolume() const { return masterVol_.load(std::memory_order_relaxed); }
     int     Healthy() const { return healthy_.load(std::memory_order_relaxed); }  // 0=停 1=正常 2=重建中
@@ -74,9 +75,10 @@ private:
     std::atomic<bool> running_{ false };
 
     // ---- 跨线程 ----
-    CRITICAL_SECTION paramsCs_{};                   // params_/wantId_ 写 (Set) / 读 (线程)
+    CRITICAL_SECTION paramsCs_{};                   // params_/wantId 写 (Set) / 读 (线程)
     Params params_{};
-    std::string wantId_;                            // 目标端点 ID (UTF-8, 空=默认)
+    std::string wantMicId_;                         // 麦克风源目标端点 (UTF-8, 空=默认)
+    std::string wantLoopId_;                        // 回环源目标输出端点 (UTF-8, 空=默认)
     std::atomic<int> wantMic_{ 0 };                 // 0=回环 1=麦克风 (SetSource 写)
     std::atomic<uint8_t> envByte_{ 0 };             // 输出包络 0..255
     std::atomic<float>   masterVol_{ 1.0f };

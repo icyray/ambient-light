@@ -144,10 +144,11 @@ void Meter::SetSource(bool microphone)
     wantMic_ = microphone ? 1 : 0;
 }
 
-void Meter::SetTargetDevice(const char* endpointId)
+void Meter::SetTargetDevice(const char* micEndpointId, const char* loopEndpointId)
 {
     EnterCriticalSection(&paramsCs_);
-    wantId_ = endpointId ? endpointId : "";
+    wantMicId_ = micEndpointId ? micEndpointId : "";
+    wantLoopId_ = loopEndpointId ? loopEndpointId : "";
     LeaveCriticalSection(&paramsCs_);
 }
 
@@ -308,7 +309,7 @@ void Meter::ThreadLoop()
         s.mic = wantMic_.load() != 0;
         {
             EnterCriticalSection(&paramsCs_);
-            s.targetId = wantId_;
+            s.targetId = s.mic ? wantMicId_ : wantLoopId_;
             LeaveCriticalSection(&paramsCs_);
         }
         if (!InitSession(s, &name)) {
@@ -357,7 +358,7 @@ void Meter::ThreadLoop()
             {
                 std::string nowId;
                 EnterCriticalSection(&paramsCs_);
-                nowId = wantId_;
+                nowId = s.mic ? wantMicId_ : wantLoopId_;
                 LeaveCriticalSection(&paramsCs_);
                 if (nowId != s.targetId) {
                     ACLOGI("audio: target device changed (%s -> %s) -> rebuild",
@@ -366,7 +367,9 @@ void Meter::ThreadLoop()
                     break;
                 }
             }
-            if ((s.mic ? s.events.captureChanged : s.events.renderChanged).exchange(0)) {
+            // 默认设备变化仅在"跟随默认"(未钉选端点) 时触发重建; 钉选时只看在位性
+            if (s.targetId.empty() &&
+                (s.mic ? s.events.captureChanged : s.events.renderChanged).exchange(0)) {
                 ACLOGI("audio: default %s endpoint changed -> rebuild",
                        s.mic ? "capture" : "render");
                 rebuild = true;

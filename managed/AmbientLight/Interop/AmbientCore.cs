@@ -250,7 +250,8 @@ public unsafe struct ACConfig
     public int audioAgc;
     public int audioFollowVolume;
     public double audioSoft;
-    public fixed byte audioDevId[64];           // 麦克风源目标端点 ID, 空=跟随默认
+    public fixed byte audioDevId[64];           // 麦克风源目标输入端点, 空=跟随默认
+    public fixed byte audioOutDevId[64];        // 回环源目标输出端点, 空=跟随默认
     public fixed uint reserved[8];
 
     public string ComPort
@@ -290,6 +291,28 @@ public unsafe struct ACConfig
         {
             var b = Encoding.UTF8.GetBytes(value ?? "");
             fixed (byte* p = audioDevId)
+            {
+                for (int i = 0; i < 64; i++) p[i] = 0;
+                for (int i = 0; i < b.Length && i < 63; i++) p[i] = b[i];
+            }
+        }
+    }
+
+    public string AudioOutDevId
+    {
+        get
+        {
+            fixed (byte* p = audioOutDevId)
+            {
+                int n = 0;
+                while (n < 64 && p[n] != 0) n++;
+                return Encoding.UTF8.GetString(p, n);
+            }
+        }
+        set
+        {
+            var b = Encoding.UTF8.GetBytes(value ?? "");
+            fixed (byte* p = audioOutDevId)
             {
                 for (int i = 0; i < 64; i++) p[i] = 0;
                 for (int i = 0; i < b.Length && i < 63; i++) p[i] = b[i];

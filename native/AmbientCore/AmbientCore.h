@@ -98,8 +98,10 @@ typedef struct ACConfig {
     int32_t  audioFollowVolume; // 音量字节跟随系统主音量标量, 默认 0
     double   audioSoft;         // 律动柔和度 0..1, 默认 0.5: 起音平滑(10-100ms)+
                                 //   中段抬升(gamma 1→0.5)+呼吸下限(0-15%), 0=硬包络(频闪感)
-    char     audioDevId[AC_AUDIO_ID_LEN]; // 麦克风源: 目标端点 ID (AC_GetAudioEndPoints),
+    char     audioDevId[AC_AUDIO_ID_LEN];   // 麦克风源: 目标输入端点 ID (AC_GetAudioEndPoints),
                                            // 空 = 跟随系统默认输入; 设备拔出自动回退默认, 重插切回
+    char     audioOutDevId[AC_AUDIO_ID_LEN]; // 回环源: 目标输出端点 ID, 空 = 跟随系统默认输出;
+                                           // 可选非默认输出 (听 B 设备时灯跟 B); 回退语义同上
 
     uint32_t reserved[8];       // 必须置 0
 } ACConfig;

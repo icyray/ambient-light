@@ -97,11 +97,18 @@ unsafe
                       " (对着麦克风出声 audioLevel 应>0; 系统隐私拒绝时恒 0)");
 
     // ---- 输入端点枚举 (多麦克风选择用) ----
-    var adevs = GetAudioDevs();
+    var adevs = GetAudioDevs(1);
     Check("音频输入端点枚举 ≥1", adevs.Count >= 1,
           $"{adevs.Count} 台: {string.Join(" | ", adevs.Select(a => $"{a.name}{(a.def != 0 ? "[默认]" : "")}"))}");
     int ndef = adevs.Count(a => a.def != 0);
     Check("恰好一个系统默认输入", ndef == 1, $"default={ndef}");
+
+    // ---- 输出端点枚举 (回环指定输出设备用) ----
+    var odevs = GetAudioDevs(0);
+    Check("音频输出端点枚举 ≥1", odevs.Count >= 1,
+          $"{odevs.Count} 台: {string.Join(" | ", odevs.Select(a => $"{a.name}{(a.def != 0 ? "[默认]" : "")}"))}");
+    int ndefOut = odevs.Count(a => a.def != 0);
+    Check("恰好一个系统默认输出", ndefOut == 1, $"default={ndefOut}");
 
     cfg.modeIndex = 11;
     cfg.audioSource = 0;
@@ -173,14 +180,14 @@ static unsafe string ReadDev(ACStatus st)
     return Encoding.UTF8.GetString(p, n);
 }
 
-static unsafe List<(string id, string name, int def)> GetAudioDevs()
+static unsafe List<(string id, string name, int def)> GetAudioDevs(int capture)
 {
     var buf = new ACAudioDevInfo[16];
     int count = 0;
     var list = new List<(string, string, int)>();
     fixed (ACAudioDevInfo* pBuf = buf)              // 数组元素须整块钉住 (CS1666)
     {
-        Native.AC_GetAudioEndPoints(1, pBuf, 16, &count);
+        Native.AC_GetAudioEndPoints(capture, pBuf, 16, &count);
         for (int i = 0; i < count; i++)
         {
             byte* pi = pBuf[i].id, pn = pBuf[i].name;
@@ -303,6 +310,7 @@ internal unsafe struct ACConfig
     public int audioFollowVolume;
     public double audioSoft;
     public fixed byte audioDevId[64];
+    public fixed byte audioOutDevId[64];
     public fixed uint reserved[8];
 }
 

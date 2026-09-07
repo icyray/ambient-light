@@ -196,7 +196,7 @@ void MeterSetSource(const ACConfig& c)
 void MeterSetTarget(const ACConfig& c)
 {
     std::lock_guard lk(g_meterMx);
-    if (g_meter) g_meter->SetTargetDevice(c.audioDevId);
+    if (g_meter) g_meter->SetTargetDevice(c.audioDevId, c.audioOutDevId);
 }
 
 void MeterRead(uint8_t* env, float* master)
@@ -272,6 +272,7 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
     out->comPort[AC_PORT_LEN - 1] = 0;
     out->audioSource  = std::clamp(out->audioSource, 0, 2);   // 0=回环 1=MCU 自拾音 2=麦克风
     out->audioDevId[AC_AUDIO_ID_LEN - 1] = 0;
+    out->audioOutDevId[AC_AUDIO_ID_LEN - 1] = 0;
     out->audioGain    = std::clamp(out->audioGain, 0.1, 5.0);
     out->audioRelease = std::clamp(out->audioRelease, 0.05, 1.0);
     out->audioGate    = std::clamp(out->audioGate, 0.0, 0.1);
