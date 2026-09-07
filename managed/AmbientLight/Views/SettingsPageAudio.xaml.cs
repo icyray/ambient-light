@@ -38,11 +38,13 @@ public partial class SettingsPageAudio : Page
         SourceCombo.SelectedIndex = dev.AudioSource != 0 ? 1 : 0;
         AgcToggle.IsChecked = dev.AudioAgc;
         GainSlider.Value = Math.Clamp(dev.AudioGain, 0.1, 5.0);
+        SoftSlider.Value = Math.Clamp(dev.AudioSoft * 100.0, 0, 100);
         ReleaseSlider.Value = Math.Clamp(dev.AudioRelease * 1000.0, 50, 1000);
         BassSlider.Value = Math.Clamp(dev.AudioBass * 100.0, 0, 100);
         GateSlider.Value = Math.Clamp(dev.AudioGate * 10000.0, 0, 100);
         FollowVolumeToggle.IsChecked = dev.AudioFollowVolume;
         RefreshGainLabel();
+        RefreshSoftLabel();
         RefreshReleaseLabel();
         RefreshBassLabel();
         RefreshGateLabel();
@@ -62,6 +64,7 @@ public partial class SettingsPageAudio : Page
     }
 
     private void RefreshGainLabel() => GainValue.Text = $"×{GainSlider.Value:0.00}";
+    private void RefreshSoftLabel() => SoftValue.Text = $"{(int)SoftSlider.Value}%";
     private void RefreshReleaseLabel() => ReleaseValue.Text = $"{(int)ReleaseSlider.Value} ms";
     private void RefreshBassLabel() => BassValue.Text = $"{(int)BassSlider.Value}%";
     private void RefreshGateLabel() => GateValue.Text = $"{GateSlider.Value / 100.0:0.00}%";
@@ -85,6 +88,14 @@ public partial class SettingsPageAudio : Page
         if (GainValue != null) RefreshGainLabel();
         if (_loading) return;
         ConfigStore.Device.AudioGain = GainSlider.Value;
+        App.Instance.ApplyConfigDebounced();
+    }
+
+    private void OnSoftChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (SoftValue != null) RefreshSoftLabel();
+        if (_loading) return;
+        ConfigStore.Device.AudioSoft = SoftSlider.Value / 100.0;
         App.Instance.ApplyConfigDebounced();
     }
 

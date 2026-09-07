@@ -14,7 +14,8 @@
 //   2. 慢速峰值归一 (AGC, tau≈5s, 地板 0.02): 各自归一到 [0,1]
 //   3. 混合 = (1-bass)*normFull + bass*normBass
 //   4. 绝对底噪门限 (AGC 之前的原始 fullRMS, 防底噪被 AGC 放大) → 0
-//   5. 包络: 快起 (瞬时), 慢落 (audioRelease 时间常数)
+//   5. 柔和度整形 (soft, 仅有声段): gamma 1→0.5 抬中段 + 呼吸下限 0→15%
+//   6. 包络: 起音平滑 (10-100ms 随 soft), 慢落 (audioRelease 时间常数)
 #pragma once
 #include <windows.h>
 #include <atomic>
@@ -29,6 +30,7 @@ struct Params {
     double gate    = 0.003;   // 底噪门限 (原始全频 RMS), 0..0.1
     double bass    = 0.35;    // 低频加权 0..1 (0=全频, 1=纯低频)
     bool   agc     = true;    // 慢速峰值归一 (安静音源自动抬升)
+    double soft    = 0.5;     // 律动柔和度 0..1: 起音 10-100ms / gamma 1→0.5 / 呼吸下限 0-15%
 };
 
 class Meter {

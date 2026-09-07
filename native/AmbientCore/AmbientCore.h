@@ -94,6 +94,8 @@ typedef struct ACConfig {
     double   audioBass;         // 低频加权 0..1 (0=全频 1=纯低频), 默认 0.35
     int32_t  audioAgc;          // 慢速峰值自动增益(安静音源抬升), 默认 1
     int32_t  audioFollowVolume; // 音量字节跟随系统主音量标量, 默认 0
+    double   audioSoft;         // 律动柔和度 0..1, 默认 0.5: 起音平滑(10-100ms)+
+                                //   中段抬升(gamma 1→0.5)+呼吸下限(0-15%), 0=硬包络(频闪感)
 
     uint32_t reserved[8];       // 必须置 0
 } ACConfig;

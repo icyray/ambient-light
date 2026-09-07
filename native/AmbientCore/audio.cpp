@@ -191,8 +191,14 @@ static void TeardownSession(Session& s)
 // ---- 包络 -------------------------------------------------------------
 void Meter::StepEnvelope(double target, double dtMs)
 {
-    if (target > env_) env_ = target;                          // 快起
-    else env_ *= exp(-dtMs / (live_.release * 1000.0 + 1e-9)); // 慢落
+    if (target > env_) {
+        // 起音平滑 (10-100ms 随柔和度), 消除逐包硬跳变带来的频闪感
+        double tauA = 10.0 + 90.0 * live_.soft;
+        env_ += (target - env_) * (1.0 - exp(-dtMs / tauA));
+        if (env_ > 1.0) env_ = 1.0;
+    } else {
+        env_ *= exp(-dtMs / (live_.release * 1000.0 + 1e-9)); // 慢落 (用户可调)
+    }
     if (env_ < 0.0005) env_ = 0;
     envByte_ = (uint8_t)(env_ * 255.0 + 0.5);
 }
@@ -232,8 +238,17 @@ void Meter::ProcessPacket(const uint8_t* data, uint32_t frames, uint32_t blockAl
         peakF_ = peakB_ = 1.0;
     }
     double target = (1.0 - live_.bass) * (fullRms / peakF_) + live_.bass * (bassRms / peakB_);
-    if (fullRms < live_.gate) target = 0;              // 绝对门限在 AGC 之前取值 (防底噪放大)
     if (target > 1.0) target = 1.0;
+    if (fullRms < live_.gate) {
+        target = 0;                        // 绝对门限在 AGC 之前取值 (防底噪放大); 静默→包络落 0
+    } else {
+        // 柔和度整形 (仅作用于有声段, 门限之下不抬升):
+        //   gamma 1→0.5 抬中段 (鼓点间隙不再深黑), 呼吸下限 0→15% (消灭大幅亮灭频闪)
+        double shaped = pow(target, 1.0 - 0.5 * live_.soft);
+        double fl = 0.15 * live_.soft;
+        target = fl + (1.0 - fl) * shaped;
+        if (target > 1.0) target = 1.0;
+    }
     StepEnvelope(target, dtMs);
 }
 

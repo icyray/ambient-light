@@ -29,7 +29,7 @@
                     <ComboBoxItem Content="系统声音 (主机 WASAPI 回环拾音)" />
                     <ComboBoxItem Content="灯带固件自拾音 (MCU 律动算法)" />
                 </ComboBox>
-                <TextBlock Text="主机拾音 = 按电脑播放的声音律动; 固件自拾音 = 灯带自己拾音, 主机仅发命令 (无需音源设置, 下方参数仅主机拾音生效)。"
+                <TextBlock Text="主机拾音 = 按电脑播放的声音律动; 固件自拾音 = 灯带自己拾音, 主机仅发命令。注意: 多数固件并无麦克风, 自拾音只表现为 ~0.25s 一次的闪烁 (原厂同样), 属硬件限制。"
                            Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
             </StackPanel>
         </ui:Card>
@@ -60,6 +60,16 @@
         <ui:Card Margin="0,0,0,8">
             <StackPanel>
                 <Grid>
+                    <TextBlock Text="柔和度" FontWeight="SemiBold" />
+                    <TextBlock x:Name="SoftValue" Text="50%" HorizontalAlignment="Right" />
+                </Grid>
+                <Slider x:Name="SoftSlider" controls:SliderJump.Enabled="True"
+                        Minimum="0" Maximum="100" Value="50"
+                        ValueChanged="OnSoftChanged" Margin="0,8,0,0" />
+                <TextBlock Text="0% = 硬包络 (最跟手, 大动态音乐会有频闪感); 越高越平滑 — 起音变缓、鼓点间隙不再深黑、保留呼吸底亮。默认 50%。"
+                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+
+                <Grid Margin="0,14,0,0">
                     <TextBlock Text="回落时长" FontWeight="SemiBold" />
                     <TextBlock x:Name="ReleaseValue" Text="300 ms" HorizontalAlignment="Right" />
                 </Grid>

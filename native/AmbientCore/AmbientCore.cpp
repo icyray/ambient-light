@@ -76,6 +76,7 @@ ACConfig DefaultConfig()
     c.audioBass = 0.35;
     c.audioAgc = 1;
     c.audioFollowVolume = 0;
+    c.audioSoft = 0.5;
     return c;
 }
 
@@ -173,6 +174,7 @@ void MeterPushParams(const ACConfig& c)
         p.gate = c.audioGate;
         p.bass = c.audioBass;
         p.agc = c.audioAgc != 0;
+        p.soft = c.audioSoft;
         g_meter->SetParams(p);
     }
 }
@@ -255,6 +257,7 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
     out->audioBass    = std::clamp(out->audioBass, 0.0, 1.0);
     out->audioAgc     = out->audioAgc ? 1 : 0;
     out->audioFollowVolume = out->audioFollowVolume ? 1 : 0;
+    out->audioSoft    = std::clamp(out->audioSoft, 0.0, 1.0);
     for (uint32_t v : out->reserved) if (v) return 1;
     return 0;
 }
@@ -737,11 +740,13 @@ void CoreLoopInner(Sess* g)
                 WaitStop(g, 33);
             }
         } else if (IsHostAudio(applied)) {
-            // ---- 拾音律动 (主机拾音): 5ms 节拍 "Adz"+音量×3; 不建 DDA, 与显示器无关
+            // ---- 拾音律动 (主机拾音): 5ms 节拍 "Adz"+音量×3; 不建 DDA, 与显示器无关。
+            //      固件把该字节同时用作整体渲染亮度 (静音全灭) → 亮度参数 = 灯带最高亮度上限。
             uint8_t env = 0;
             float master = 1.0f;
             MeterRead(&env, &master);
-            double v = (double)env * applied.audioGain *
+            double cap = std::clamp(applied.brightness, 0.0, 1.0);
+            double v = (double)env * applied.audioGain * cap *
                        (applied.audioFollowVolume ? master : 1.0f);
             uint8_t b = (uint8_t)std::clamp((int)(v + 0.5), 0, 255);
             const uint8_t f6[6] = { 'A', 'd', 'z', b, b, b };

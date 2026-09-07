@@ -84,7 +84,7 @@
                 <Slider x:Name="BrightnessSlider" Minimum="0" Maximum="100" Value="100"
                         LargeChange="0" controls:SliderJump.Enabled="True"
                         Margin="0,8,0,0" />
-                <TextBlock Text="主机渲染模式 (屏幕追光/纯色) 生效; MCU 特效由固件自渲染。"
+                <TextBlock Text="屏幕追光/纯色: 直接调光; 拾音律动: 作为灯带最高亮度上限; MCU 特效由固件自渲染不生效。"
                            Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
             </StackPanel>
         </ui:Card>

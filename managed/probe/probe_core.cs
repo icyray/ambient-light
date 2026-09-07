@@ -67,6 +67,7 @@ unsafe
     cfg.audioBass = 0.35;
     cfg.audioAgc = 1;
     cfg.audioFollowVolume = 0;
+    cfg.audioSoft = 0.5;
     Check("SetConfig mode 1 (主机拾音)", Native.AC_SetConfig(ref cfg) == 0);
     f0 = Poll(0).frameCounter;
     st = Poll(3000);
@@ -260,6 +261,7 @@ internal unsafe struct ACConfig
     public double audioBass;
     public int audioAgc;
     public int audioFollowVolume;
+    public double audioSoft;
     public fixed uint reserved[8];
 }
 

@@ -226,6 +226,7 @@ public unsafe struct ACConfig
     public double audioBass;
     public int audioAgc;
     public int audioFollowVolume;
+    public double audioSoft;
     public fixed uint reserved[8];
 
     public string ComPort
@@ -286,6 +287,7 @@ public unsafe struct ACConfig
         audioBass = 0.35,
         audioAgc = 1,
         audioFollowVolume = 0,
+        audioSoft = 0.5,
     };
 }
 

@@ -53,6 +53,7 @@ public sealed class DeviceSettings
     public double AudioBass { get; set; } = 0.35;      // 低频加权 0..1
     public bool AudioAgc { get; set; } = true;         // 慢速峰值自动增益
     public bool AudioFollowVolume { get; set; } = false; // 音量字节跟随系统主音量
+    public double AudioSoft { get; set; } = 0.5;       // 律动柔和度 0..1 (0=硬包络 1=最平滑)
 
     public unsafe Interop.ACConfig ToCoreConfig()
     {
@@ -95,6 +96,7 @@ public sealed class DeviceSettings
         c.audioBass = AudioBass;
         c.audioAgc = AudioAgc ? 1 : 0;
         c.audioFollowVolume = AudioFollowVolume ? 1 : 0;
+        c.audioSoft = AudioSoft;
         return c;
     }
 
@@ -135,6 +137,7 @@ public sealed class DeviceSettings
         AudioBass = c.audioBass;
         AudioAgc = c.audioAgc != 0;
         AudioFollowVolume = c.audioFollowVolume != 0;
+        AudioSoft = c.audioSoft;
     }
 
     private static (byte r, byte g, byte b) ParseColor(string hex, (byte r, byte g, byte b) fallback)
