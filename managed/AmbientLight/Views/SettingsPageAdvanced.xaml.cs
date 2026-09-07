@@ -33,6 +33,7 @@ public partial class SettingsPageAdvanced : Page
         AutoStartToggle.IsChecked = ConfigStore.App.AutoStart;
         AutoStartPathText.Text = AutoStart.ShortcutPath;
         StartMinimizedToggle.IsChecked = ConfigStore.App.StartMinimized;
+        AutoStartCoreToggle.IsChecked = ConfigStore.Device.AutoStartCore;
         ConfigDirText.Text = $"{ConfigStore.ConfigDir}  ({ConfigStore.ConfigDirSource})";
         VersionText.Text = $"AmbientLight {GetType().Assembly.GetName().Version?.ToString(3)} · AmbientCore v{(AmbientCore.Version() >> 16) & 0xFF}.{(AmbientCore.Version() >> 8) & 0xFF}.{AmbientCore.Version() & 0xFF}";
         _loading = false;
@@ -104,6 +105,13 @@ public partial class SettingsPageAdvanced : Page
         if (_loading) return;
         ConfigStore.App.StartMinimized = StartMinimizedToggle.IsChecked == true;
         ConfigStore.SaveApp();
+    }
+
+    private void OnAutoStartCoreChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        ConfigStore.Device.AutoStartCore = AutoStartCoreToggle.IsChecked == true;
+        ConfigStore.SaveDevice();
     }
 
     // ---- 测试图 ----------------------------------------------------------

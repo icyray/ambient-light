@@ -16,7 +16,7 @@ public sealed class DeviceSettings
 {
     public string ComPort { get; set; } = "";          // 空 = 自动探测 VID_2E3C&PID_5740
     public int BaudRate { get; set; } = 2000000;
-    public bool AutoStartCore { get; set; } = false;   // app 启动即开灯 (M1 默认关)
+    public bool AutoStartCore { get; set; } = true;    // 应用启动即连接灯带并恢复上次模式 (M1 默认关, M2 验收后改为默认开)
     public int ModeIndex { get; set; } = 0;
     public int MonitorIndex { get; set; } = 0;
     public int LedCount { get; set; } = 60;
