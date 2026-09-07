@@ -37,6 +37,7 @@ public static unsafe partial class AmbientCore
     public const int ErrInternal = 6;
 
     public const int MaxLeds = 180;                 // 固件定长帧上限
+    public const int MaxAudioDevs = 16;             // 音频端点枚举上限
 
     // ---- 模式表 (modeIndex → 名称, 与厂商 lang/zh 一致) ----
     public static readonly (int Index, string Name, string Kind)[] Modes =
@@ -93,6 +94,9 @@ public static unsafe partial class AmbientCore
 
     [LibraryImport(Lib)]
     private static partial int AC_GetDevices(ACDeviceInfo* outBuf, uint max, int* count);
+
+    [LibraryImport(Lib)]
+    private static partial int AC_GetAudioEndPoints(int capture, ACAudioDevInfo* outBuf, uint max, int* count);
 
     [LibraryImport(Lib)]
     private static partial int AC_SetTestPattern(int mode);
@@ -185,6 +189,25 @@ public static unsafe partial class AmbientCore
         }
         return buf.Take(count).ToArray();
     }
+
+    /// <summary>音频端点枚举 (capture=true 输入/麦克风, false 输出); 失败返回空数组</summary>
+    public static ACAudioDevInfo[] GetAudioEndPoints(bool capture)
+    {
+        var buf = new ACAudioDevInfo[MaxAudioDevs];
+        int count = 0;
+        try
+        {
+            fixed (ACAudioDevInfo* p = buf)
+            {
+                AC_GetAudioEndPoints(capture ? 1 : 0, p, (uint)buf.Length, &count);
+            }
+        }
+        catch
+        {
+            return Array.Empty<ACAudioDevInfo>();
+        }
+        return buf.Take(Math.Max(count, 0)).ToArray();
+    }
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -227,6 +250,7 @@ public unsafe struct ACConfig
     public int audioAgc;
     public int audioFollowVolume;
     public double audioSoft;
+    public fixed byte audioDevId[64];           // 麦克风源目标端点 ID, 空=跟随默认
     public fixed uint reserved[8];
 
     public string ComPort
@@ -247,6 +271,28 @@ public unsafe struct ACConfig
             {
                 for (int i = 0; i < 16; i++) p[i] = 0;
                 for (int i = 0; i < b.Length && i < 15; i++) p[i] = b[i];
+            }
+        }
+    }
+
+    public string AudioDevId
+    {
+        get
+        {
+            fixed (byte* p = audioDevId)
+            {
+                int n = 0;
+                while (n < 64 && p[n] != 0) n++;
+                return Encoding.UTF8.GetString(p, n);
+            }
+        }
+        set
+        {
+            var b = Encoding.UTF8.GetBytes(value ?? "");
+            fixed (byte* p = audioDevId)
+            {
+                for (int i = 0; i < 64; i++) p[i] = 0;
+                for (int i = 0; i < b.Length && i < 63; i++) p[i] = b[i];
             }
         }
     }
@@ -381,4 +427,16 @@ public unsafe struct ACDeviceInfo
     public int inUse;
 
     public string ComPort { get { fixed (byte* p = comPort) return ACMonitorInfo.ReadFixed(p, 16); } }
+}
+
+/// <summary>音频端点 (拾音源选择); Id 配置到 ACConfig.audioDevId</summary>
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+public unsafe struct ACAudioDevInfo
+{
+    public fixed byte id[64];
+    public fixed byte name[32];
+    public int isDefault;
+
+    public string Id { get { fixed (byte* p = id) return ACMonitorInfo.ReadFixed(p, 64); } }
+    public string Name { get { fixed (byte* p = name) return ACMonitorInfo.ReadFixed(p, 32); } }
 }

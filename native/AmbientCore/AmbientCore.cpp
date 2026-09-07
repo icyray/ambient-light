@@ -22,6 +22,8 @@
 #include <windows.h>
 #include <initguid.h>
 #include <powrprof.h>
+#include <mmdeviceapi.h>
+#include <wrl/client.h>
 #include <atomic>
 #include <algorithm>
 #include <chrono>
@@ -36,10 +38,16 @@
 #pragma comment(lib, "powrprof.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "ole32.lib")
 
 using namespace std::chrono;
+using Microsoft::WRL::ComPtr;
 
 namespace {
+
+// PKEY_Device_FriendlyName (与 audio.cpp 同款本地定义, 避免 initguid 顺序耦合)
+static const PROPERTYKEY kPKEY_Name = { { 0xa45c254e, 0xdf1c, 0x4efd,
+                                          { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 14 };
 
 constexpr uint32_t kVersion = (1u << 16) | (3u << 8) | 0u;   // 1.3.0 (M3: 拾音 + 多会话)
 
@@ -185,6 +193,12 @@ void MeterSetSource(const ACConfig& c)
     if (g_meter) g_meter->SetSource(c.audioSource == 2);   // 2=麦克风, 其余=回环
 }
 
+void MeterSetTarget(const ACConfig& c)
+{
+    std::lock_guard lk(g_meterMx);
+    if (g_meter) g_meter->SetTargetDevice(c.audioDevId);
+}
+
 void MeterRead(uint8_t* env, float* master)
 {
     std::lock_guard lk(g_meterMx);
@@ -257,6 +271,7 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
     out->baudRate     = std::clamp(out->baudRate, 9600u, 4000000u);
     out->comPort[AC_PORT_LEN - 1] = 0;
     out->audioSource  = std::clamp(out->audioSource, 0, 2);   // 0=回环 1=MCU 自拾音 2=麦克风
+    out->audioDevId[AC_AUDIO_ID_LEN - 1] = 0;
     out->audioGain    = std::clamp(out->audioGain, 0.1, 5.0);
     out->audioRelease = std::clamp(out->audioRelease, 0.05, 1.0);
     out->audioGate    = std::clamp(out->audioGate, 0.0, 0.1);
@@ -597,6 +612,7 @@ void CoreLoopInner(Sess* g)
         if (IsHostAudio(applied)) {
             if (!audioOn) { audioOn = true; MeterAcquire(); }
             MeterSetSource(applied);            // 回环/麦克风切换 (变更触发音源重建)
+            MeterSetTarget(applied);            // 指定输入端点 (空=跟随默认, 变更触发重建)
             if (audioParamsSerial != s) { MeterPushParams(applied); audioParamsSerial = s; }
             if (!audioCleared) {            // 预览帧清零 + procEma 归零 (拾音不走采集路径)
                 std::unique_lock lk(g->stMx);
@@ -1131,4 +1147,83 @@ AC_API int32_t AC_SetTestPattern(int32_t mode)
     g->testPattern = mode;
     ACLOGI("test pattern -> %d", mode);
     return 0;
+}
+
+AC_API int32_t AC_GetAudioEndPoints(int32_t capture, ACAudioDevInfo* out, uint32_t max, int32_t* count)
+{
+    if (!count) return 1;
+    *count = 0;
+    HRESULT co = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    int32_t rc = 0;
+    {
+        ComPtr<IMMDeviceEnumerator> en;
+        HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                      __uuidof(IMMDeviceEnumerator), (void**)en.GetAddressOf());
+        if (FAILED(hr)) {
+            if (SUCCEEDED(co)) CoUninitialize();
+            return 6;                               // D3D/内部错误族: COM 不可用
+        }
+        // capture=1 → eCapture (麦克风/线路输入); 0 → eRender (输出)
+        ComPtr<IMMDeviceCollection> col;
+        hr = en->EnumAudioEndpoints(capture ? eCapture : eRender,
+                                    DEVICE_STATE_ACTIVE, &col);
+        if (FAILED(hr)) {
+            if (SUCCEEDED(co)) CoUninitialize();
+            return 6;
+        }
+        UINT n = 0;
+        col->GetCount(&n);
+        // 默认端点 ID (isDefault 标记用)
+        ComPtr<IMMDevice> def;
+        std::string defId;
+        if (SUCCEEDED(en->GetDefaultAudioEndpoint(capture ? eCapture : eRender, eConsole, &def))) {
+            LPWSTR p = nullptr;
+            if (SUCCEEDED(def->GetId(&p)) && p) {
+                int m = WideCharToMultiByte(CP_UTF8, 0, p, -1, nullptr, 0, nullptr, nullptr);
+                if (m > 1) {
+                    defId.resize((size_t)m - 1);
+                    WideCharToMultiByte(CP_UTF8, 0, p, -1, defId.data(), m, nullptr, nullptr);
+                }
+                CoTaskMemFree(p);
+            }
+        }
+        uint32_t k = 0;
+        for (UINT i = 0; i < n && k < max; i++) {
+            ComPtr<IMMDevice> dev;
+            if (FAILED(col->Item(i, &dev))) continue;
+            LPWSTR pid = nullptr;
+            if (FAILED(dev->GetId(&pid)) || !pid) continue;
+            ACAudioDevInfo* d = out ? &out[k] : nullptr;
+            if (d) {
+                memset(d, 0, sizeof(*d));
+                int m = WideCharToMultiByte(CP_UTF8, 0, pid, -1, nullptr, 0, nullptr, nullptr);
+                if (m > 1) {
+                    std::string id8((size_t)m - 1, 0);
+                    WideCharToMultiByte(CP_UTF8, 0, pid, -1, id8.data(), m, nullptr, nullptr);
+                    strncpy_s(d->id, id8.c_str(), _TRUNCATE);
+                }
+                // 友好名
+                ComPtr<IPropertyStore> ps;
+                if (SUCCEEDED(dev->OpenPropertyStore(STGM_READ, &ps))) {
+                    PROPVARIANT v;
+                    PropVariantInit(&v);
+                    if (SUCCEEDED(ps->GetValue(kPKEY_Name, &v)) && v.vt == VT_LPWSTR && v.pwszVal) {
+                        int w = WideCharToMultiByte(CP_UTF8, 0, v.pwszVal, -1, nullptr, 0, nullptr, nullptr);
+                        if (w > 1) {
+                            std::string nm((size_t)w - 1, 0);
+                            WideCharToMultiByte(CP_UTF8, 0, v.pwszVal, -1, nm.data(), w, nullptr, nullptr);
+                            strncpy_s(d->name, nm.c_str(), _TRUNCATE);
+                        }
+                    }
+                    PropVariantClear(&v);
+                }
+                d->isDefault = (defId == d->id) ? 1 : 0;
+            }
+            CoTaskMemFree(pid);
+            k++;
+        }
+        *count = (int32_t)k;
+    }
+    if (SUCCEEDED(co)) CoUninitialize();
+    return rc;
 }

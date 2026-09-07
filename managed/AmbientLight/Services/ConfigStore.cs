@@ -54,6 +54,7 @@ public sealed class DeviceSettings
     public bool AudioAgc { get; set; } = true;         // 慢速峰值自动增益
     public bool AudioFollowVolume { get; set; } = false; // 音量字节跟随系统主音量
     public double AudioSoft { get; set; } = 0.5;       // 律动柔和度 0..1 (0=硬包络 1=最平滑)
+    public string AudioDevId { get; set; } = "";       // 麦克风源端点 ID, 空=跟随系统默认输入
 
     public unsafe Interop.ACConfig ToCoreConfig()
     {
@@ -97,6 +98,7 @@ public sealed class DeviceSettings
         c.audioAgc = AudioAgc ? 1 : 0;
         c.audioFollowVolume = AudioFollowVolume ? 1 : 0;
         c.audioSoft = AudioSoft;
+        c.AudioDevId = AudioDevId;
         return c;
     }
 
@@ -138,6 +140,7 @@ public sealed class DeviceSettings
         AudioAgc = c.audioAgc != 0;
         AudioFollowVolume = c.audioFollowVolume != 0;
         AudioSoft = c.audioSoft;
+        AudioDevId = c.AudioDevId;
     }
 
     private static (byte r, byte g, byte b) ParseColor(string hex, (byte r, byte g, byte b) fallback)

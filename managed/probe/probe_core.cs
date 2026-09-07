@@ -96,6 +96,13 @@ unsafe
     Console.WriteLine($"    audioOk={st.audioOk} audioLevel={st.audioLevel} dev='{ReadDev(st)}'" +
                       " (对着麦克风出声 audioLevel 应>0; 系统隐私拒绝时恒 0)");
 
+    // ---- 输入端点枚举 (多麦克风选择用) ----
+    var adevs = GetAudioDevs();
+    Check("音频输入端点枚举 ≥1", adevs.Count >= 1,
+          $"{adevs.Count} 台: {string.Join(" | ", adevs.Select(a => $"{a.name}{(a.def != 0 ? "[默认]" : "")}"))}");
+    int ndef = adevs.Count(a => a.def != 0);
+    Check("恰好一个系统默认输入", ndef == 1, $"default={ndef}");
+
     cfg.modeIndex = 11;
     cfg.audioSource = 0;
 
@@ -166,6 +173,26 @@ static unsafe string ReadDev(ACStatus st)
     return Encoding.UTF8.GetString(p, n);
 }
 
+static unsafe List<(string id, string name, int def)> GetAudioDevs()
+{
+    var buf = new ACAudioDevInfo[16];
+    int count = 0;
+    var list = new List<(string, string, int)>();
+    fixed (ACAudioDevInfo* pBuf = buf)              // 数组元素须整块钉住 (CS1666)
+    {
+        Native.AC_GetAudioEndPoints(1, pBuf, 16, &count);
+        for (int i = 0; i < count; i++)
+        {
+            byte* pi = pBuf[i].id, pn = pBuf[i].name;
+            int ni = 0, nn = 0;
+            while (ni < 64 && pi[ni] != 0) ni++;
+            while (nn < 32 && pn[nn] != 0) nn++;
+            list.Add((Encoding.UTF8.GetString(pi, ni), Encoding.UTF8.GetString(pn, nn), pBuf[i].isDefault));
+        }
+    }
+    return list;
+}
+
 static ACStatus Poll(int ms)
 {
     var st = new ACStatus();
@@ -230,6 +257,9 @@ internal static unsafe partial class Native
 
     [DllImport("AmbientCore.dll", CallingConvention = CallingConvention.Cdecl)]
     internal static extern void AC_GetStatusEx(uint slot, ref ACStatus st);
+
+    [DllImport("AmbientCore.dll", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern unsafe int AC_GetAudioEndPoints(int capture, ACAudioDevInfo* outBuf, uint max, int* count);
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
@@ -272,6 +302,7 @@ internal unsafe struct ACConfig
     public int audioAgc;
     public int audioFollowVolume;
     public double audioSoft;
+    public fixed byte audioDevId[64];
     public fixed uint reserved[8];
 }
 
@@ -297,4 +328,12 @@ internal unsafe struct ACStatus
     public byte audioLevel;
     public int audioOk;
     public fixed byte audioDev[32];
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
+internal unsafe struct ACAudioDevInfo
+{
+    public fixed byte id[64];
+    public fixed byte name[32];
+    public int isDefault;
 }

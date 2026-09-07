@@ -40,6 +40,7 @@ public partial class SettingsPageAudio : Page
         var dev = ConfigStore.Device;
         int idx = Array.IndexOf(SourceValues, dev.AudioSource);
         SourceCombo.SelectedIndex = idx < 0 ? 0 : idx;
+        UpdateMicDevPanel(SourceValues[Math.Max(idx, 0)]);
         AgcToggle.IsChecked = dev.AudioAgc;
         GainSlider.Value = Math.Clamp(dev.AudioGain, 0.1, 5.0);
         SoftSlider.Value = Math.Clamp(dev.AudioSoft * 100.0, 0, 100);
@@ -52,6 +53,50 @@ public partial class SettingsPageAudio : Page
         RefreshReleaseLabel();
         RefreshBassLabel();
         RefreshGateLabel();
+    }
+
+    // ---- 麦克风输入设备选择 (音源=麦克风时显示) -----------------------
+    public sealed record MicDevItem(string Id, string Label);
+
+    private void UpdateMicDevPanel(int sourceValue)
+    {
+        bool mic = sourceValue == 2;
+        MicDevPanel.Visibility = mic ? Visibility.Visible : Visibility.Collapsed;
+        MicDevCombo.Visibility = mic ? Visibility.Visible : Visibility.Collapsed;
+        if (mic) RefreshMicDevs();
+    }
+
+    private void RefreshMicDevs()
+    {
+        var items = new List<MicDevItem> { new("", "系统默认 (跟随系统输入设备)") };
+        try
+        {
+            foreach (var d in AmbientCore.GetAudioEndPoints(capture: true))
+            {
+                if (string.IsNullOrEmpty(d.Id)) continue;
+                items.Add(new MicDevItem(d.Id, d.Name + (d.isDefault != 0 ? "  (系统默认)" : "")));
+            }
+        }
+        catch { /* 枚举失败仍保留"系统默认" */ }
+        MicDevHintText.Visibility = items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        _loading = true;
+        MicDevCombo.ItemsSource = items;
+        string cur = ConfigStore.Device.AudioDevId;
+        int sel = items.FindIndex(i => i.Id == cur);
+        MicDevCombo.SelectedIndex = sel < 0 ? 0 : sel;      // 配置的设备不在位 → 显示系统默认
+        _loading = false;
+    }
+
+    private void OnRefreshMicDevs(object sender, RoutedEventArgs e)
+    {
+        RefreshMicDevs();
+    }
+
+    private void OnMicDevChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || MicDevCombo.SelectedItem is not MicDevItem it) return;
+        ConfigStore.Device.AudioDevId = it.Id;
+        App.Instance.ApplyConfigDebounced();
     }
 
     private void OnPolled(ACStatus st)
@@ -76,7 +121,9 @@ public partial class SettingsPageAudio : Page
     private void OnSourceChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || SourceCombo.SelectedIndex < 0) return;
-        ConfigStore.Device.AudioSource = SourceValues[SourceCombo.SelectedIndex];
+        int v = SourceValues[SourceCombo.SelectedIndex];
+        ConfigStore.Device.AudioSource = v;
+        UpdateMicDevPanel(v);
         App.Instance.ApplyConfigDebounced();
     }
 

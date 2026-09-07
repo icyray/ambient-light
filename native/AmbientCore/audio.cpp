@@ -25,11 +25,21 @@ static const GUID kIeeeFloat = { 0x00000003, 0x0000, 0x0010,
 static const PROPERTYKEY kPKEY_Name = { { 0xa45c254e, 0xdf1c, 0x4efd,
                                           { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 14 };
 
+static std::wstring Utf8ToWide(const std::string& s)
+{
+    if (s.empty()) return {};
+    int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
+    std::wstring w(n, 0);
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), w.data(), n);
+    return w;
+}
+
 // ---- 默认输出/输入设备通知 (MTA; 生命周期归捕获线程, Release 不 delete) --------
 class EndpointEvents : public IMMNotificationClient {
 public:
-    std::atomic<int> renderChanged{ 0 };
-    std::atomic<int> captureChanged{ 0 };
+    std::atomic<int> renderChanged{ 0 };   // 默认渲染设备变化
+    std::atomic<int> captureChanged{ 0 };  // 默认采集设备变化
+    std::atomic<int> anyStateChanged{ 0 }; // 任一设备状态/在位变化 (选中指定端点时触发回退重建)
 
     STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override {
         if (!ppv) return E_POINTER;
@@ -44,9 +54,9 @@ public:
     STDMETHODIMP_(ULONG) AddRef() override { return ++ref_; }
     STDMETHODIMP_(ULONG) Release() override { return --ref_; }
 
-    STDMETHODIMP OnDeviceStateChanged(LPCWSTR, DWORD) override { return S_OK; }
+    STDMETHODIMP OnDeviceStateChanged(LPCWSTR, DWORD) override { anyStateChanged.store(1); return S_OK; }
     STDMETHODIMP OnDeviceAdded(LPCWSTR) override { return S_OK; }
-    STDMETHODIMP OnDeviceRemoved(LPCWSTR) override { return S_OK; }
+    STDMETHODIMP OnDeviceRemoved(LPCWSTR) override { anyStateChanged.store(1); return S_OK; }
     STDMETHODIMP OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR) override {
         if (role != eConsole) return S_OK;
         if (flow == eRender) renderChanged.store(1);
@@ -72,6 +82,7 @@ struct Session {
     double fs = 48000.0;
     HANDLE evCapture = nullptr;                     // Meter::evCapture_ 别名
     bool mic = false;                               // false=渲染回环 true=麦克风采集
+    std::string targetId;                           // 本会话使用的目标端点 ID (UTF-8, 空=默认)
     EndpointEvents events;
 };
 } // namespace
@@ -133,6 +144,13 @@ void Meter::SetSource(bool microphone)
     wantMic_ = microphone ? 1 : 0;
 }
 
+void Meter::SetTargetDevice(const char* endpointId)
+{
+    EnterCriticalSection(&paramsCs_);
+    wantId_ = endpointId ? endpointId : "";
+    LeaveCriticalSection(&paramsCs_);
+}
+
 std::string Meter::EndpointName() const
 {
     EnterCriticalSection(const_cast<CRITICAL_SECTION*>(&nameCs_));
@@ -150,8 +168,17 @@ static bool InitSession(Session& s, std::string* nameOut)
     s.enumerator->RegisterEndpointNotificationCallback(&s.events);
     // 麦克风 = 采集端点 (普通共享捕获); 回环 = 渲染端点 (AUDCLNT_STREAMFLAGS_LOOPBACK)
     EDataFlow flow = s.mic ? eCapture : eRender;
-    hr = s.enumerator->GetDefaultAudioEndpoint(flow, eConsole, &s.device);
-    if (FAILED(hr)) return false;
+    if (!s.targetId.empty()) {
+        // 配置了具体端点: 打不开 (拔出/失效) → 回退系统默认 (重插后状态通知触发切回)
+        HRESULT hrDev = s.enumerator->GetDevice(Utf8ToWide(s.targetId).c_str(), &s.device);
+        if (FAILED(hrDev))
+            ACLOGW("audio: target endpoint gone (%s) -> fallback to system default",
+                   s.targetId.c_str());
+    }
+    if (!s.device) {
+        HRESULT hr = s.enumerator->GetDefaultAudioEndpoint(flow, eConsole, &s.device);
+        if (FAILED(hr)) return false;
+    }
     *nameOut = ReadEndpointName(s.device.Get());
     if (FAILED(s.device->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL,
                                   nullptr, (void**)s.vol.GetAddressOf())))
@@ -279,6 +306,11 @@ void Meter::ThreadLoop()
         healthy_ = 2;
         std::string name;
         s.mic = wantMic_.load() != 0;
+        {
+            EnterCriticalSection(&paramsCs_);
+            s.targetId = wantId_;
+            LeaveCriticalSection(&paramsCs_);
+        }
         if (!InitSession(s, &name)) {
             healthy_ = 0;
             envByte_ = 0;
@@ -322,9 +354,27 @@ void Meter::ThreadLoop()
                 rebuild = true;
                 break;
             }
+            {
+                std::string nowId;
+                EnterCriticalSection(&paramsCs_);
+                nowId = wantId_;
+                LeaveCriticalSection(&paramsCs_);
+                if (nowId != s.targetId) {
+                    ACLOGI("audio: target device changed (%s -> %s) -> rebuild",
+                           s.targetId.c_str(), nowId.c_str());
+                    rebuild = true;
+                    break;
+                }
+            }
             if ((s.mic ? s.events.captureChanged : s.events.renderChanged).exchange(0)) {
                 ACLOGI("audio: default %s endpoint changed -> rebuild",
                        s.mic ? "capture" : "render");
+                rebuild = true;
+                break;
+            }
+            if (!s.targetId.empty() && s.events.anyStateChanged.exchange(0)) {
+                // 钉选了具体端点: 任何设备在位性变化都重建, 拔出自动回退默认, 重插自动切回
+                ACLOGI("audio: device set changed (target pinned) -> rebuild");
                 rebuild = true;
                 break;
             }

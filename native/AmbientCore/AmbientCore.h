@@ -22,6 +22,8 @@
 #define AC_MAX_DEVICES  8
 #define AC_PORT_LEN     16      // "COM5"
 #define AC_NAME_LEN     32
+#define AC_AUDIO_ID_LEN 64      // MMDevice 端点 ID "{0.0.x.00000000}.{GUID}" ≈ 54 字符
+#define AC_MAX_AUDIO_DEVS 16
 #define AC_MAX_LEDS     180     // 固件定长帧上限 (3+180*3=543B)
 
 // 设备类型 = 握手应答字节解码 (0x80 | type<<2 | devId)
@@ -96,6 +98,8 @@ typedef struct ACConfig {
     int32_t  audioFollowVolume; // 音量字节跟随系统主音量标量, 默认 0
     double   audioSoft;         // 律动柔和度 0..1, 默认 0.5: 起音平滑(10-100ms)+
                                 //   中段抬升(gamma 1→0.5)+呼吸下限(0-15%), 0=硬包络(频闪感)
+    char     audioDevId[AC_AUDIO_ID_LEN]; // 麦克风源: 目标端点 ID (AC_GetAudioEndPoints),
+                                           // 空 = 跟随系统默认输入; 设备拔出自动回退默认, 重插切回
 
     uint32_t reserved[8];       // 必须置 0
 } ACConfig;
@@ -143,6 +147,13 @@ typedef struct ACDeviceInfo {
     int32_t  inUse;                 // 1 = 已被本核心或其他进程占用
 } ACDeviceInfo;
 
+// 音频端点 (v1.3): 拾音源选择用; capture=1 枚举输入(麦克风/线路输入), 0 枚举输出
+typedef struct ACAudioDevInfo {
+    char     id[AC_AUDIO_ID_LEN];   // MMDevice 端点 ID (配置到 ACConfig.audioDevId)
+    char     name[AC_NAME_LEN];     // 友好名 (UTF-8)
+    int32_t  isDefault;             // 1 = 当前系统默认 (仅 capture 集合内)
+} ACAudioDevInfo;
+
 // ---- 错误码 ----------------------------------------------------------
 // 0=OK  1=参数无效  2=设备未找到  3=端口打开失败(被占用)
 // 4=握手失败  5=已有实例运行  6=D3D/内部错误
@@ -175,6 +186,9 @@ AC_API int32_t    AC_GetLastDiagEx(uint32_t slot, char* buf, uint32_t cap);
 // 枚举 (可在 Start 前调用; 设备枚举会短暂打开串口发握手, ~200ms/台)
 AC_API int32_t    AC_GetMonitors(ACMonitorInfo* out, uint32_t max, int32_t* count);
 AC_API int32_t    AC_GetDevices(ACDeviceInfo* out, uint32_t max, int32_t* count);
+
+// 音频端点枚举 (v1.3): capture=1 输入设备(麦克风/线路输入) 0 输出设备; 只列 ACTIVE 端点
+AC_API int32_t    AC_GetAudioEndPoints(int32_t capture, ACAudioDevInfo* out, uint32_t max, int32_t* count);
 
 // 测试钩子 (校准/排障)
 AC_API int32_t    AC_SetTestPattern(int32_t mode);      // 0=关 1=四象限色块 2=洋红常亮
