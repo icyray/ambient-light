@@ -11,6 +11,9 @@ public partial class SettingsPageAudio : Page
 {
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
+    // 下拉序 ↔ audioSource 值: 0=回环(默认) 2=麦克风 1=MCU 自拾音
+    private static readonly int[] SourceValues = [0, 2, 1];
+
     public SettingsPageAudio()
     {
         InitializeComponent();
@@ -35,7 +38,8 @@ public partial class SettingsPageAudio : Page
     private void LoadFromConfig()
     {
         var dev = ConfigStore.Device;
-        SourceCombo.SelectedIndex = dev.AudioSource != 0 ? 1 : 0;
+        int idx = Array.IndexOf(SourceValues, dev.AudioSource);
+        SourceCombo.SelectedIndex = idx < 0 ? 0 : idx;
         AgcToggle.IsChecked = dev.AudioAgc;
         GainSlider.Value = Math.Clamp(dev.AudioGain, 0.1, 5.0);
         SoftSlider.Value = Math.Clamp(dev.AudioSoft * 100.0, 0, 100);
@@ -72,7 +76,7 @@ public partial class SettingsPageAudio : Page
     private void OnSourceChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || SourceCombo.SelectedIndex < 0) return;
-        ConfigStore.Device.AudioSource = SourceCombo.SelectedIndex;
+        ConfigStore.Device.AudioSource = SourceValues[SourceCombo.SelectedIndex];
         App.Instance.ApplyConfigDebounced();
     }
 

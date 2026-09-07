@@ -86,6 +86,16 @@ unsafe
     Check("Adb 心跳运行", st.state == 2 && st.frameCounter > f0,
           $"state={st.state} delta={st.frameCounter - f0} (≈2-3)");
     Check("Adb 模式 audioLevel=0", st.audioLevel == 0, $"audioLevel={st.audioLevel}");
+
+    // ---- 拾音子模式: 麦克风 (audioSource=2, eCapture 共享捕获) ----
+    cfg.audioSource = 2;
+    Check("SetConfig audioSource=2 (麦克风)", Native.AC_SetConfig(ref cfg) == 0);
+    st = Poll(2500);
+    Check("麦克风拾音运行 (Adz 节拍)", st.state == 2 && st.fps > 120f,
+          $"state={st.state} fps={st.fps:F0}");
+    Console.WriteLine($"    audioOk={st.audioOk} audioLevel={st.audioLevel} dev='{ReadDev(st)}'" +
+                      " (对着麦克风出声 audioLevel 应>0; 系统隐私拒绝时恒 0)");
+
     cfg.modeIndex = 11;
     cfg.audioSource = 0;
 

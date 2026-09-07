@@ -179,6 +179,12 @@ void MeterPushParams(const ACConfig& c)
     }
 }
 
+void MeterSetSource(const ACConfig& c)
+{
+    std::lock_guard lk(g_meterMx);
+    if (g_meter) g_meter->SetSource(c.audioSource == 2);   // 2=麦克风, 其余=回环
+}
+
 void MeterRead(uint8_t* env, float* master)
 {
     std::lock_guard lk(g_meterMx);
@@ -250,7 +256,7 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
     out->sfloor       = std::clamp(out->sfloor, 0.0, 255.0);
     out->baudRate     = std::clamp(out->baudRate, 9600u, 4000000u);
     out->comPort[AC_PORT_LEN - 1] = 0;
-    out->audioSource  = out->audioSource ? 1 : 0;
+    out->audioSource  = std::clamp(out->audioSource, 0, 2);   // 0=回环 1=MCU 自拾音 2=麦克风
     out->audioGain    = std::clamp(out->audioGain, 0.1, 5.0);
     out->audioRelease = std::clamp(out->audioRelease, 0.05, 1.0);
     out->audioGate    = std::clamp(out->audioGate, 0.0, 0.1);
@@ -384,7 +390,8 @@ void CoreLoopInner(Sess* g)
         return m == 1 && c.audioSource == 1;              // MCU 自拾音 "Adb"
     };
     auto IsHostAudio = [](const ACConfig& c) {
-        return c.modeIndex == 1 && c.audioSource == 0;    // 主机拾音 "Adz"
+        // 主机拾音 "Adz": audioSource 0=系统声音回环 2=麦克风 (1=MCU 自拾音)
+        return c.modeIndex == 1 && c.audioSource != 1;
     };
 
     auto MakeCaptureParams = [](const ACConfig& c) {
@@ -589,6 +596,7 @@ void CoreLoopInner(Sess* g)
         // ============ 2b. 主机拾音会话生命周期 (跟随配置, Start 即拾音也覆盖) =====
         if (IsHostAudio(applied)) {
             if (!audioOn) { audioOn = true; MeterAcquire(); }
+            MeterSetSource(applied);            // 回环/麦克风切换 (变更触发音源重建)
             if (audioParamsSerial != s) { MeterPushParams(applied); audioParamsSerial = s; }
             if (!audioCleared) {            // 预览帧清零 + procEma 归零 (拾音不走采集路径)
                 std::unique_lock lk(g->stMx);

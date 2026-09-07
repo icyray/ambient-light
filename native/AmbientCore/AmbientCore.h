@@ -86,8 +86,8 @@ typedef struct ACConfig {
     double   sfloor;            // colorfix 色度门限 (8bit max-min), 默认 24
 
     // v1.3 增补 (M3 拾音)
-    int32_t  audioSource;       // 0=系统声音(主机 WASAPI 回环, "Adz" 5ms 节拍)
-                                // 1=MCU 自拾音("Adb", MCU 特效语义), 默认 0
+    int32_t  audioSource;       // 主机拾音时: 0=系统声音回环(默认) 2=麦克风;
+                                // 1=MCU 自拾音("Adb", MCU 特效语义)
     double   audioGain;         // 灵敏度乘数, 默认 1.0 (0.1..5.0)
     double   audioRelease;      // 包络回落时间常数(秒), 默认 0.30 (0.05..1.0)
     double   audioGate;         // 底噪门限(原始全频 RMS), 默认 0.003 (0..0.1)

@@ -46,6 +46,7 @@ public:
     bool Running() const { return running_.load(std::memory_order_acquire); }
 
     void SetParams(const Params& p);                // 任意线程, 下一包生效
+    void SetSource(bool microphone);                // 任意线程: false=回环(默认) true=麦克风; 变更触发重建
     uint8_t EnvelopeByte() const { return envByte_.load(std::memory_order_relaxed); }
     float   MasterVolume() const { return masterVol_.load(std::memory_order_relaxed); }
     int     Healthy() const { return healthy_.load(std::memory_order_relaxed); }  // 0=停 1=正常 2=重建中
@@ -74,6 +75,7 @@ private:
     // ---- 跨线程 ----
     CRITICAL_SECTION paramsCs_{};                   // params_ 写 (SetParams) / 读 (线程)
     Params params_{};
+    std::atomic<int> wantMic_{ 0 };                 // 0=回环 1=麦克风 (SetSource 写)
     std::atomic<uint8_t> envByte_{ 0 };             // 输出包络 0..255
     std::atomic<float>   masterVol_{ 1.0f };
     std::atomic<int>     healthy_{ 0 };             // 0=停 1=正常 2=重建中

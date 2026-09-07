@@ -25,10 +25,11 @@ static const GUID kIeeeFloat = { 0x00000003, 0x0000, 0x0010,
 static const PROPERTYKEY kPKEY_Name = { { 0xa45c254e, 0xdf1c, 0x4efd,
                                           { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 14 };
 
-// ---- 默认输出设备通知 (MTA; 生命周期归捕获线程, Release 不 delete) ------------
+// ---- 默认输出/输入设备通知 (MTA; 生命周期归捕获线程, Release 不 delete) --------
 class EndpointEvents : public IMMNotificationClient {
 public:
-    std::atomic<int> defaultChanged{ 0 };
+    std::atomic<int> renderChanged{ 0 };
+    std::atomic<int> captureChanged{ 0 };
 
     STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override {
         if (!ppv) return E_POINTER;
@@ -47,7 +48,9 @@ public:
     STDMETHODIMP OnDeviceAdded(LPCWSTR) override { return S_OK; }
     STDMETHODIMP OnDeviceRemoved(LPCWSTR) override { return S_OK; }
     STDMETHODIMP OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR) override {
-        if (flow == eRender && role == eConsole) defaultChanged.store(1);
+        if (role != eConsole) return S_OK;
+        if (flow == eRender) renderChanged.store(1);
+        else if (flow == eCapture) captureChanged.store(1);
         return S_OK;
     }
     STDMETHODIMP OnPropertyValueChanged(LPCWSTR, const PROPERTYKEY) override { return S_OK; }
@@ -68,6 +71,7 @@ struct Session {
     UINT32 channels = 2;
     double fs = 48000.0;
     HANDLE evCapture = nullptr;                     // Meter::evCapture_ 别名
+    bool mic = false;                               // false=渲染回环 true=麦克风采集
     EndpointEvents events;
 };
 } // namespace
@@ -124,6 +128,11 @@ void Meter::SetParams(const Params& p)
     LeaveCriticalSection(&paramsCs_);
 }
 
+void Meter::SetSource(bool microphone)
+{
+    wantMic_ = microphone ? 1 : 0;
+}
+
 std::string Meter::EndpointName() const
 {
     EnterCriticalSection(const_cast<CRITICAL_SECTION*>(&nameCs_));
@@ -139,7 +148,9 @@ static bool InitSession(Session& s, std::string* nameOut)
                                   __uuidof(IMMDeviceEnumerator), (void**)s.enumerator.GetAddressOf());
     if (FAILED(hr)) return false;
     s.enumerator->RegisterEndpointNotificationCallback(&s.events);
-    hr = s.enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &s.device);
+    // 麦克风 = 采集端点 (普通共享捕获); 回环 = 渲染端点 (AUDCLNT_STREAMFLAGS_LOOPBACK)
+    EDataFlow flow = s.mic ? eCapture : eRender;
+    hr = s.enumerator->GetDefaultAudioEndpoint(flow, eConsole, &s.device);
     if (FAILED(hr)) return false;
     *nameOut = ReadEndpointName(s.device.Get());
     if (FAILED(s.device->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL,
@@ -164,10 +175,10 @@ static bool InitSession(Session& s, std::string* nameOut)
     s.channels = w->nChannels;
     s.fs = (double)w->nSamplesPerSec;
 
-    // 事件驱动共享模式回环; 缓冲 1s 足够抗抖, 事件节拍仍为设备周期 (~10ms)
-    hr = s.client->Initialize(AUDCLNT_SHAREMODE_SHARED,
-                              AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                              10000000, 0, w, nullptr);
+    // 事件驱动共享模式; 缓冲 1s 足够抗抖, 事件节拍仍为设备周期 (~10ms)
+    DWORD flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK;
+    if (!s.mic) flags |= AUDCLNT_STREAMFLAGS_LOOPBACK;
+    hr = s.client->Initialize(AUDCLNT_SHAREMODE_SHARED, flags, 10000000, 0, w, nullptr);
     if (FAILED(hr)) return false;
     if (FAILED(s.client->SetEventHandle(s.evCapture))) return false;
     if (FAILED(s.client->GetService(__uuidof(IAudioCaptureClient),
@@ -267,11 +278,13 @@ void Meter::ThreadLoop()
     for (;;) {
         healthy_ = 2;
         std::string name;
+        s.mic = wantMic_.load() != 0;
         if (!InitSession(s, &name)) {
             healthy_ = 0;
             envByte_ = 0;
             if (!loggedNoDev) {
-                ACLOGW("audio: no usable render endpoint, retrying (500ms)");
+                ACLOGW("audio: no usable %s endpoint, retrying (500ms)",
+                       s.mic ? "capture (mic)" : "render (loopback)");
                 loggedNoDev = true;
             }
             TeardownSession(s);
@@ -292,7 +305,8 @@ void Meter::ThreadLoop()
         peakF_ = 0.02;
         peakB_ = 0.006;
         env_ = 0;
-        ACLOGI("audio: loopback on '%s' (%u ch, %.0f Hz)", name.c_str(), s.channels, s.fs);
+        ACLOGI("audio: %s on '%s' (%u ch, %.0f Hz)",
+               s.mic ? "mic" : "loopback", name.c_str(), s.channels, s.fs);
         healthy_ = 1;
         lastPacket = steady_clock::now();
 
@@ -303,8 +317,14 @@ void Meter::ThreadLoop()
             if (w == WAIT_OBJECT_0) { stopReq = true; break; }
             auto now1 = steady_clock::now();
 
-            if (s.events.defaultChanged.exchange(0)) {
-                ACLOGI("audio: default render endpoint changed -> rebuild");
+            if (wantMic_.load() != 0 != s.mic) {
+                ACLOGI("audio: source switch (%s) -> rebuild", s.mic ? "mic->loopback" : "loopback->mic");
+                rebuild = true;
+                break;
+            }
+            if ((s.mic ? s.events.captureChanged : s.events.renderChanged).exchange(0)) {
+                ACLOGI("audio: default %s endpoint changed -> rebuild",
+                       s.mic ? "capture" : "render");
                 rebuild = true;
                 break;
             }
