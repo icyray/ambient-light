@@ -16,7 +16,7 @@ public partial class LedRingView : UserControl
     private double _aspect = 16.0 / 9.0;
 
     // 布局预算 (固定): 屏幕矩形最大外接尺寸 + LED 与矩形边缘的间隙
-    private const double MaxScreenW = 560, MaxScreenH = 280, LedGap = 3;
+    private const double MaxScreenW = 460, MaxScreenH = 220, LedGap = 14;
 
     public LedRingView() => InitializeComponent();
 
@@ -65,15 +65,14 @@ public partial class LedRingView : UserControl
         else { sh = MaxScreenH; sw = MaxScreenH * _aspect; }
         double spanH = horiz > 0 ? sw / horiz : double.MaxValue;
         double spanV = vert > 0 ? sh / vert : double.MaxValue;
-        double cell = Math.Clamp(Math.Min(spanH, spanV), 3.0, 14.0);
-        double pad = LedGap + cell;
+        double cell = Math.Clamp(Math.Min(spanH, spanV), 3.0, 12.0);
+        double pad = LedGap + cell;                  // 矩形边到画布边 (间隙 + 一颗灯)
         double cw = sw + 2 * pad, ch = sh + 2 * pad;
 
         _top = []; _bottom = []; _left = []; _right = [];
         RingCanvas.Children.Clear();
         RingCanvas.Width = cw;
-        RingCanvas.Height = ch;
-        Height = ch;                                 // 控件高度 = 画布高度 (固定值)
+        RingCanvas.Height = ch;                      // 高度交给容器自适应 (画布居中)
 
         var screen = new Rectangle
         {
