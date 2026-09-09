@@ -5,7 +5,11 @@
          (边数分配/绕向/灯序偏移与核心 capture.cpp BuildRects 同构),
          颜色 = 最近一帧下发数据 (ACStatus.ledRgb)。画布尺寸由屏幕比例计算得出, 控件内居中 -->
     <Grid>
-        <Canvas x:Name="RingCanvas" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <!-- Viewbox: 窗口变窄时整体等比缩小 (Max 限制为原始尺寸, 不放大) -->
+        <Viewbox x:Name="RingBox" Stretch="Uniform"
+                 HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Canvas x:Name="RingCanvas" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Viewbox>
         <Border HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420"
                 Background="Transparent" IsHitTestVisible="False">
             <StackPanel>

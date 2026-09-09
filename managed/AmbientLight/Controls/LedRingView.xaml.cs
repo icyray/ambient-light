@@ -72,7 +72,9 @@ public partial class LedRingView : UserControl
         _top = []; _bottom = []; _left = []; _right = [];
         RingCanvas.Children.Clear();
         RingCanvas.Width = cw;
-        RingCanvas.Height = ch;                      // 高度交给容器自适应 (画布居中)
+        RingCanvas.Height = ch;
+        RingBox.MaxWidth = cw;                       // 原大上限; 窗口更窄时 Viewbox 等比缩小
+        RingBox.MaxHeight = ch;
 
         var screen = new Rectangle
         {
@@ -131,9 +133,13 @@ public partial class LedRingView : UserControl
 
         foreach (var (idx, u, v) in pts)
         {
+            // 灯珠中心在矩形边缘外侧: 间隙 LedGap + 半径 cell/2
+            double off = LedGap + cell / 2;
+            double cx = pad + u * sw + (u == 0 ? -off : u == 1 ? off : 0);
+            double cy = pad + v * sh + (v == 0 ? -off : v == 1 ? off : 0);
             var e = new Ellipse { Width = cell, Height = cell, Fill = Frozen(30, 30, 34), Tag = idx };
-            Canvas.SetLeft(e, pad + u * sw - cell / 2);
-            Canvas.SetTop(e, pad + v * sh - cell / 2);
+            Canvas.SetLeft(e, cx - cell / 2);
+            Canvas.SetTop(e, cy - cell / 2);
             RingCanvas.Children.Add(e);
             if (v == 0) _top.Add(e);
             else if (v == 1) _bottom.Add(e);
