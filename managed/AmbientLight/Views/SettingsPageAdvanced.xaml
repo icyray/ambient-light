@@ -73,26 +73,6 @@
             <StackPanel>
                 <Grid>
                     <StackPanel>
-                        <TextBlock Text="定时开启" FontWeight="SemiBold" />
-                        <TextBlock Text="每天到点自动开启灯带 (当天只自动开一次, 手动关闭不会被再次拉起); 时刻未到时应用启动不亮灯。"
-                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <ui:ToggleSwitch x:Name="AutoOnToggle" HorizontalAlignment="Right"
-                                     Click="OnAutoOnChanged" />
-                </Grid>
-                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                    <TextBlock Text="开启时刻" VerticalAlignment="Center" Margin="0,0,12,0" />
-                    <ComboBox x:Name="AutoOnHourCombo" Width="84" SelectionChanged="OnAutoOnTimeChanged" />
-                    <TextBlock Text=":" VerticalAlignment="Center" Margin="4,0" />
-                    <ComboBox x:Name="AutoOnMinuteCombo" Width="84" SelectionChanged="OnAutoOnTimeChanged" />
-                </StackPanel>
-            </StackPanel>
-        </ui:Card>
-
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <Grid>
-                    <StackPanel>
                         <TextBlock Text="开机自启" FontWeight="SemiBold" />
                         <TextBlock Text="登录 Windows 后自动运行 (在 shell:startup 写入 .url 快捷方式, 不动注册表)"
                                    Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />

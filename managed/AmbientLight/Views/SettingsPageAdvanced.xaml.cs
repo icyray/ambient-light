@@ -33,18 +33,6 @@ public partial class SettingsPageAdvanced : Page
         AutoStartPathText.Text = AutoStart.ShortcutPath;
         StartMinimizedToggle.IsChecked = ConfigStore.App.StartMinimized;
         AutoStartCoreToggle.IsChecked = ConfigStore.Device.AutoStartCore;
-        AutoOnToggle.IsChecked = ConfigStore.App.AutoOnEnabled;
-        if (AutoOnHourCombo.Items.Count == 0)
-        {
-            for (int h = 0; h < 24; h++) AutoOnHourCombo.Items.Add($"{h:00}");
-            for (int m = 0; m < 60; m += 5) AutoOnMinuteCombo.Items.Add($"{m:00}");
-        }
-        int hh = 17, mm = 0;   // 解析失败默认 17:00
-        if (TimeSpan.TryParseExact(ConfigStore.App.AutoOnTime, @"hh\:mm", null, out var t))
-            (hh, mm) = (t.Hours, t.Minutes / 5 * 5);
-        AutoOnHourCombo.SelectedIndex = Math.Clamp(hh, 0, 23);
-        AutoOnMinuteCombo.SelectedIndex = Math.Clamp(mm / 5, 0, 11);
-        AutoOnHourCombo.IsEnabled = AutoOnMinuteCombo.IsEnabled = ConfigStore.App.AutoOnEnabled;
         ConfigDirText.Text = $"{ConfigStore.ConfigDir}  ({ConfigStore.ConfigDirSource})";
         VersionText.Text = $"AmbientLight {GetType().Assembly.GetName().Version?.ToString(3)} · AmbientCore v{(AmbientCore.Version() >> 16) & 0xFF}.{(AmbientCore.Version() >> 8) & 0xFF}.{AmbientCore.Version() & 0xFF}";
         _loading = false;
@@ -113,23 +101,7 @@ public partial class SettingsPageAdvanced : Page
         ConfigStore.SaveDevice();
     }
 
-    // ---- 定时开启 + 校准 -------------------------------------------------
-    private void OnAutoOnChanged(object sender, RoutedEventArgs e)
-    {
-        if (_loading) return;
-        ConfigStore.App.AutoOnEnabled = AutoOnToggle.IsChecked == true;
-        AutoOnHourCombo.IsEnabled = AutoOnMinuteCombo.IsEnabled = ConfigStore.App.AutoOnEnabled;
-        ConfigStore.SaveApp();
-    }
-
-    private void OnAutoOnTimeChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_loading || AutoOnHourCombo.SelectedIndex < 0 || AutoOnMinuteCombo.SelectedIndex < 0) return;
-        ConfigStore.App.AutoOnTime =
-            $"{AutoOnHourCombo.SelectedIndex:00}:{AutoOnMinuteCombo.SelectedIndex * 5:00}";
-        ConfigStore.SaveApp();
-    }
-
+    // ---- 校准 ------------------------------------------------------------
     private void OnCalibrate(object sender, RoutedEventArgs e) => CalibrateWindow.TryOpen();
 
     // ---- 配置目录 --------------------------------------------------------

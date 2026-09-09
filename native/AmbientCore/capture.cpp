@@ -402,7 +402,8 @@ void CaptureSession::UpdateLayout(const Params& p)
 {
     bool depthOrGeometry = p.leds != p_.leds || p.sides != p_.sides ||
                            p.direction != p_.direction || p.range != p_.range ||
-                           p.depthOverride != p_.depthOverride || p.smoothing != p_.smoothing;
+                           p.depthOverride != p_.depthOverride || p.smoothing != p_.smoothing ||
+                           p.ledRotate != p_.ledRotate;
     bool cbOnly = !depthOrGeometry &&
                   (p.taps != p_.taps || p.barlevel != p_.barlevel || p.blackbars != p_.blackbars);
     Params old = p_;

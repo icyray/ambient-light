@@ -601,7 +601,8 @@ void CoreLoopInner(Sess* g)
                 nc.direction != applied.direction || nc.captureRange != applied.captureRange ||
                 nc.depthOverride != applied.depthOverride || nc.taps != applied.taps ||
                 nc.smoothing != applied.smoothing || nc.blackBars != applied.blackBars ||
-                nc.blackBarLevel != applied.blackBarLevel;
+                nc.blackBarLevel != applied.blackBarLevel ||
+                nc.ledRotate != applied.ledRotate;   // 灯序偏移也走取色区重建 (校准窗实时生效)
             if (capValid && layoutChanged) cap.UpdateLayout(MakeCaptureParams(nc));
             // cols 必须与新灯数同步, 否则 Step 的 memcpy 越界写堆 (曾致 CLR 堆损坏)
             cols.resize((size_t)std::min(nc.ledCount, serial::kMaxLedCount) + 4);

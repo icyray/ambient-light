@@ -83,12 +83,8 @@ public partial class App : Application
             _main.Show();
         _poller.Start();
 
-        // 定时开灯开启且未到时刻 → 本次启动不自动亮灯 (到点由调度器拉起);
-        // 已过时刻则照常 AutoStartCore (开箱即亮语义不变)
-        bool autoOnWait = ConfigStore.App.AutoOnEnabled && !NowBeyondAutoOnTime();
-        if (!autoOnWait && ConfigStore.Devices.Values.Any(d => d.AutoStartCore))
+        if (ConfigStore.Devices.Values.Any(d => d.AutoStartCore))
             _ = StartAllAsync();
-        InitAutoSchedule();
     }
 
     // ---- 核心生命周期 (M3: 每设备一个 slot 会话) ---------------------
@@ -231,34 +227,6 @@ public partial class App : Application
         _applyDebounce.Start();
     }
 
-    // ---- 定时开灯 (M4): 每天 AutoOnTime 到点自动开启 (当天只一次, 用户手动关闭不劫持;
-    //      厂商 LedAutoOnOff/LedAutoTime 同款语义, 但不做厂商的"未到点强制关灯") ----
-    private DispatcherTimer? _autoOnTimer;
-    private DateOnly _autoOnLastDay;
-
-    private void InitAutoSchedule()
-    {
-        if (!ConfigStore.App.AutoOnEnabled) return;
-        if (NowBeyondAutoOnTime())
-            _autoOnLastDay = DateOnly.FromDateTime(DateTime.Now);   // 启动已过点: 今天不再重复拉起
-        _autoOnTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        _autoOnTimer.Tick += (_, _) =>
-        {
-            if (!ConfigStore.App.AutoOnEnabled || !NowBeyondAutoOnTime()) return;
-            if (_autoOnLastDay == DateOnly.FromDateTime(DateTime.Now)) return;
-            _autoOnLastDay = DateOnly.FromDateTime(DateTime.Now);
-            if (!CoreRunning) _ = StartAllAsync();
-        };
-        _autoOnTimer.Start();
-    }
-
-    private static bool NowBeyondAutoOnTime()
-    {
-        // HH:mm 解析失败按"已过点"处理 (不影响亮灯可用性)
-        return !TimeSpan.TryParseExact(ConfigStore.App.AutoOnTime, @"hh\:mm", null, out var t)
-               || DateTime.Now.TimeOfDay >= t;
-    }
-
     // ---- 崩溃日志 (crash.log 与配置同目录; 任何失败静默) --------------------
     // 注: AC_SetTestPattern 原生接口保留 (probe 回归用), UI 入口已由全屏校准向导取代
     private static void WriteCrashLog(string source, object? exc, bool terminating)
@@ -330,7 +298,6 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _autoOnTimer?.Stop();
         StopAllDevices();
         if (ConfigStore.ConfigDir.Length > 0)
         {

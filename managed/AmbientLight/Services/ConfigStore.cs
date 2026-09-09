@@ -11,8 +11,6 @@ public sealed class AppOptions
     public bool StartMinimized { get; set; } = false;
     public bool AutoStart { get; set; } = false;   // shell:startup 快捷方式 (M4)
     public string SelectedDevice { get; set; } = "0_1";   // 当前编辑的设备 key (M3)
-    public bool AutoOnEnabled { get; set; } = false;   // 定时开关灯 (M4): 到点自动开, 时刻前保持灭
-    public string AutoOnTime { get; set; } = "17:00";  // HH:mm, 每天 (跨零点自动归为"未到时间"→关)
 }
 
 public sealed class DeviceSettings
