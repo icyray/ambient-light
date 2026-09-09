@@ -14,7 +14,7 @@ public partial class HomePage : Page
 {
     private bool _loaded;                       // 初值阶段忽略一切配置下发
     private int _lastPolledState = -1;
-    private int _lastRingSig = -1;              // (mode|leds|sides|dir) 变化才重配预览
+    private long _lastRingSig = -1;             // (mode|leds|sides|dir|state|rotate) 变化才重配预览
     private readonly Dictionary<int, Wpf.Ui.Controls.Button> _modeBtns = new();
 
     public HomePage()
@@ -164,12 +164,14 @@ public partial class HomePage : Page
     private void UpdateRing(ACStatus st)
     {
         var dev = ConfigStore.Device;
-        int sig = dev.ModeIndex | (dev.LedCount << 5) | (dev.Sides << 15) | (dev.Direction << 18)
-                | ((int)st.state << 20) | ((dev.LedRotate + 256) << 24);
+        long sig = dev.ModeIndex | ((long)dev.LedCount << 5) | ((long)dev.Sides << 15)
+                | ((long)dev.Direction << 18) | ((long)st.state << 20)
+                | (((long)dev.LedRotate + 256) << 24);
         if (sig != _lastRingSig)
         {
             _lastRingSig = sig;
-            Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, dev.LedRotate);
+            var (mw, mh) = GetMonitorSize(dev.MonitorIndex);   // 预览按真实长宽比布局
+            Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, dev.LedRotate, mw, mh);
             UpdateRingHint(dev.ModeIndex);
             ModeTagText.Text = $"{AmbientCore.ModeName(dev.ModeIndex)} · {dev.LedCount} 灯";
         }
@@ -190,6 +192,23 @@ public partial class HomePage : Page
             Ring.Clear();
         }
         // WAIT_DISP/DEV_LOST: 保留最后画面 (串口策略帧/重连语义与之一致)
+    }
+
+    /// <summary>选中显示器的实际物理分辨率 (预览长宽比用); 枚举失败按 16:9</summary>
+    private static (int w, int h) GetMonitorSize(int index)
+    {
+        try
+        {
+            var mons = AmbientCore.GetMonitors();
+            if (mons.Length > 0)
+            {
+                int i = Math.Clamp(index, 0, mons.Length - 1);
+                if (mons[i].width > 0 && mons[i].height > 0)
+                    return (mons[i].width, mons[i].height);
+            }
+        }
+        catch { }
+        return (16, 9);
     }
 
     private void UpdateRingHint(int mode)

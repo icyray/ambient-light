@@ -167,14 +167,18 @@ public partial class CalibrateWindow : Window
         QuadBR.Background = new SolidColorBrush(Palette[s[3]]);
         SchemeText.Text = $"配色方案 {_scheme + 1}/4 · 左上{ColorNames[s[0]]} 右上{ColorNames[s[1]]}" +
                           $" 左下{ColorNames[s[2]]} 右下{ColorNames[s[3]]}";
-        // 分辨率 (核心枚举的目标显示器)
+        // 分辨率 (核心枚举的目标显示器) — 同时供预览按真实长宽比布局
+        int mw = 0, mh = 0;
         try
         {
             var core = AmbientCore.GetMonitors();
             int i = Math.Clamp(dev.MonitorIndex, 0, Math.Max(core.Length - 1, 0));
             if (core.Length > 0)
-                ResText.Text = $"校准屏 [{i}] {core[i].Name} · {core[i].width}×{core[i].height}" +
+            {
+                mw = core[i].width; mh = core[i].height;
+                ResText.Text = $"校准屏 [{i}] {core[i].Name} · {mw}×{mh}" +
                                (core[i].primary != 0 ? " (主屏)" : "");
+            }
         }
         catch { }
         // 灯序偏移
@@ -184,7 +188,7 @@ public partial class CalibrateWindow : Window
         RotRightBtn.IsEnabled = maxRot > 0 && dev.LedRotate < maxRot;
         RotResetBtn.IsEnabled = maxRot > 0 && dev.LedRotate != 0;
         // 预览 = 固定标准图 (不随偏移): 每格 = 该序号 LED 在 rotate=0 时的位置与象限色
-        Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, 0);
+        Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, 0, mw, mh);
         Ring.ShowQuadrantMap([Palette[s[0]], Palette[s[1]], Palette[s[2]], Palette[s[3]]]);
         IndexText.Text = "LED 序号: " + Ring.DescribeIndices();
     }
