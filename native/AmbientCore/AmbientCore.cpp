@@ -377,6 +377,7 @@ void CoreLoopInner(Sess* g)
     int  monitorFallback = 0;
     bool waitDisp = false;
     auto lastPolicyResend = steady_clock::now() - seconds(10);
+    auto lastFrameSend = steady_clock::now();       // RUNNING 静态桌面重发节拍 (见 STEP_TIMEOUT)
     // 启动/唤醒后的宽限期: D3D 设备创建失败按瞬时处理 (驱动未就绪), 避免日志误报 ERROR
     auto hardGraceUntil = steady_clock::now() + seconds(3);
 
@@ -842,6 +843,7 @@ void CoreLoopInner(Sess* g)
 
                 auto tw = steady_clock::now();
                 bool ok = sp.Write(frame.data(), (DWORD)frame.size());
+                lastFrameSend = tw;
                 double wireMs = duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count();
                 wireEma = wireEma == 0 ? wireMs : wireEma * 0.9 + wireMs * 0.1;
                 if (!ok) { WireFail("write failed"); continue; }
@@ -857,7 +859,17 @@ void CoreLoopInner(Sess* g)
                     if (el < need) WaitStop(g, (DWORD)(need - el));
                 }
             } else if (stp == capture::CaptureSession::STEP_TIMEOUT) {
-                // 静态屏/熄屏: 0 占用; DPMS 熄屏已由电源事件进入 WAIT_DISP
+                // 静态屏: 不采样 (0 占用)。但帧只在桌面更新时发送, 若就此沉默,
+                // 主机侧热改 (亮度/颜色链/灯序偏移) 在静止画面上永远不可见, 固件掉电
+                // 丢帧也无法自愈 —— 每 200ms 重发最后一帧 (frame 即最近下发内容;
+                // WAIT_DISP 除外, 那里由策略帧 2s 重发接管)。
+                auto nowT = steady_clock::now();
+                if (!waitDisp && serialOpen && frameCounter > 0 && nowT - lastFrameSend >= milliseconds(200)) {
+                    if (!sp.Write(frame.data(), (DWORD)frame.size())) { WireFail("write failed"); continue; }
+                    uint8_t sb;
+                    if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
+                    lastFrameSend = nowT;
+                }
             } else {
                 cap.Destroy();
                 capValid = false;

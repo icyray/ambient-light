@@ -133,18 +133,24 @@ public partial class CalibrateWindow : Window
     }
 
     // ---- 状态刷新 ------------------------------------------------------------
+    private bool _blink;
+
     private void PollOnce()
     {
         try
         {
             var st = AmbientCore.GetStatusEx(_slot);
-            // 预览是固定参照 (ShowQuadrantMap), 不随物理灯带的偏移走 → 这里只刷状态
+            // 预览是固定参照 (ShowQuadrantMap), 不随物理灯带的偏移走 → 这里只刷状态。
+            // 状态行带闪烁指示是有意的: 校准屏其余部分静止时, 桌面无更新 → DDA 不出帧,
+            // 灯带就不刷新 (改偏移看不到效果)。字符轮换保证每 120ms 产生一次桌面更新。
+            _blink = !_blink;
+            string live = _blink ? " ●" : " ○";
             StatusText.Text = st.state switch
             {
-                AmbientCore.StateRunning => "会话运行中",
-                AmbientCore.StateDevLost => "设备失联 (DEV_LOST): 灯带被拔出或端口被占用?",
-                AmbientCore.StateWaitDisp => "画面暂不可用 (锁屏/熄屏)",
-                _ => $"会话状态 {st.state}",
+                AmbientCore.StateRunning => "会话运行中" + live,
+                AmbientCore.StateDevLost => "设备失联 (DEV_LOST): 灯带被拔出或端口被占用?" + live,
+                AmbientCore.StateWaitDisp => "画面暂不可用 (锁屏/熄屏)" + live,
+                _ => $"会话状态 {st.state}" + live,
             };
         }
         catch { }
