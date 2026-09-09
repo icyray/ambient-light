@@ -73,6 +73,7 @@ public partial class CalibrateWindow : Window
         var cfg = ConfigStore.Device.ToCoreConfig();
         cfg.captureRange = 2;       // 厂商同款: 校准时取色带贴边, 中央面板不参与取色
         cfg.colorCut = 0;
+        cfg.brightness = 1.0;       // 校准要肉眼分辨颜色, 临时拉满 (关闭时随恢复还原)
         cfg.modeIndex = 0;
         cfg.ledRotate = ConfigStore.Device.LedRotate;
         AmbientCore.SetConfigEx(_slot, ref cfg);
@@ -137,7 +138,7 @@ public partial class CalibrateWindow : Window
         try
         {
             var st = AmbientCore.GetStatusEx(_slot);
-            Ring.Update(st.CopyLedRgb(), ConfigStore.Device.LedCount);
+            // 预览是固定参照 (ShowQuadrantMap), 不随物理灯带的偏移走 → 这里只刷状态
             StatusText.Text = st.state switch
             {
                 AmbientCore.StateRunning => "会话运行中",
@@ -172,12 +173,13 @@ public partial class CalibrateWindow : Window
         catch { }
         // 灯序偏移
         int maxRot = MaxRotate(dev.LedCount);
-        RotateText.Text = $"灯数 {dev.LedCount} · 灯序偏移 {dev.LedRotate:+0;-0;0} (±{maxRot})";
+        RotateText.Text = $"灯数 {dev.LedCount} · 灯序偏移 {dev.LedRotate:+0;-0;0} (±{maxRot}) — 按钮直接移动物理灯带";
         RotLeftBtn.IsEnabled = maxRot > 0 && dev.LedRotate > -maxRot;
         RotRightBtn.IsEnabled = maxRot > 0 && dev.LedRotate < maxRot;
         RotResetBtn.IsEnabled = maxRot > 0 && dev.LedRotate != 0;
-        // 预览 + 序号范围
-        Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, dev.LedRotate);
+        // 预览 = 固定标准图 (不随偏移): 每格 = 该序号 LED 在 rotate=0 时的位置与象限色
+        Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, 0);
+        Ring.ShowQuadrantMap([Palette[s[0]], Palette[s[1]], Palette[s[2]], Palette[s[3]]]);
         IndexText.Text = "LED 序号: " + Ring.DescribeIndices();
     }
 

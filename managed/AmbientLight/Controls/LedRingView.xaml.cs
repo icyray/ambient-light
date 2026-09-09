@@ -12,6 +12,7 @@ public partial class LedRingView : UserControl
 {
     private List<Ellipse> _top = [], _bottom = [], _left = [], _right = [];
     private int _signature = -1;
+    private int _cfgLeds, _cfgSides, _cfgDir;   // ShowQuadrantMap 复算几何用
 
     public LedRingView() => InitializeComponent();
 
@@ -26,6 +27,7 @@ public partial class LedRingView : UserControl
         int sig = ledCount | (sides << 10) | (direction << 14) | ((Math.Clamp(rotate, -255, 255) + 255) << 16);
         if (sig == _signature) return;
         _signature = sig;
+        _cfgLeds = ledCount; _cfgSides = sides; _cfgDir = direction;
 
         var (top, bottom, left, right, maxPerSide) = BuildLayout(ledCount, sides, direction, rotate);
         int maxVert = Math.Max(Math.Max(left.Count, right.Count), 1);
@@ -75,6 +77,30 @@ public partial class LedRingView : UserControl
             (Range(_left, "左"), 3), (Range(_right, "右"), 4),
         }.Where(p => p.Item1 != null).OrderBy(p => p.Item2).Select(p => p.Item1);
         return string.Join(" · ", parts);
+    }
+
+    /// <summary>以当前布局画"标准四象限图" (不随灯序偏移): 每格按其物理位置所在象限着色,
+    /// quad = [左上,右上,左下,右下]。校准窗的固定参照 —— 物理灯带偏移时此图不动,
+    /// 用户将灯带颜色分界对齐屏幕象限分界即可。</summary>
+    public void ShowQuadrantMap(Color[] quad)
+    {
+        if (quad == null || quad.Length < 4) return;
+        var brushes = quad.Take(4).Select(c =>
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }).ToArray();
+        const double W = 16, H = 9;
+        Paint(_top, k => (k + 0.5) * W / Math.Max(_top.Count, 1) < W / 2 ? 0 : 1);
+        Paint(_bottom, k => (k + 0.5) * W / Math.Max(_bottom.Count, 1) < W / 2 ? 2 : 3);
+        Paint(_left, k => (k + 0.5) * H / Math.Max(_left.Count, 1) < H / 2 ? 0 : 2);
+        Paint(_right, k => (k + 0.5) * H / Math.Max(_right.Count, 1) < H / 2 ? 1 : 3);
+
+        void Paint(List<Ellipse> strip, Func<int, int> quadOf)
+        {
+            for (int k = 0; k < strip.Count; k++) strip[k].Fill = brushes[quadOf(k)];
+        }
     }
 
     private static void Fill(List<Ellipse> strip, ReadOnlySpan<byte> rgb, int ledCount)

@@ -18,12 +18,7 @@ public partial class SettingsPageAdvanced : Page
     {
         InitializeComponent();
         Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
-        // TimePicker 无公开 change 事件, 用 DP 描述符监听
-        System.ComponentModel.DependencyPropertyDescriptor.FromProperty(
-            Wpf.Ui.Controls.TimePicker.TimeProperty, typeof(Wpf.Ui.Controls.TimePicker))
-            .AddValueChanged(AutoOnTimePicker, OnAutoOnTimeChanged);
         Loaded += OnLoaded;
-        Unloaded += (_, _) => App.Instance.PatternChanged -= OnPatternChanged;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -39,24 +34,20 @@ public partial class SettingsPageAdvanced : Page
         StartMinimizedToggle.IsChecked = ConfigStore.App.StartMinimized;
         AutoStartCoreToggle.IsChecked = ConfigStore.Device.AutoStartCore;
         AutoOnToggle.IsChecked = ConfigStore.App.AutoOnEnabled;
-        AutoOnTimePicker.Time = TimeSpan.TryParseExact(ConfigStore.App.AutoOnTime, @"hh\:mm",
-            null, out var t) ? t : new TimeSpan(17, 0, 0);
-        AutoOnTimePicker.IsEnabled = ConfigStore.App.AutoOnEnabled;
+        if (AutoOnHourCombo.Items.Count == 0)
+        {
+            for (int h = 0; h < 24; h++) AutoOnHourCombo.Items.Add($"{h:00}");
+            for (int m = 0; m < 60; m += 5) AutoOnMinuteCombo.Items.Add($"{m:00}");
+        }
+        int hh = 17, mm = 0;   // 解析失败默认 17:00
+        if (TimeSpan.TryParseExact(ConfigStore.App.AutoOnTime, @"hh\:mm", null, out var t))
+            (hh, mm) = (t.Hours, t.Minutes / 5 * 5);
+        AutoOnHourCombo.SelectedIndex = Math.Clamp(hh, 0, 23);
+        AutoOnMinuteCombo.SelectedIndex = Math.Clamp(mm / 5, 0, 11);
+        AutoOnHourCombo.IsEnabled = AutoOnMinuteCombo.IsEnabled = ConfigStore.App.AutoOnEnabled;
         ConfigDirText.Text = $"{ConfigStore.ConfigDir}  ({ConfigStore.ConfigDirSource})";
         VersionText.Text = $"AmbientLight {GetType().Assembly.GetName().Version?.ToString(3)} · AmbientCore v{(AmbientCore.Version() >> 16) & 0xFF}.{(AmbientCore.Version() >> 8) & 0xFF}.{AmbientCore.Version() & 0xFF}";
         _loading = false;
-
-        RefreshPatternButtons();
-        App.Instance.PatternChanged += OnPatternChanged;
-    }
-
-    private void OnPatternChanged() => RefreshPatternButtons();
-
-    private void RefreshPatternButtons()
-    {
-        int active = App.Instance.ActivePattern;
-        PatternQuadBtn.Appearance = active == 1 ? ControlAppearance.Primary : ControlAppearance.Secondary;
-        PatternMagentaBtn.Appearance = active == 2 ? ControlAppearance.Primary : ControlAppearance.Secondary;
     }
 
     private void OnMinBrightnessChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -126,29 +117,20 @@ public partial class SettingsPageAdvanced : Page
     private void OnAutoOnChanged(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
-        bool on = AutoOnToggle.IsChecked == true;
-        ConfigStore.App.AutoOnEnabled = on;
-        AutoOnTimePicker.IsEnabled = on;
+        ConfigStore.App.AutoOnEnabled = AutoOnToggle.IsChecked == true;
+        AutoOnHourCombo.IsEnabled = AutoOnMinuteCombo.IsEnabled = ConfigStore.App.AutoOnEnabled;
         ConfigStore.SaveApp();
-        // 立即对齐一次状态 (开关定时功能影响本次会话的启动语义已过, 只影响后续到点拉起)
     }
 
-    private void OnAutoOnTimeChanged(object? sender, EventArgs e)
+    private void OnAutoOnTimeChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_loading) return;
-        if (AutoOnTimePicker.Time is TimeSpan t)
-        {
-            ConfigStore.App.AutoOnTime = $"{(int)t.TotalHours:00}:{t.Minutes:00}";
-            ConfigStore.SaveApp();
-        }
+        if (_loading || AutoOnHourCombo.SelectedIndex < 0 || AutoOnMinuteCombo.SelectedIndex < 0) return;
+        ConfigStore.App.AutoOnTime =
+            $"{AutoOnHourCombo.SelectedIndex:00}:{AutoOnMinuteCombo.SelectedIndex * 5:00}";
+        ConfigStore.SaveApp();
     }
 
     private void OnCalibrate(object sender, RoutedEventArgs e) => CalibrateWindow.TryOpen();
-
-    // ---- 测试图 ----------------------------------------------------------
-    private void OnPatternQuad(object sender, RoutedEventArgs e) => App.Instance.SetPattern(1);
-
-    private void OnPatternMagenta(object sender, RoutedEventArgs e) => App.Instance.SetPattern(2);
 
     // ---- 配置目录 --------------------------------------------------------
     private void OnOpenConfigDir(object sender, RoutedEventArgs e)

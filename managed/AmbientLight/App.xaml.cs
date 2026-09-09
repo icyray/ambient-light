@@ -211,8 +211,10 @@ public partial class App : Application
         ConfigStore.SaveDevice();
     }
 
-    /// <summary>全屏校准窗打开标记 (M4): ApplyConfig/SetPattern 挂起防抖动。</summary>
+    /// <summary>全屏校准窗打开标记 (M4): ApplyConfig 挂起防抖动。</summary>
     public bool Calibrating { get; set; }
+
+    // ---- 崩溃日志 (crash.log 与配置同目录; 任何失败静默) --------------------
 
     private DispatcherTimer? _applyDebounce;
 
@@ -257,20 +259,8 @@ public partial class App : Application
                || DateTime.Now.TimeOfDay >= t;
     }
 
-    // ---- 测试图 (高级页; 覆盖正常内容, 再点同钮关闭) --------------------
-    public int ActivePattern { get; private set; }
-    public event Action? PatternChanged;
-
-    public void SetPattern(int mode)
-    {
-        if (Calibrating) return;                     // 校准窗运行时不响应普通测试图
-        int next = ActivePattern == mode ? 0 : mode;
-        AmbientCore.SetTestPattern(next);
-        ActivePattern = next;
-        PatternChanged?.Invoke();
-    }
-
     // ---- 崩溃日志 (crash.log 与配置同目录; 任何失败静默) --------------------
+    // 注: AC_SetTestPattern 原生接口保留 (probe 回归用), UI 入口已由全屏校准向导取代
     private static void WriteCrashLog(string source, object? exc, bool terminating)
     {
         try
