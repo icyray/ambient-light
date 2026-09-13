@@ -9,6 +9,16 @@
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
+            <!-- M5.1: 页内分组小标签 (组内卡片间距 4px, 组间靠标签上边距拉开);
+                 Foreground 必须显式给主题色——StackPanel 直属的 TextBlock 不在
+                 CardForeground 继承链内, 默认会是黑色 (深色主题不可读) -->
+            <Style x:Key="GroupLabel" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                <Setter Property="FontSize" Value="13.5" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Opacity" Value="0.72" />
+                <Setter Property="Margin" Value="4,14,4,6" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
