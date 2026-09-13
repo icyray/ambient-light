@@ -2,6 +2,7 @@ bin/
 obj/
 *.user
 .vs/
+.workbuddy/
 native/AmbientCore/bin/
 native/AmbientCore/obj/
 managed/AmbientLight/log/
