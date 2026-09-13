@@ -60,18 +60,17 @@ public partial class SettingsPageAudio : Page
 
     private void UpdateDevPanels(int sourceValue)
     {
+        // AnimatedVisibility: 高度+透明度过渡 (解析期首次调用直接就位, 之后带动画)
         bool loop = sourceValue == 0, mic = sourceValue == 2;
-        OutDevPanel.Visibility = loop ? Visibility.Visible : Visibility.Collapsed;
-        OutDevCombo.Visibility = loop ? Visibility.Visible : Visibility.Collapsed;
-        MicDevPanel.Visibility = mic ? Visibility.Visible : Visibility.Collapsed;
-        MicDevCombo.Visibility = mic ? Visibility.Visible : Visibility.Collapsed;
+        Controls.AnimatedVisibility.SetExpanded(OutDevRow, loop);
+        Controls.AnimatedVisibility.SetExpanded(MicDevRow, mic);
         if (loop) RefreshDevCombo(OutDevCombo, capture: false, ConfigStore.Device.AudioOutDevId);
         if (mic) RefreshDevCombo(MicDevCombo, capture: true, ConfigStore.Device.AudioDevId);
     }
 
     private void RefreshDevCombo(ComboBox combo, bool capture, string currentId)
     {
-        var items = new List<AudioDevItem> { new("", "系统默认 (跟随系统)") };
+        var items = new List<AudioDevItem> { new("", "系统默认") };
         try
         {
             foreach (var d in AmbientCore.GetAudioEndPoints(capture))
@@ -81,8 +80,6 @@ public partial class SettingsPageAudio : Page
             }
         }
         catch { /* 枚举失败仍保留"系统默认" */ }
-        if (combo == OutDevCombo) OutDevHintText.Visibility = items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
-        else MicDevHintText.Visibility = items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
         _loading = true;
         combo.ItemsSource = items;
         int sel = items.FindIndex(i => i.Id == currentId);
@@ -115,11 +112,11 @@ public partial class SettingsPageAudio : Page
         LevelBar.Value = st.audioLevel;
         LevelValueText.Text = $"{st.audioLevel}";
         string dev = st.AudioDev;
-        AudioDevText.Text = st.audioOk switch
+        VolumeRow.Description = st.audioOk switch
         {
             1 => $"音源: {dev}",
             2 => "音源重建中 (默认输出设备变化/暂不可用)…",
-            _ => "音源: — (开启拾音模式后显示)",
+            _ => "开启拾音模式后显示音源与电平",
         };
     }
 

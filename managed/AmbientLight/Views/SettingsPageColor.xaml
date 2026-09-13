@@ -4,167 +4,136 @@
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:AmbientLight.Controls">
     <!-- 颜色设置: 数值范围与厂商 FormSettings 一致
-         (饱和度/色相 0-200→0-20/0-2, 伽马 30-100→0.30-1.00, cut 0-25, 增益 0-200→0-2) -->
-    <StackPanel Margin="16,4,16,16">
+         (饱和度/色相 0-200→0-20/0-2, 伽马 30-100→0.30-1.00, cut 0-25, 增益 0-200→0-2)。
+         M5.1: 行式布局; 滑块行统一"值左滑右"; RGB 通道增益折叠进「LED 色彩平衡」
+         (三行等距, 色块+白字+值+滑块); 纯色拾色器已迁至主页模式区 -->
+    <StackPanel Margin="16,12,16,16">
 
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <Grid>
-                    <TextBlock Text="色彩饱和度 (鲜艳度)" FontWeight="SemiBold" />
-                    <TextBlock x:Name="VibranceValue" Text="9.0" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="VibranceSlider" controls:SliderJump.Enabled="True" Minimum="0" Maximum="20" Value="9"
-                        SmallChange="0.1" ValueChanged="OnVibranceChanged" Margin="0,8,0,0" />
-                <Separator Margin="0,10" />
-                <Grid>
-                    <TextBlock Text="色相强度" FontWeight="SemiBold" />
-                    <TextBlock x:Name="HueValue" Text="1.00" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="HueSlider" controls:SliderJump.Enabled="True" Minimum="0" Maximum="2" Value="1"
-                        SmallChange="0.01" ValueChanged="OnHueChanged" Margin="0,8,0,0" />
-                <Separator Margin="0,10" />
-                <Grid>
-                    <TextBlock Text="明暗强度 (伽马)" FontWeight="SemiBold" />
-                    <TextBlock x:Name="GammaValue" Text="0.65" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="GammaSlider" controls:SliderJump.Enabled="True" Minimum="0.3" Maximum="1" Value="0.65"
-                        SmallChange="0.01" ValueChanged="OnGammaChanged" Margin="0,8,0,0" />
+        <!-- 色彩调整 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="色彩调整" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBucket24}" Title="饱和度"
+                             Description="画面色彩鲜艳程度">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="VibranceValue" Text="9.0" MinWidth="32" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="VibranceSlider" Width="200" Minimum="0" Maximum="20" Value="9"
+                        SmallChange="0.1" controls:SliderJump.Enabled="True"
+                        VerticalAlignment="Center" ValueChanged="OnVibranceChanged" />
             </StackPanel>
-        </ui:Card>
-
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <Grid>
-                    <TextBlock Text="最低颜色亮度 (cut)" FontWeight="SemiBold" />
-                    <TextBlock x:Name="ColorCutValue" Text="1" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="ColorCutSlider" controls:SliderJump.Enabled="True" Minimum="0" Maximum="25" Value="1"
-                        ValueChanged="OnColorCutChanged" Margin="0,8,0,0" />
-                <TextBlock Text="RGB 全部低于该级别的颜色不显示 (压黑)。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-                <Separator Margin="0,10" />
-                <TextBlock Text="LED 色彩平衡 (通道增益)" FontWeight="SemiBold" />
-                <Grid Margin="0,8,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="42" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="40" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="红" Foreground="#FF6B6B" VerticalAlignment="Center" />
-                    <Slider x:Name="RGainSlider" controls:SliderJump.Enabled="True" Grid.Column="1" Minimum="0" Maximum="2" Value="1"
-                            SmallChange="0.01" ValueChanged="OnRGainChanged" VerticalAlignment="Center" />
-                    <TextBlock x:Name="RGainValue" Grid.Column="2" Text="1.00" Margin="6,0,0,0"
-                               VerticalAlignment="Center" />
-                </Grid>
-                <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="42" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="40" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="绿" Foreground="#7DD97D" VerticalAlignment="Center" />
-                    <Slider x:Name="GGainSlider" controls:SliderJump.Enabled="True" Grid.Column="1" Minimum="0" Maximum="2" Value="1"
-                            SmallChange="0.01" ValueChanged="OnGGainChanged" VerticalAlignment="Center" />
-                    <TextBlock x:Name="GGainValue" Grid.Column="2" Text="1.00" Margin="6,0,0,0"
-                               VerticalAlignment="Center" />
-                </Grid>
-                <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="42" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="40" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="蓝" Foreground="#7D9DFF" VerticalAlignment="Center" />
-                    <Slider x:Name="BGainSlider" controls:SliderJump.Enabled="True" Grid.Column="1" Minimum="0" Maximum="2" Value="1"
-                            SmallChange="0.01" ValueChanged="OnBGainChanged" VerticalAlignment="Center" />
-                    <TextBlock x:Name="BGainValue" Grid.Column="2" Text="1.00" Margin="6,0,0,0"
-                               VerticalAlignment="Center" />
-                </Grid>
-                <Separator Margin="0,10" />
-                <TextBlock Text="LED 颜色输出 (灯珠色序)" FontWeight="SemiBold" />
-                <ComboBox x:Name="OutputCombo" Margin="0,8,0,0" SelectionChanged="OnOutputChanged">
-                    <ComboBoxItem Content="RGB" />
-                    <ComboBoxItem Content="GBR" />
-                    <ComboBoxItem Content="BRG" />
-                    <ComboBoxItem Content="RBG" />
-                    <ComboBoxItem Content="GRB" />
-                    <ComboBoxItem Content="BGR" />
-                </ComboBox>
-                <TextBlock Text="灯光颜色与预期不符时, 逐个尝试直到正确 (灯珠接线序差异)。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ColorLine24}" Title="色相强度">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="HueValue" Text="1.00" MinWidth="32" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="HueSlider" Width="200" Minimum="0" Maximum="2" Value="1"
+                        SmallChange="0.01" controls:SliderJump.Enabled="True"
+                        VerticalAlignment="Center" ValueChanged="OnHueChanged" />
             </StackPanel>
-        </ui:Card>
-
-        <ui:Card>
-            <StackPanel>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BrightnessLow24}" Title="明暗强度 (伽马)"
+                             Description="画面明暗向灯带的映射曲线">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="GammaValue" Text="0.65" MinWidth="32" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="GammaSlider" Width="200" Minimum="0.3" Maximum="1" Value="0.65"
+                        SmallChange="0.01" controls:SliderJump.Enabled="True"
+                        VerticalAlignment="Center" ValueChanged="OnGammaChanged" />
+            </StackPanel>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Filter24}" Title="最低颜色亮度 (cut)"
+                             Description="RGB 全部低于该级别的颜色不显示 (压黑)">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="ColorCutValue" Text="1" MinWidth="32" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="ColorCutSlider" Width="200" Minimum="0" Maximum="25" Value="1"
+                        controls:SliderJump.Enabled="True"
+                        VerticalAlignment="Center" ValueChanged="OnColorCutChanged" />
+            </StackPanel>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRepeatAll24}" Title="灯珠色序"
+                             Description="颜色不符时逐个尝试 (灯珠接线序差异)">
+            <ComboBox x:Name="OutputCombo" Width="200" VerticalAlignment="Center"
+                      SelectionChanged="OnOutputChanged">
+                <ComboBoxItem Content="RGB" />
+                <ComboBoxItem Content="GBR" />
+                <ComboBoxItem Content="BRG" />
+                <ComboBoxItem Content="RBG" />
+                <ComboBoxItem Content="GRB" />
+                <ComboBoxItem Content="BGR" />
+            </ComboBox>
+        </controls:SettingRow>
+        <ui:CardExpander Margin="0,0,0,4" Icon="{ui:SymbolIcon Options24}" ContentPadding="0">
+            <ui:CardExpander.Header>
                 <Grid>
-                    <TextBlock Text="纯色灯光 (模式 11)" FontWeight="SemiBold" />
-                    <TextBlock Text="在主页模式宫格选择「纯色灯光」生效"
-                               Opacity="0.45" FontSize="11" HorizontalAlignment="Right"
-                               VerticalAlignment="Bottom" />
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="LED 色彩平衡" FontSize="14" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="分通道增益, 白场偏色时微调 (高级)" />
+                    <TextBlock x:Name="GainSummaryText" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                               Text="×1.00 ×1.00 ×1.00" FontSize="12" Margin="8,0,4,0"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </ui:CardExpander.Header>
+            <!-- 三行等距: 统一行距 10, 色块+白字+值+滑块 (与主页拾色器 RGB 行同款) -->
+            <StackPanel Margin="16,12,16,16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="16" Height="16" CornerRadius="3" Background="#FF6B6B" />
+                        <TextBlock Text="R" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock x:Name="RGainValue" Grid.Column="1" Text="1.00" MinWidth="36"
+                               TextAlignment="Right" Margin="8,0,12,0" VerticalAlignment="Center" />
+                    <Slider x:Name="RGainSlider" Grid.Column="2" Width="200" Minimum="0" Maximum="2" Value="1"
+                            SmallChange="0.01" controls:SliderJump.Enabled="True"
+                            VerticalAlignment="Center" ValueChanged="OnRGainChanged" />
                 </Grid>
                 <Grid Margin="0,10,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="SolidPreview" Grid.Column="0" Width="48" Height="48"
-                            CornerRadius="8" Background="#FFE1D6" BorderBrush="#3A3A44"
-                            BorderThickness="1" VerticalAlignment="Center" />
-                    <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                        <ItemsControl x:Name="PresetStrip">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                        <Grid Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="HEX" VerticalAlignment="Center" Opacity="0.7" />
-                            <ui:TextBox x:Name="HexBox" Grid.Column="1" Margin="8,0,0,0" Text="#FFE1D6"
-                                        TextChanged="OnHexChanged" MaxLength="9" />
-                        </Grid>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="16" Height="16" CornerRadius="3" Background="#7DD97D" />
+                        <TextBlock Text="G" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
+                    <TextBlock x:Name="GGainValue" Grid.Column="1" Text="1.00" MinWidth="36"
+                               TextAlignment="Right" Margin="8,0,12,0" VerticalAlignment="Center" />
+                    <Slider x:Name="GGainSlider" Grid.Column="2" Width="200" Minimum="0" Maximum="2" Value="1"
+                            SmallChange="0.01" controls:SliderJump.Enabled="True"
+                            VerticalAlignment="Center" ValueChanged="OnGGainChanged" />
                 </Grid>
                 <Grid Margin="0,10,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="R" Foreground="#FF6B6B" VerticalAlignment="Center" />
-                    <Slider x:Name="SRSlider" controls:SliderJump.Enabled="True" Grid.Column="1" Minimum="0" Maximum="255" Value="255"
-                            ValueChanged="OnSolidRgbChanged" VerticalAlignment="Center" />
-                    <TextBlock x:Name="SRValue" Grid.Column="2" Text="255" Margin="6,0,0,0" VerticalAlignment="Center" />
-                </Grid>
-                <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="24" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="34" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="G" Foreground="#7DD97D" VerticalAlignment="Center" />
-                    <Slider x:Name="SGSlider" controls:SliderJump.Enabled="True" Grid.Column="1" Minimum="0" Maximum="255" Value="225"
-                            ValueChanged="OnSolidRgbChanged" VerticalAlignment="Center" />
-                    <TextBlock x:Name="SGValue" Grid.Column="2" Text="225" Margin="6,0,0,0" VerticalAlignment="Center" />
-                </Grid>
-                <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="24" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="34" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="B" Foreground="#7D9DFF" VerticalAlignment="Center" />
-                    <Slider x:Name="SBSlider" controls:SliderJump.Enabled="True" Grid.Column="1" Minimum="0" Maximum="255" Value="214"
-                            ValueChanged="OnSolidRgbChanged" VerticalAlignment="Center" />
-                    <TextBlock x:Name="SBValue" Grid.Column="2" Text="214" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="16" Height="16" CornerRadius="3" Background="#7D9DFF" />
+                        <TextBlock Text="B" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock x:Name="BGainValue" Grid.Column="1" Text="1.00" MinWidth="36"
+                               TextAlignment="Right" Margin="8,0,12,0" VerticalAlignment="Center" />
+                    <Slider x:Name="BGainSlider" Grid.Column="2" Width="200" Minimum="0" Maximum="2" Value="1"
+                            SmallChange="0.01" controls:SliderJump.Enabled="True"
+                            VerticalAlignment="Center" ValueChanged="OnBGainChanged" />
                 </Grid>
             </StackPanel>
-        </ui:Card>
+        </ui:CardExpander>
 
     </StackPanel>
 </Page>

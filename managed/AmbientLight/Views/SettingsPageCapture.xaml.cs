@@ -11,7 +11,7 @@ public sealed record MonitorItem(int Index, string Label);
 
 public partial class SettingsPageCapture : Page
 {
-    private static readonly int[] FpsCapChoices = [0, 30, 60, 90, 120, 144, 165, 240];
+    private static readonly int[] FpsCapChoices = [0, 240, 165, 144, 120, 90, 60, 30];   // 序与下拉一致 (M2 起显示序为降序, 原数组升序导致选 240 实发 30)
     private static readonly int[] SmoothingChoices = [0, 3, 4, 5];   // 厂商: 步长 = 2+配置值
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
@@ -96,9 +96,9 @@ public partial class SettingsPageCapture : Page
         RotateBox.Maximum = maxRot;
         RotateBox.Value = Math.Clamp(ConfigStore.Device.LedRotate, -maxRot, maxRot);
         RotateBox.IsEnabled = maxRot > 0;
-        RotateHintText.Text = maxRot > 0
-            ? $"校正灯带物理起点与协议起点的少量错位 (±{maxRot}); 全屏校准向导里可直接试出正确值。"
-            : "灯数少于 10 时无需灯序偏移。";
+        RotateRow.Description = maxRot > 0
+            ? $"校正灯带物理起点与协议起点的少量错位 (±{maxRot}); 全屏校准向导里可直接试出正确值"
+            : "灯数少于 10 时无需灯序偏移";
     }
 
     private void OnRotateChanged(object sender, RoutedEventArgs e)

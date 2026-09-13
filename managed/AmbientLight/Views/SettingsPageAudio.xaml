@@ -4,139 +4,106 @@
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:AmbientLight.Controls">
     <!-- 拾音设置 (M3): 算法为自研包络链 (全频+低频 RMS → AGC → 门限 → 快起慢落),
-         参数热更新经 ApplyConfigDebounced; 音量表数据源 = ACStatus.audioLevel -->
-    <StackPanel Margin="16,4,16,16">
+         参数热更新经 ApplyConfigDebounced; 音量表数据源 = ACStatus.audioLevel。
+         M5.1: Win11 设置行式布局 (SettingRow 左标题/说明 + 右控件), 组标签分组 -->
+    <StackPanel Margin="16,12,16,16">
 
-        <!-- 实时音量 -->
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <Grid>
-                    <TextBlock Text="实时音量" FontWeight="SemiBold" />
-                    <TextBlock x:Name="LevelValueText" Text="0" HorizontalAlignment="Right" />
-                </Grid>
-                <ProgressBar x:Name="LevelBar" Minimum="0" Maximum="255" Value="0"
-                             Height="10" Margin="0,10,0,0" />
-                <TextBlock x:Name="AudioDevText" Text="音源: — (开启拾音模式后显示)"
-                           Opacity="0.6" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" />
+        <!-- 音源与设备 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="音源与设备" />
+        <controls:SettingRow x:Name="VolumeRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon DataBarVertical24}" Title="实时音量"
+                             Description="开启拾音模式后显示音源与电平">
+            <StackPanel Orientation="Horizontal">
+                <ProgressBar x:Name="LevelBar" Minimum="0" Maximum="255" Value="0" Width="150"
+                             Height="8" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock x:Name="LevelValueText" Text="0" MinWidth="28" TextAlignment="Right"
+                           VerticalAlignment="Center" />
             </StackPanel>
-        </ui:Card>
-
-        <!-- 音源 -->
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <TextBlock Text="音源" FontWeight="SemiBold" />
-                <ComboBox x:Name="SourceCombo" Margin="0,8,0,0" SelectionChanged="OnSourceChanged">
-                    <ComboBoxItem Content="系统声音 (回环拾音, 电脑正在播放的内容)" />
-                    <ComboBoxItem Content="麦克风 (环境声音)" />
-                    <ComboBoxItem Content="灯带固件自拾音 (MCU 律动算法)" />
-                </ComboBox>
-                <TextBlock Text="回环 = 按电脑播放的声音律动 (默认); 麦克风 = 按环境声音律动, 需在系统隐私设置中允许桌面应用访问麦克风; 固件自拾音多数硬件无麦克风, 仅表现为 ~0.25s 闪烁 (原厂同样), 属硬件限制。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-                <!-- 主机拾音: 设备选择 (多输出/输入), 仅对应音源时显示 -->
-                <Grid x:Name="OutDevPanel" Margin="0,12,0,0" Visibility="Collapsed">
-                    <TextBlock Text="输出设备" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <ui:Button Content="刷新" Appearance="Secondary" HorizontalAlignment="Right"
-                               Click="OnRefreshOutDevs" />
-                </Grid>
-                <ComboBox x:Name="OutDevCombo" Margin="0,8,0,0" Visibility="Collapsed"
-                          DisplayMemberPath="Label" SelectionChanged="OnOutDevChanged" />
-                <TextBlock x:Name="OutDevHintText" Opacity="0.45" FontSize="11"
-                           Margin="0,6,0,0" TextWrapping="Wrap" Visibility="Collapsed"
-                           Text="可选非默认输出 (灯跟那台设备的声音走, 与系统默认无关); 选中的设备拔出时自动回退系统默认输出, 重插后自动切回; 选「系统默认」则始终跟随系统输出设备。" />
-                <Grid x:Name="MicDevPanel" Margin="0,12,0,0" Visibility="Collapsed">
-                    <TextBlock Text="输入设备" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <ui:Button Content="刷新" Appearance="Secondary" HorizontalAlignment="Right"
-                               Click="OnRefreshMicDevs" />
-                </Grid>
-                <ComboBox x:Name="MicDevCombo" Margin="0,8,0,0" Visibility="Collapsed"
-                          DisplayMemberPath="Label" SelectionChanged="OnMicDevChanged" />
-                <TextBlock x:Name="MicDevHintText" Opacity="0.45" FontSize="11"
-                           Margin="0,6,0,0" TextWrapping="Wrap" Visibility="Collapsed"
-                           Text="选中的设备拔出时自动回退系统默认输入, 重新插入后自动切回; 选「系统默认」则始终跟随系统输入设备。" />
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon SoundSource24}" Title="音源"
+                             Description="回环跟电脑播放走; 麦克风收环境声 (需在系统隐私设置放行); 固件自拾音多数硬件无麦克风, 仅 0.25s 闪烁 (原厂同样)">
+            <ComboBox x:Name="SourceCombo" Width="200" VerticalAlignment="Center"
+                      SelectionChanged="OnSourceChanged">
+                <ComboBoxItem Content="系统声音" />
+                <ComboBoxItem Content="麦克风" />
+                <ComboBoxItem Content="固件自拾音" />
+            </ComboBox>
+        </controls:SettingRow>
+        <controls:SettingRow x:Name="OutDevRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon Speaker224}"
+                             Title="输出设备" controls:AnimatedVisibility.Expanded="False"
+                             Description="可选非默认输出; 拔出自动回退默认, 重插自动切回">
+            <StackPanel Orientation="Horizontal">
+                <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}" Appearance="Secondary" ToolTip="刷新" Margin="0,0,8,0"
+                           VerticalAlignment="Center" Click="OnRefreshOutDevs" />
+                <ComboBox x:Name="OutDevCombo" Width="200" DisplayMemberPath="Label"
+                          VerticalAlignment="Center" SelectionChanged="OnOutDevChanged" />
             </StackPanel>
-        </ui:Card>
-
-        <!-- 灵敏度 -->
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <Grid>
-                    <StackPanel>
-                        <TextBlock Text="自动增益" FontWeight="SemiBold" />
-                        <TextBlock Text="跟踪最近几秒的声音峰值自动归一, 安静音源也能满幅律动"
-                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <ui:ToggleSwitch x:Name="AgcToggle" HorizontalAlignment="Right"
-                                     IsChecked="True" Click="OnAgcChanged" />
-                </Grid>
-                <Grid Margin="0,10,0,0">
-                    <TextBlock Text="灵敏度" />
-                    <TextBlock x:Name="GainValue" Text="×1.00" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="GainSlider" controls:SliderJump.Enabled="True"
-                        Minimum="0.1" Maximum="5.0" Value="1.0"
-                        ValueChanged="OnGainChanged" Margin="0,8,0,0" />
+        </controls:SettingRow>
+        <controls:SettingRow x:Name="MicDevRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon Mic24}"
+                             Title="输入设备" controls:AnimatedVisibility.Expanded="False"
+                             Description="拔出自动回退默认, 重插自动切回">
+            <StackPanel Orientation="Horizontal">
+                <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}" Appearance="Secondary" ToolTip="刷新" Margin="0,0,8,0"
+                           VerticalAlignment="Center" Click="OnRefreshMicDevs" />
+                <ComboBox x:Name="MicDevCombo" Width="200" DisplayMemberPath="Label"
+                          VerticalAlignment="Center" SelectionChanged="OnMicDevChanged" />
             </StackPanel>
-        </ui:Card>
+        </controls:SettingRow>
 
         <!-- 律动手感 -->
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <Grid>
-                    <TextBlock Text="柔和度" FontWeight="SemiBold" />
-                    <TextBlock x:Name="SoftValue" Text="50%" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="SoftSlider" controls:SliderJump.Enabled="True"
-                        Minimum="0" Maximum="100" Value="50"
-                        ValueChanged="OnSoftChanged" Margin="0,8,0,0" />
-                <TextBlock Text="0% = 硬包络 (最跟手, 大动态音乐会有频闪感); 越高越平滑 — 起音变缓、鼓点间隙不再深黑、保留呼吸底亮。默认 50%。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-
-                <Grid Margin="0,14,0,0">
-                    <TextBlock Text="回落时长" FontWeight="SemiBold" />
-                    <TextBlock x:Name="ReleaseValue" Text="300 ms" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="ReleaseSlider" controls:SliderJump.Enabled="True"
-                        Minimum="50" Maximum="1000" Value="300"
-                        ValueChanged="OnReleaseChanged" Margin="0,8,0,0" />
-                <TextBlock Text="音量峰值消失后灯光熄灭的快慢。短 = 干脆利落, 长 = 余韵拖尾。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-
-                <Grid Margin="0,14,0,0">
-                    <TextBlock Text="低频加权" FontWeight="SemiBold" />
-                    <TextBlock x:Name="BassValue" Text="35%" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="BassSlider" controls:SliderJump.Enabled="True"
-                        Minimum="0" Maximum="100" Value="35"
-                        ValueChanged="OnBassChanged" Margin="0,8,0,0" />
-                <TextBlock Text="0% = 跟随整体响度; 100% = 只跟鼓点/贝斯。低频单独做峰值归一, 混音大小不影响权重。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="律动手感" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ScaleFit24}" Title="自动增益"
+                             Description="跟踪近几秒峰值自动归一, 安静音源也能满幅律动">
+            <ui:ToggleSwitch x:Name="AgcToggle" IsChecked="True" Click="OnAgcChanged" />
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Gauge24}" Title="灵敏度"
+                             Description="手动增益, 与自动增益相乘">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="GainValue" Text="×1.00" MinWidth="40" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="GainSlider" Width="200" Minimum="0.1" Maximum="5.0" Value="1.0"
+                        controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnGainChanged" />
             </StackPanel>
-        </ui:Card>
-
-        <!-- 门限与音量 -->
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <Grid>
-                    <TextBlock Text="底噪门限" FontWeight="SemiBold" />
-                    <TextBlock x:Name="GateValue" Text="0.30%" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="GateSlider" controls:SliderJump.Enabled="True"
-                        Minimum="0" Maximum="100" Value="30"
-                        ValueChanged="OnGateChanged" Margin="0,8,0,0" />
-                <TextBlock Text="低于此响度的声音视为静默 (灯全灭)。出现底噪常亮就调大; 安静段落全灭太灵敏就调小。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-
-                <Grid Margin="0,14,0,0">
-                    <StackPanel>
-                        <TextBlock Text="跟随系统音量" FontWeight="SemiBold" />
-                        <TextBlock Text="音量调低时灯光幅度同步变小 (关闭 = 只看内容不看音量)"
-                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <ui:ToggleSwitch x:Name="FollowVolumeToggle" HorizontalAlignment="Right"
-                                     IsChecked="False" Click="OnFollowVolumeChanged" />
-                </Grid>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Filter24}" Title="底噪门限"
+                             Description="低于此响度视为静默 (灯全灭); 底噪常亮调大, 安静段太灵敏调小">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="GateValue" Text="0.30%" MinWidth="40" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="GateSlider" Width="200" Minimum="0" Maximum="100" Value="30"
+                        controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnGateChanged" />
             </StackPanel>
-        </ui:Card>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Wand24}" Title="柔和度"
+                             Description="0% 硬包络最跟手 (大动态有频闪感); 越高起音越缓、间隙不再深黑">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="SoftValue" Text="50%" MinWidth="40" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="SoftSlider" Width="200" Minimum="0" Maximum="100" Value="50"
+                        controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnSoftChanged" />
+            </StackPanel>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="回落时长"
+                             Description="峰值消失后灯光熄灭的快慢; 短干脆, 长余韵">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="ReleaseValue" Text="300 ms" MinWidth="48" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="ReleaseSlider" Width="200" Minimum="50" Maximum="1000" Value="300"
+                        controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnReleaseChanged" />
+            </StackPanel>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon MusicNote224}" Title="低频加权"
+                             Description="0% 跟整体响度; 100% 只跟鼓点/贝斯 (低频独立归一)">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="BassValue" Text="35%" MinWidth="40" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="BassSlider" Width="200" Minimum="0" Maximum="100" Value="35"
+                        controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnBassChanged" />
+            </StackPanel>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Pulse24}" Title="跟随系统音量"
+                             Description="音量调低时灯光幅度同步变小 (关闭 = 只看内容)">
+            <ui:ToggleSwitch x:Name="FollowVolumeToggle" IsChecked="False" Click="OnFollowVolumeChanged" />
+        </controls:SettingRow>
 
     </StackPanel>
 </Page>
