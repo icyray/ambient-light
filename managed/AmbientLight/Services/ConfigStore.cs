@@ -229,6 +229,30 @@ public static class ConfigStore
         GetOrCreate(SelectedKey);           // 首次运行: 保证至少有一个默认设备
     }
 
+    /// <summary>恢复出厂默认 (轮 21): 删掉配置目录里的 app.json / device_*.json 后重新 Load
+    /// (缺文件即默认值), 并立刻按默认值落盘。
+    /// **破坏性操作 —— 调用方必须先用 ContentDialog 确认** (高级页「恢复默认配置」)。
+    /// 只删自己写的两种文件, 不碰目录里的其它东西。</summary>
+    public static void RestoreDefaults()
+    {
+        try
+        {
+            if (Directory.Exists(ConfigDir))
+            {
+                var app = Path.Combine(ConfigDir, "app.json");
+                if (File.Exists(app)) File.Delete(app);
+                foreach (var f in Directory.GetFiles(ConfigDir, "device_*.json"))
+                    File.Delete(f);
+            }
+        }
+        catch
+        {
+            // 删不掉也继续: Load 对缺失文件一律回落到默认值
+        }
+        Load();
+        SaveAll();
+    }
+
     public static void SaveApp()
     {
         App.SelectedDevice = SelectedKey;

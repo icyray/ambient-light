@@ -3,126 +3,142 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:AmbientLight.Controls">
-    <StackPanel Margin="16,4,16,16">
+    <!-- M5.1: Win11 设置行式布局, 组标签分组;
+         sfloor (仅 colorfix 开启时生效) 折叠进「低灰保真修正」CardExpander -->
+    <StackPanel Margin="16,12,16,16">
 
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <Grid>
-                    <TextBlock Text="LED 最小亮度" FontWeight="SemiBold" />
-                    <TextBlock x:Name="MinBrightnessValue" Text="1" HorizontalAlignment="Right" />
-                </Grid>
-                <Slider x:Name="MinBrightnessSlider" controls:SliderJump.Enabled="True" Minimum="1" Maximum="25" Value="1"
-                        ValueChanged="OnMinBrightnessChanged" Margin="0,8,0,0" />
-                <TextBlock Text="RGB 全部低于该级别时抬升到该灰度, 避免灯带彻底熄灭。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+        <!-- 画面修正 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="画面修正" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon LightbulbFilament24}" Title="LED 最小亮度"
+                             Description="RGB 全部低于该灰度时抬升, 避免灯带彻底熄灭">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="MinBrightnessValue" Text="1" MinWidth="32" TextAlignment="Right"
+                           Margin="0,0,10,0" VerticalAlignment="Center" />
+                <Slider x:Name="MinBrightnessSlider" Width="200" Minimum="1" Maximum="25" Value="1"
+                        controls:SliderJump.Enabled="True"
+                        VerticalAlignment="Center" ValueChanged="OnMinBrightnessChanged" />
             </StackPanel>
-        </ui:Card>
-
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
-                <TextBlock Text="锁屏 / 熄屏 / 切换时灯带策略" FontWeight="SemiBold" />
-                <ComboBox x:Name="WaitDispCombo" Margin="0,8,0,0" SelectionChanged="OnWaitDispChanged">
-                    <ComboBoxItem Content="熄灭 (默认, 全零帧)" />
-                    <ComboBoxItem Content="最暗 (最小亮度灰帧)" />
-                    <ComboBoxItem Content="保持最后画面" />
-                </ComboBox>
-                <TextBlock Text="仅屏幕追光模式受熄屏影响; 进入状态时发一帧策略帧, 每 2s 重发防固件掉电丢帧。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-            </StackPanel>
-        </ui:Card>
-
-        <ui:Card Margin="0,0,0,8">
-            <StackPanel>
+        </controls:SettingRow>
+        <ui:CardExpander Margin="0,0,0,4" Icon="{ui:SymbolIcon ColorBackground24}" ContentPadding="0">
+            <ui:CardExpander.Header>
                 <Grid>
-                    <StackPanel>
-                        <TextBlock Text="低灰保真修正 (colorfix)" FontWeight="SemiBold" />
-                        <TextBlock Text="厂商原链会把暗灰色放大成蓝绿色; 开启后按绝对色度门限钳为中性灰。"
-                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <ui:ToggleSwitch x:Name="ColorfixToggle" HorizontalAlignment="Right"
-                                     Click="OnColorfixChanged" />
-                </Grid>
-                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="色度噪声门限 (sfloor)" VerticalAlignment="Center" />
-                    <TextBlock x:Name="SfloorValue" Grid.Column="1" Text="24" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="低灰保真修正 (colorfix)" FontSize="14" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="暗灰色被放大成蓝绿色时开启, 按绝对色度门限钳为中性灰" />
+                    <ui:ToggleSwitch x:Name="ColorfixToggle" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                     Margin="0,0,4,0" Click="OnColorfixChanged" />
                 </Grid>
-                <Slider x:Name="SfloorSlider" controls:SliderJump.Enabled="True" Minimum="0" Maximum="255" Value="24"
-                        ValueChanged="OnSfloorChanged" Margin="0,8,0,0" />
-                <TextBlock Text="8bit max-min 低于该门限视为采样噪声 (0-255, 默认 24)。"
-                           Opacity="0.45" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
-            </StackPanel>
-        </ui:Card>
-
-        <ui:Card Margin="0,0,0,8">
+            </ui:CardExpander.Header>
             <StackPanel>
-                <TextBlock Text="屏幕校准" FontWeight="SemiBold" />
-                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                    <ui:Button x:Name="CalibrateBtn" Content="全屏校准向导…" Appearance="Primary"
-                               Click="OnCalibrate" />
-                </StackPanel>
-                <TextBlock Text="在追光目标显示器上铺满四色大图: 直接移动物理灯带的颜色起点, 使每颗灯的颜色与所在象限一致 (分界处对齐)。打开期间临时切到追光 + 100% 亮度 + 贴边取色 (不落盘), 关闭自动恢复。"
-                           Opacity="0.6" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
+                <Grid Margin="16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="色度噪声门限 (sfloor)" FontSize="13" />
+                        <TextBlock FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Text="8bit max-min 低于该门限视为采样噪声 (0-255, 默认 24)" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="SfloorValue" Text="24" MinWidth="32" TextAlignment="Right"
+                                   Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <Slider x:Name="SfloorSlider" Width="200" Minimum="0" Maximum="255" Value="24"
+                                controls:SliderJump.Enabled="True"
+                                VerticalAlignment="Center" ValueChanged="OnSfloorChanged" />
+                    </StackPanel>
+                </Grid>
             </StackPanel>
-        </ui:Card>
+        </ui:CardExpander>
 
-        <ui:Card Margin="0,0,0,8">
+        <!-- 屏幕与电源 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="屏幕与电源" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon WeatherMoon24}" Title="熄屏策略"
+                             Description="锁屏/熄屏/切换显示器时灯带的显示策略">
+            <ComboBox x:Name="WaitDispCombo" Width="200" VerticalAlignment="Center"
+                      SelectionChanged="OnWaitDispChanged">
+                <ComboBoxItem Content="熄灭" />
+                <ComboBoxItem Content="最暗" />
+                <ComboBoxItem Content="保持最后画面" />
+            </ComboBox>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Target24}" Title="全屏校准向导"
+                             Description="在目标屏铺四色大图, 移动物理灯带的颜色起点对齐四色分界">
+            <ui:Button Content="打开向导…" Appearance="Primary" Click="OnCalibrate" />
+        </controls:SettingRow>
+
+        <!-- 启动 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="启动" />
+        <controls:SettingRow x:Name="AutoStartRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon Rocket24}"
+                             Title="开机自启" Description="登录 Windows 后自动运行">
+            <ui:ToggleSwitch x:Name="AutoStartToggle" Click="OnAutoStartChanged" />
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Lightbulb24}" Title="启动时自动开启灯带"
+                             Description="应用启动后立即连接并恢复上次模式; 连接中断时自动重连">
+            <ui:ToggleSwitch x:Name="AutoStartCoreToggle" Click="OnAutoStartCoreChanged" />
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowMinimize24}" Title="启动时收进托盘"
+                             Description="启动后不显示主窗口, 仅托盘图标">
+            <ui:ToggleSwitch x:Name="StartMinimizedToggle" Click="OnStartMinimizedChanged" />
+        </controls:SettingRow>
+
+        <!-- 关于 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="关于" />
+
+        <!-- 版本更新 (轮 21): UI 先就位, 检查逻辑待软件发布到 GitHub Release 后接入
+             (拉 /repos/<owner>/<repo>/releases/latest 的 tag_name 与当前版本比对)。
+             轮 22: 按用户要求去掉说明文案, 版本号看页脚那一行。 -->
+        <controls:SettingRow x:Name="UpdateRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
+                             Title="版本更新">
+            <ui:Button Content="检查更新" Appearance="Secondary" VerticalAlignment="Center"
+                       Click="OnCheckUpdate" />
+        </controls:SettingRow>
+
+        <!-- 配置目录 (可折叠: 折叠内是"恢复默认配置"这种破坏性操作, 收起来减少误触)。
+             轮 22: 去掉说明文案 (原说明里的路径现在只在「打开」后可见)。 -->
+        <ui:CardExpander Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderOpen24}" ContentPadding="0">
+            <ui:CardExpander.Header>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="配置目录" FontSize="14" VerticalAlignment="Center" />
+                    <ui:Button Grid.Column="1" Margin="8,0,4,0" Content="打开" Appearance="Secondary"
+                               VerticalAlignment="Center" Click="OnOpenConfigDir" />
+                </Grid>
+            </ui:CardExpander.Header>
             <StackPanel>
-                <Grid>
-                    <StackPanel>
-                        <TextBlock Text="开机自启" FontWeight="SemiBold" />
-                        <TextBlock Text="登录 Windows 后自动运行 (在 shell:startup 写入 .url 快捷方式, 不动注册表)"
-                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                <Grid Margin="16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="恢复默认配置" FontSize="13" />
+                        <TextBlock FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Text="把设置与设备配置全部重置为出厂默认 (亮度/模式/端口/采集/拾音/灯序等), 不可撤销" />
                     </StackPanel>
-                    <ui:ToggleSwitch x:Name="AutoStartToggle" HorizontalAlignment="Right"
-                                     Click="OnAutoStartChanged" />
-                </Grid>
-                <TextBlock x:Name="AutoStartPathText" Text="" Opacity="0.4" FontSize="11"
-                           Margin="0,6,0,0" TextWrapping="Wrap" />
-                <Separator Margin="0,10" />
-                <Grid>
-                    <StackPanel>
-                        <TextBlock Text="启动时自动开启灯带" FontWeight="SemiBold" />
-                        <TextBlock Text="应用启动后立即连接设备并恢复上次模式 (开机自启后无需手动开启); 设备未就绪时核心自动重连"
-                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <ui:ToggleSwitch x:Name="AutoStartCoreToggle" HorizontalAlignment="Right"
-                                     Click="OnAutoStartCoreChanged" />
-                </Grid>
-                <Separator Margin="0,10" />
-                <Grid>
-                    <StackPanel>
-                        <TextBlock Text="启动时收进托盘" FontWeight="SemiBold" />
-                        <TextBlock Text="启动后不显示主窗口, 仅托盘图标 (配合开机自启使用)"
-                                   Opacity="0.45" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <ui:ToggleSwitch x:Name="StartMinimizedToggle" HorizontalAlignment="Right"
-                                     Click="OnStartMinimizedChanged" />
+                    <ui:Button x:Name="RestoreDefaultsBtn" Grid.Column="1" Content="恢复默认…"
+                               VerticalAlignment="Center" Click="OnRestoreDefaults" />
                 </Grid>
             </StackPanel>
-        </ui:Card>
-
-        <ui:Card Margin="0,0,0,8">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="配置目录" FontWeight="SemiBold" />
-                    <TextBlock x:Name="ConfigDirText" Text="" Opacity="0.7" FontSize="11"
-                               TextWrapping="Wrap" Margin="0,4,0,0" />
-                </StackPanel>
-                <ui:Button Grid.Column="1" Content="打开" Appearance="Secondary"
-                           VerticalAlignment="Center" Margin="8,0,0,0" Click="OnOpenConfigDir" />
-            </Grid>
-        </ui:Card>
+        </ui:CardExpander>
 
         <TextBlock x:Name="VersionText" Text="" Opacity="0.4" FontSize="11"
                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                   HorizontalAlignment="Center" />
+                   HorizontalAlignment="Center" Margin="0,14,0,0" />
     </StackPanel>
 </Page>
