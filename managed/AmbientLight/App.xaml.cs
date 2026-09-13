@@ -262,7 +262,7 @@ public partial class App : Application
     /// <summary>全屏校准窗打开标记 (M4): ApplyConfig 挂起防抖动。</summary>
     public bool Calibrating { get; set; }
 
-    // ---- 崩溃日志 (crash.log 与配置同目录; 任何失败静默) --------------------
+    // ---- 设置页防抖应用 ----------------------------------------------------
 
     private DispatcherTimer? _applyDebounce;
 
@@ -279,14 +279,43 @@ public partial class App : Application
         _applyDebounce.Start();
     }
 
-    // ---- 崩溃日志 (crash.log 与配置同目录; 任何失败静默) --------------------
+    // ---- 崩溃日志 (exe 旁 log/crash.log; 任何失败静默) ----------------------
+    // 目录与核心统一 (轮 22): 核心写的是 exe 旁 log/ambientcore.log (native/log.cpp:
+    // GetModuleFileNameW + \log\), 托管侧原先却写进 config/ —— 配置目录只该放配置。
+    // 程序目录不可写时 (例如装在 Program Files) 回退 %APPDATA%\AmbientLight\log。
     // 注: AC_SetTestPattern 原生接口保留 (probe 回归用), UI 入口已由全屏校准向导取代
+
+    private static string? _logDir;
+
+    /// <summary>日志目录 (懒解析 + 缓存): exe 旁 log/, 不可写则 %APPDATA%\AmbientLight\log</summary>
+    private static string LogDir => _logDir ??= ResolveLogDir();
+
+    private static string ResolveLogDir()
+    {
+        var local = Path.Combine(AppContext.BaseDirectory, "log");
+        try
+        {
+            Directory.CreateDirectory(local);
+            var probe = Path.Combine(local, ".write_probe");
+            File.WriteAllText(probe, "ok");
+            File.Delete(probe);
+            return local;
+        }
+        catch
+        {
+            var roaming = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "AmbientLight", "log");
+            try { Directory.CreateDirectory(roaming); } catch { /* 由 append 的 try 兜底 */ }
+            return roaming;
+        }
+    }
+
     private static void WriteCrashLog(string source, object? exc, bool terminating)
     {
         try
         {
-            var logDir = ConfigStore.ConfigDir.Length > 0 ? ConfigStore.ConfigDir : ".";
-            File.AppendAllText(Path.Combine(logDir, "crash.log"),
+            File.AppendAllText(Path.Combine(LogDir, "crash.log"),
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{source}]{(terminating ? " [terminating]" : "")} " +
                 $"{exc ?? "(null)"}\r\n\r\n");
         }
