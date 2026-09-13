@@ -3,8 +3,8 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:views="clr-namespace:AmbientLight.Views"
-                 Title="AmbientLight" Width="760" Height="760"
-                 MinWidth="560" MinHeight="600"
+                 Title="AmbientLight" Width="840" Height="720"
+                 MinWidth="680" MinHeight="480"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True">
     <Grid>
@@ -15,22 +15,33 @@
 
         <ui:TitleBar Grid.Row="0" Title="AmbientLight" />
 
+        <!-- SizeChanged = 自适应折叠左侧菜单 (轮 20): 变窄自动折叠 / 变宽恢复, 详见 MainWindow.xaml.cs -->
         <ui:NavigationView Grid.Row="1" x:Name="RootNav"
                            PaneDisplayMode="Left" IsBackButtonVisible="Collapsed"
                            OpenPaneLength="160"
+                           SizeChanged="OnRootNavSizeChanged"
                            IsTopSeparatorVisible="False" IsFooterSeparatorVisible="False">
             <ui:NavigationView.MenuItems>
                 <ui:NavigationViewItem Content="主页" Icon="{ui:SymbolIcon Home24}"
                                        TargetPageType="{x:Type views:HomePage}" />
-                <ui:NavigationViewItem Content="拾音" Icon="{ui:SymbolIcon SoundWaveCircle24}"
-                                       TargetPageType="{x:Type views:SettingsPageAudio}" />
                 <ui:NavigationViewItem Content="采集" Icon="{ui:SymbolIcon Desktop24}"
                                        TargetPageType="{x:Type views:SettingsPageCapture}" />
+                <ui:NavigationViewItem Content="拾音" Icon="{ui:SymbolIcon SoundWaveCircle24}"
+                                       TargetPageType="{x:Type views:SettingsPageAudio}" />
                 <ui:NavigationViewItem Content="颜色" Icon="{ui:SymbolIcon Color24}"
                                        TargetPageType="{x:Type views:SettingsPageColor}" />
                 <ui:NavigationViewItem Content="高级" Icon="{ui:SymbolIcon Settings24}"
                                        TargetPageType="{x:Type views:SettingsPageAdvanced}" />
             </ui:NavigationView.MenuItems>
         </ui:NavigationView>
+
+        <!-- ContentDialog 宿主 (轮 21)。WPF-UI 的 ContentDialog.ShowAsync() 必须有一个宿主
+             (ContentPresenter 那套已标记 Obsolete, 4.3 推荐 ContentDialogHost), 否则抛
+             "DialogHost was not set" —— 而那只在用户点按钮时才暴露, 所以这里放好并铺满整窗 (最后
+             一个子元素 = 盖在最上层)。空着时没有内容, 不挡下面的操作;
+             IsDisableSiblingsEnabled: 对话框打开期间禁用兄弟元素 (标题栏/导航), 保证是模态的 ——
+             这类确认框不能允许用户同时去点别处。 -->
+        <ui:ContentDialogHost x:Name="RootDialogHost" Grid.Row="0" Grid.RowSpan="2"
+                              IsDisableSiblingsEnabled="True" />
     </Grid>
 </ui:FluentWindow>
