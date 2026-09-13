@@ -153,31 +153,74 @@ public partial class App : Application
         UpdateTrayToggle();
     }
 
-    /// <summary>总开关: 枚举在位设备, 为 AutoStartCore 的设备各建会话;
-    /// 一台都没枚举到时占住选中设备的 slot 等 DEV_LOST 自动重连</summary>
-    public async Task StartAllAsync()
+    /// <summary>最近一次"总开启"没建起任何会话时的原因: (胶囊短标签, InfoBar 详情)。
+    /// null = 未尝试, 或已正常建起会话。</summary>
+    public (string Label, string Detail)? LastStartProblem { get; private set; }
+
+    /// <summary>总开关: 枚举在位设备, 为 AutoStartCore 的设备各建会话; 选中设备可用则直接开。
+    /// 并发调用**复用同一次启动任务** —— 轮 16 用户报"快速连点开启/关闭会弹报错":
+    /// 连点会让 Stop 尚未释放端口时又发起 StartEx, 失败分支弹出模态 MessageBox (App.xaml.cs 启动失败提示)。
+    /// 去重后同一时刻只有一次枚举+建会话。
+    /// **轮 18: 不再对"设备被占用/未应答/不在位"占坑建兜底会话** —— 那会让 UI 出现一个假的开启态
+    /// (banner 亮起 + 胶囊"未连接" + 按钮却写着"开启", 再点反而变关闭)。现在改为把原因写进
+    /// `LastStartProblem` 由 UI 呈现 (胶囊警示色 + InfoBar), 按钮保持"开启", 再点即重试。</summary>
+    public Task StartAllAsync()
     {
-        if (CoreRunning) return;
+        if (CoreRunning) return Task.CompletedTask;
+        if (_startTask is { IsCompleted: false }) return _startTask;
+        return _startTask = StartAllCoreAsync();
+    }
+
+    private Task? _startTask;   // 进行中的启动任务 (完成即失效)
+
+    private async Task StartAllCoreAsync()
+    {
+        LastStartProblem = null;
         try
         {
             var devices = await Task.Run(Interop.AmbientCore.GetDevices);
+            var usable = devices.Where(d => d.devType >= 0 && d.inUse == 0).ToArray();
+
             bool any = false;
-            foreach (var d in devices)
+            foreach (var d in usable)
             {
-                if (d.devType < 0 || d.inUse == 1) continue;   // 未应答/端口被占
                 var key = $"{d.devType}_{d.devId}";
                 if (ConfigStore.GetOrCreate(key).AutoStartCore && StartDevice(key))
                     any = true;
             }
-            if (!any && ConfigStore.Device.AutoStartCore)
-                StartDevice(ConfigStore.SelectedKey);
+            // 用户明确点了"开启": 只要选中设备这次枚举到且可用就直接开 —— AutoStartCore 管的是
+            // "应用启动时自动连", 不该拦住手动开启 (否则会出现"点了没反应、也不说为什么")
+            if (!any && usable.Any(d => $"{d.devType}_{d.devId}" == ConfigStore.SelectedKey))
+                any = StartDevice(ConfigStore.SelectedKey);
+
+            if (!any) LastStartProblem = DescribeNoStart(devices);
         }
-        catch
+        catch (Exception ex)
         {
-            // 枚举失败按未在位处理: 占住选中设备 slot, 状态机自动重试
-            if (ConfigStore.Device.AutoStartCore) StartDevice(ConfigStore.SelectedKey);
+            LastStartProblem = ("枚举失败", $"设备枚举失败: {ex.Message}");
         }
         UpdateTrayToggle();
+    }
+
+    /// <summary>一台会话都没建起来时, 把原因整理成 (胶囊短标签, InfoBar 详情)</summary>
+    private static (string Label, string Detail) DescribeNoStart(Interop.ACDeviceInfo[] devices)
+    {
+        var busy = devices.Where(d => d.inUse == 1).Select(d => d.ComPort).ToArray();
+        if (busy.Length > 0)
+            return ("端口被占用",
+                    $"端口 {string.Join("、", busy)} 已被占用, 无法开启。常见原因是 Ansnake 等工具正连着灯带 —— 关闭占用程序后再点「开启」。");
+
+        var silent = devices.Where(d => d.devType < 0).Select(d => d.ComPort).ToArray();
+        if (silent.Length > 0)
+            return ("设备未应答",
+                    $"发现端口 {string.Join("、", silent)}, 但握手无应答。检查 USB 连接与供电后再点「开启」重试。");
+
+        if (devices.Length == 0)
+            return ("未发现灯带",
+                    "未发现灯带 (VID_2E3C & PID_5740)。检查 USB 连接、确认 Ansnake 未占用端口, 然后点「开启」重试。");
+
+        return ("设备未启用",
+                "已发现可用灯带, 但该设备未勾选「启动时自动开启灯带」。可到高级设置勾选, 或在下方设备列表里单独点「开启」。");
     }
 
     public bool StartCore()
@@ -192,7 +235,16 @@ public partial class App : Application
     public void ToggleCore()
     {
         if (CoreRunning) StopCore();
-        else StartCore();
+        else _ = StartFromTrayAsync();
+    }
+
+    /// <summary>托盘"开启氛围灯": 没开起来时把主窗带到前台 —— 那是唯一能看到失败原因的地方
+    /// (banner 胶囊 + InfoBar 会说明是端口被占用 / 未应答 / 未发现灯带)。
+    /// 轮 18 之前这里会占坑建会话, 于是"点了没反应"和"灯自己亮了"都很突然; 现在改为如实报告。</summary>
+    private async Task StartFromTrayAsync()
+    {
+        await StartAllAsync();
+        if (LastStartProblem != null) ShowMainWindow();
     }
 
     /// <summary>配置变更 (亮度滑条等) → 选中设备原子热更新 + 落盘;
