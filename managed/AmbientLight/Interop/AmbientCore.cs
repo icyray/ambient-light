@@ -9,6 +9,11 @@ public static unsafe partial class AmbientCore
 {
     private const string Lib = "AmbientCore.dll";
 
+    /// <summary>本托管代码编译时对齐的 native ABI 版本 (major, minor)。
+    /// **v1.5 起 `ACMonitorInfo.adapter` 从 32 加宽到 64** —— 这是布局变更, 用旧 DLL 会读到
+    /// 错位的分辨率/适配器(静默出错, 不抛异常)。探针用 `AC_Version()` 核对, 防止旁边躺着一个旧 DLL。</summary>
+    public static readonly (int Major, int Minor) RequiredAbi = (1, 5);
+
     // ---- 常量 (与 AmbientCore.h 对齐) ----
     public const int MaxMonitors = 8;
     public const int MaxDevices = 8;
@@ -427,13 +432,13 @@ public unsafe struct ACStatus
 public unsafe struct ACMonitorInfo
 {
     public fixed byte name[32];
-    public fixed byte adapter[32];
+    public fixed byte adapter[64];      // v1.5: 32 → 64 (显卡型号带 "GPU" 后缀会被截断)
     public int width;
     public int height;
     public int primary;
 
     public string Name { get { fixed (byte* p = name) return ReadFixed(p, 32); } }
-    public string Adapter { get { fixed (byte* p = adapter) return ReadFixed(p, 32); } }
+    public string Adapter { get { fixed (byte* p = adapter) return ReadFixed(p, 64); } }
 
     internal static string ReadFixed(byte* p, int len)
     {

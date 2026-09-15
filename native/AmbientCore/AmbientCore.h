@@ -1,9 +1,11 @@
-// AmbientCore.h — 公共 C ABI (v1.4, x64 cdecl, 未修饰导出)
+// AmbientCore.h — 公共 C ABI (v1.5, x64 cdecl, 未修饰导出)
 // 合同来源: docs/AmbientCore_API.md。规则:
 //   - 结构体以 structSize 开头, 新增字段只能追加在末尾
 //     (v1.1 增补: ACConfig.colorfix/sfloor; v1.2 增补: ACStatus.ledRgb;
 //      v1.3 增补: ACConfig.audio* 7 字段, ACStatus.audioLevel/audioOk/audioDev;
-//      v1.4 增补: ACConfig.ledRotate)
+//      v1.4 增补: ACConfig.ledRotate;
+//      v1.5 加宽: ACMonitorInfo.adapter 32→64 字节 —— 32 字节会把
+//      "NVIDIA GeForce RTX 4060 Laptop GPU" 截成 "…Laptop", 界面上看着像显卡名少了半截)
 //   - 字符串一律 UTF-8, 缓冲由调用方分配, DLL 不跨边界分配/释放
 //   - v1 明确不做: 回调、跨 ABI 分配、宽字符接口、x86
 #pragma once
@@ -23,6 +25,7 @@
 #define AC_MAX_DEVICES  8
 #define AC_PORT_LEN     16      // "COM5"
 #define AC_NAME_LEN     32
+#define AC_ADAPTER_LEN  64      // v1.5: 显卡型号全名较长 (含 "GPU" 后缀), 32 会被截断
 #define AC_AUDIO_ID_LEN 64      // MMDevice 端点 ID "{0.0.x.00000000}.{GUID}" ≈ 54 字符
 #define AC_MAX_AUDIO_DEVS 16
 #define AC_MAX_LEDS     180     // 固件定长帧上限 (3+180*3=543B)
@@ -70,7 +73,7 @@ typedef struct ACConfig {
     int32_t  blackBarLevel;     // 黑色判定阈值, 默认 3
 
     // 颜色链 (与厂商 AdjustLedColors 一致)
-    double   brightness;        // HSL L 乘数, 默认 1.0
+    double   brightness;        // 线性调光乘数 (HSL 链之后线性缩放 RGB), 默认 1.0; 拾音模式下乘在音量包络上
     double   vibrance;          // HSL S 乘数, 默认 9.0  (厂商 LedVibrance=90)
     double   hueMul;            // HSL H 乘数, 默认 1.0
     double   gamma;             // 默认 0.65
@@ -142,10 +145,10 @@ typedef struct ACStatus {
 
 // ---- 显示器 / 设备枚举 ------------------------------------------------
 typedef struct ACMonitorInfo {
-    char     name[AC_NAME_LEN];     // "\\.\DISPLAY5"
-    char     adapter[AC_NAME_LEN];  // "NVIDIA GeForce ..."
-    int32_t  width, height;         // 当前模式 (物理像素)
-    int32_t  primary;               // 1 = 主屏
+    char     name[AC_NAME_LEN];        // "\\.\DISPLAY5"
+    char     adapter[AC_ADAPTER_LEN];  // "NVIDIA GeForce RTX 4060 Laptop GPU" (v1.5 起 64B, 不再截断)
+    int32_t  width, height;            // 当前模式 (物理像素)
+    int32_t  primary;                  // 1 = 主屏
 } ACMonitorInfo;
 
 typedef struct ACDeviceInfo {

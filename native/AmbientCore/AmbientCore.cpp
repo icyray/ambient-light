@@ -49,7 +49,7 @@ namespace {
 static const PROPERTYKEY kPKEY_Name = { { 0xa45c254e, 0xdf1c, 0x4efd,
                                           { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 14 };
 
-constexpr uint32_t kVersion = (1u << 16) | (4u << 8) | 0u;   // 1.4.0 (M4: ledRotate 校准)
+constexpr uint32_t kVersion = (1u << 16) | (5u << 8) | 0u;   // 1.5.0 (ACMonitorInfo.adapter 32→64, 显卡名不再截断)
 
 ACConfig DefaultConfig()
 {
