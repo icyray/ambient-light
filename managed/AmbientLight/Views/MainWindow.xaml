@@ -3,8 +3,8 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:views="clr-namespace:AmbientLight.Views"
-                 Title="AmbientLight" Width="840" Height="720"
-                 MinWidth="680" MinHeight="480"
+                 Title="AmbientLight" Width="880" Height="680"
+                 MinWidth="600" MinHeight="230"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True">
     <Grid>
@@ -24,7 +24,7 @@
             <ui:NavigationView.MenuItems>
                 <ui:NavigationViewItem Content="主页" Icon="{ui:SymbolIcon Home24}"
                                        TargetPageType="{x:Type views:HomePage}" />
-                <ui:NavigationViewItem Content="采集" Icon="{ui:SymbolIcon Desktop24}"
+                <ui:NavigationViewItem Content="追光" Icon="{ui:SymbolIcon Desktop24}"
                                        TargetPageType="{x:Type views:SettingsPageCapture}" />
                 <ui:NavigationViewItem Content="拾音" Icon="{ui:SymbolIcon SoundWaveCircle24}"
                                        TargetPageType="{x:Type views:SettingsPageAudio}" />

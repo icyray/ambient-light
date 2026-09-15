@@ -18,7 +18,7 @@ public partial class MainWindow : FluentWindow
     // **恢复只对"我们自动折的那一次"生效**, 用户自己折起来的菜单永不被自动展开。
     // 只认"跨过阈值"这个边沿、不在每次 SizeChanged 里强制判定: 否则用户在窄窗口下手动展开菜单,
     // 会被下一次尺寸变化立刻折回去 —— 那是和用户抢控制权。
-    private const double NavAutoCollapseWidth = 740;   // 阈值 (窗口/内容区宽度, 想调手感改这里)
+    private const double NavAutoCollapseWidth = 720;   // 阈值 (窗口/内容区宽度, 想调手感改这里)
     private bool _paneAutoCollapsed;    // 当前的折叠态是"自动折的" → 变宽时该恢复
     private bool? _navWasWide;          // 上一次判定落在阈值哪一侧; null = 还没判定过
 
