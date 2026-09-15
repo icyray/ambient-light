@@ -73,9 +73,14 @@
                 <ComboBoxItem Content="保持最后画面" />
             </ComboBox>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Target24}" Title="全屏校准向导"
-                             Description="在目标屏铺四色大图, 移动物理灯带的颜色起点对齐四色分界">
-            <ui:Button Content="打开向导…" Appearance="Primary" Click="OnCalibrate" />
+        <!-- 全屏校准向导已于轮 28 移到「采集」页 (紧挨灯序偏移 —— 那才是它的使用场景) -->
+
+        <!-- 界面 (M5.1 §4: banner 底边辉光的实验开关 —— 功耗/手感不对时可随手关掉,
+             退回纯渐变 banner; 5.2 主题 / 5.3 语言等界面项后续也落在这里) -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="界面" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBrush24}" Title="banner 辉光"
+                             Description="主页顶栏底边按灯带实况显示模糊辉光; 关闭后回到纯渐变">
+            <ui:ToggleSwitch x:Name="BannerGlowToggle" Click="OnBannerGlowChanged" />
         </controls:SettingRow>
 
         <!-- 启动 -->

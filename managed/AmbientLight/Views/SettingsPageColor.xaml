@@ -21,7 +21,8 @@
                         VerticalAlignment="Center" ValueChanged="OnVibranceChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ColorLine24}" Title="色相强度">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ColorLine24}" Title="色相强度"
+                             Description="整体色相偏移; 1.00 为原色, 调大色相偏红, 调小偏黄绿">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="HueValue" Text="1.00" MinWidth="32" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -91,7 +92,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="16" Height="16" CornerRadius="3" Background="#FF6B6B" />
+                        <Ellipse Width="16" Height="16" Fill="#FF6B6B"/>
                         <TextBlock Text="R" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="RGainValue" Grid.Column="1" Text="1.00" MinWidth="36"
@@ -107,7 +108,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="16" Height="16" CornerRadius="3" Background="#7DD97D" />
+                        <Ellipse Width="16" Height="16" Fill="#7DD97D"/>
                         <TextBlock Text="G" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="GGainValue" Grid.Column="1" Text="1.00" MinWidth="36"
@@ -123,7 +124,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="16" Height="16" CornerRadius="3" Background="#7D9DFF" />
+                        <Ellipse Width="16" Height="16" Fill="#7D9DFF"/>
                         <TextBlock Text="B" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="BGainValue" Grid.Column="1" Text="1.00" MinWidth="36"

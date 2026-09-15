@@ -36,6 +36,7 @@ public partial class SettingsPageAdvanced : Page
         AutoStartToggle.IsChecked = ConfigStore.App.AutoStart;
         StartMinimizedToggle.IsChecked = ConfigStore.App.StartMinimized;
         AutoStartCoreToggle.IsChecked = ConfigStore.Device.AutoStartCore;
+        BannerGlowToggle.IsChecked = ConfigStore.App.BannerGlow;   // M5.1 §4
 
         string appVer = CurrentVersion;
         uint core = AmbientCore.Version();
@@ -109,8 +110,13 @@ public partial class SettingsPageAdvanced : Page
         ConfigStore.SaveDevice();
     }
 
-    // ---- 校准 ------------------------------------------------------------
-    private void OnCalibrate(object sender, RoutedEventArgs e) => CalibrateWindow.TryOpen();
+    /// <summary>banner 底边辉光开关 (M5.1 §4): 只写 app.json, 主页每次轮询读它, 无需热更核心。</summary>
+    private void OnBannerGlowChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        ConfigStore.App.BannerGlow = BannerGlowToggle.IsChecked == true;
+        ConfigStore.SaveApp();
+    }
 
     // ---- 配置目录 --------------------------------------------------------
     private void OnOpenConfigDir(object sender, RoutedEventArgs e)

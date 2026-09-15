@@ -176,7 +176,9 @@ public partial class CalibrateWindow : Window
             if (core.Length > 0)
             {
                 mw = core[i].width; mh = core[i].height;
-                ResText.Text = $"校准屏 [{i}] {core[i].Name} · {mw}×{mh}" +
+                // 与主页/采集页统一 (轮 28): 用 1 起的序号 + 分辨率 + 适配器,
+                // 不再显示 `\\.\DISPLAY5` 这种不友好的设备名
+                ResText.Text = $"校准屏 {i + 1} · {mw}×{mh} · {core[i].Adapter}" +
                                (core[i].primary != 0 ? " (主屏)" : "");
             }
         }
@@ -190,6 +192,9 @@ public partial class CalibrateWindow : Window
         // 预览 = 固定标准图 (不随偏移): 每格 = 该序号 LED 在 rotate=0 时的位置与象限色
         Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, 0, mw, mh);
         Ring.ShowQuadrantMap([Palette[s[0]], Palette[s[1]], Palette[s[2]], Palette[s[3]]]);
+        // 中心区: 0 号灯起点徽标 + 绕向箭头 (M5.1 §7 —— 这两个信息只在"对照参照图排错"时有用,
+        // 所以放在校准向导里而不是主页)。direction 0 = 逆时针 (与核心段序一致)。
+        Ring.SetOrientation(true, 0, clockwise: dev.Direction != 0);
         IndexText.Text = "LED 序号: " + Ring.DescribeIndices();
     }
 

@@ -19,6 +19,19 @@
                 <Setter Property="Opacity" Value="0.72" />
                 <Setter Property="Margin" Value="4,14,4,6" />
             </Style>
+
+            <!-- 只留图标的按钮模板 (轮 18 ②, 轮 29 提到 App 级共用): 去掉底/边框/悬停填充/按下填充,
+                 只保留一个悬停淡入, 视觉上就是一个可点的图标。保留 ui:Button 宿主是为了沿用
+                 Click / 键盘 / ToolTip。⚠️ 不要用 Template="{x:Null}" —— 模板为 null 什么都不渲染。 -->
+            <ControlTemplate x:Key="IconOnlyButtonTemplate" TargetType="ui:Button">
+                <ContentPresenter x:Name="IconHost" HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" Opacity="0.7" />
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="IconHost" Property="Opacity" Value="1" />
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

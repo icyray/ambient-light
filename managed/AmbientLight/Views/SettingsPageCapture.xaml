@@ -14,10 +14,14 @@
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}" Title="显示器"
                              Description="追光画面来源; 拓扑变化后自动回退主屏">
             <StackPanel Orientation="Horizontal">
-                <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}" Appearance="Secondary"
-                           ToolTip="重新枚举" Margin="0,0,8,0"
-                           VerticalAlignment="Center" Click="OnRefreshMonitors" />
-                <ComboBox x:Name="MonitorCombo" Width="230" DisplayMemberPath="Label"
+                <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页刷新一致) -->
+                <ui:Button x:Name="RefreshMonitorsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
+                           ToolTip="重新枚举" Margin="8,0,8,0"
+                           VerticalAlignment="Center" Click="OnRefreshMonitors">
+                    <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </ui:Button>
+                <ComboBox x:Name="MonitorCombo" Width="210" DisplayMemberPath="Label"
                           SelectionChanged="OnMonitorChanged" VerticalAlignment="Center" />
             </StackPanel>
         </controls:SettingRow>
@@ -49,6 +53,12 @@
             <ui:NumberBox x:Name="RotateBox" Minimum="-7" Maximum="7" Value="0"
                           SmallChange="1" MaxDecimalPlaces="0" Width="140"
                           VerticalAlignment="Center" ValueChanged="OnRotateChanged" />
+        </controls:SettingRow>
+        <!-- 全屏校准向导 (轮 28 从「高级」页移来): 紧挨灯序偏移 —— 它就是用来"试出"偏移值的,
+             放这里才和它的用法在一起。 -->
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Target24}" Title="全屏校准向导"
+                             Description="在目标屏铺四色大图, 移动物理灯带的颜色起点对齐四色分界">
+            <ui:Button Content="打开向导…" Appearance="Primary" Click="OnCalibrate" />
         </controls:SettingRow>
 
         <!-- 追光 -->

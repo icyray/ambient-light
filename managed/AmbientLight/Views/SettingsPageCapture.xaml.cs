@@ -46,9 +46,12 @@ public partial class SettingsPageCapture : Page
         try
         {
             var mons = AmbientCore.GetMonitors();
+            // 文案 (轮 28 用户定稿, 轮 29 微调分隔符): `序号. 分辨率 - 适配器 - 主屏`
+            // 不再出现 `[0]` 与 `\\.\DISPLAY5` 这种不友好的名字; 序号从 1 起, 与主页编号徽标一致。
             MonitorCombo.ItemsSource = mons
                 .Select((m, i) => new MonitorItem(i,
-                    $"[{i}] {m.width}x{m.height}{(m.primary != 0 ? "  主屏" : "")}  —  {m.Name}"))
+                    $"{i + 1}. {m.width}×{m.height} - {m.Adapter}" +
+                    (m.primary != 0 ? " - 主屏" : "")))
                 .ToList();
             if (mons.Length > 0)
                 MonitorCombo.SelectedIndex = Math.Clamp(select, 0, mons.Length - 1);
@@ -68,6 +71,9 @@ public partial class SettingsPageCapture : Page
         RefreshMonitors(select: ConfigStore.Device.MonitorIndex);
         _loading = false;
     }
+
+    /// <summary>全屏校准向导 (轮 28 从「高级」页移来, 就在灯序偏移下面 —— 这是它的使用场景)。</summary>
+    private void OnCalibrate(object sender, RoutedEventArgs e) => CalibrateWindow.TryOpen();
 
     private void OnMonitorChanged(object sender, SelectionChangedEventArgs e)
     {

@@ -32,8 +32,13 @@
                              Title="输出设备" controls:AnimatedVisibility.Expanded="False"
                              Description="可选非默认输出; 拔出自动回退默认, 重插自动切回">
             <StackPanel Orientation="Horizontal">
-                <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}" Appearance="Secondary" ToolTip="刷新" Margin="0,0,8,0"
-                           VerticalAlignment="Center" Click="OnRefreshOutDevs" />
+                <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页/采集页一致) -->
+                <ui:Button x:Name="RefreshOutDevsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
+                           ToolTip="刷新"
+                           Margin="8,0,8,0" VerticalAlignment="Center" Click="OnRefreshOutDevs">
+                    <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </ui:Button>
                 <ComboBox x:Name="OutDevCombo" Width="200" DisplayMemberPath="Label"
                           VerticalAlignment="Center" SelectionChanged="OnOutDevChanged" />
             </StackPanel>
@@ -42,8 +47,13 @@
                              Title="输入设备" controls:AnimatedVisibility.Expanded="False"
                              Description="拔出自动回退默认, 重插自动切回">
             <StackPanel Orientation="Horizontal">
-                <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}" Appearance="Secondary" ToolTip="刷新" Margin="0,0,8,0"
-                           VerticalAlignment="Center" Click="OnRefreshMicDevs" />
+                <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页/采集页一致) -->
+                <ui:Button x:Name="RefreshMicDevsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
+                           ToolTip="刷新"
+                           Margin="8,0,8,0" VerticalAlignment="Center" Click="OnRefreshMicDevs">
+                    <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </ui:Button>
                 <ComboBox x:Name="MicDevCombo" Width="200" DisplayMemberPath="Label"
                           VerticalAlignment="Center" SelectionChanged="OnMicDevChanged" />
             </StackPanel>
