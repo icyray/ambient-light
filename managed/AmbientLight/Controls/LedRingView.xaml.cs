@@ -23,6 +23,18 @@ public partial class LedRingView : UserControl
     /// <summary>中心区提示副标题 (如 "MCU 特效由固件渲染")</summary>
     public void SetHint(string text) => HintText.Text = text;
 
+    /// <summary>校准向导中心区 (M5.1 §7): 0 号灯起点徽标 + 绕向箭头。
+    /// 主页不显示 —— 那里的中心只放静态几何参数 (展开"布局预览"的人要的是几何事实)。
+    /// 绕向与核心 capture.cpp / 本控件的段序一致: direction 0 = 逆时针。</summary>
+    public void SetOrientation(bool visible, int startLed, bool clockwise)
+    {
+        OrientationRow.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (!visible) return;
+        StartBadge.Text = $"起点 {startLed} 号";
+        DirArrow.Text = clockwise ? "↻" : "↺";
+        DirText.Text = clockwise ? "顺时针" : "逆时针";
+    }
+
     /// <summary>重建布局 (签名相同则跳过)。screenW/H = 目标显示器实际物理分辨率
     /// (0,0 = 按 16:9 缺省): 屏幕矩形按真实长宽比绘制, 每边 LED 数按同一比例分配
     /// (与核心一致), LED 尺寸取各边跨度均分的最小值 (均匀环绕), 画布尺寸固定。</summary>

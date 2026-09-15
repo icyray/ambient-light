@@ -11,6 +11,10 @@ public sealed class AppOptions
     public bool StartMinimized { get; set; } = false;
     public bool AutoStart { get; set; } = false;   // shell:startup 快捷方式 (M4)
     public string SelectedDevice { get; set; } = "0_1";   // 当前编辑的设备 key (M3)
+    public bool BannerGlow { get; set; } = true;          // 主页 banner 底边辉光 (M5.1 §4, 实验开关)
+    /// <summary>拾色器的自定义色槽 (轮 29): 记住最近调出来的颜色, 最新的在前, 最多 5 个。
+    /// 只存非预设色 —— 预设本身就在列表里, 再记一遍没意义。</summary>
+    public List<string> CustomColors { get; set; } = [];
 }
 
 public sealed class DeviceSettings
@@ -215,6 +219,7 @@ public static class ConfigStore
     {
         ConfigDir = ResolveConfigDir();
         App = LoadJson<AppOptions>(Path.Combine(ConfigDir, "app.json")) ?? new AppOptions();
+        App.CustomColors ??= [];            // 手改过 json / 旧文件里没有这个键时兜底
         Devices.Clear();
         if (Directory.Exists(ConfigDir))
         {

@@ -92,6 +92,14 @@ public partial class App : Application
 
     public bool CoreRunning => _slots.Count > 0;
 
+    /// <summary>总开启任务正在飞 (端口可能已被核心占着, 但 `_slots` 里还没条目)。
+    /// 主页设备行靠它区分"这是我们自己正在起"与"端口被别人占了" —— 见 HomePage.BuildDeviceRow。</summary>
+    public bool Starting => _startTask is { IsCompleted: false };
+
+    /// <summary>在飞的启动任务 (没有则 null)。调用方**只 await 不新建** —— 不能因为切到主页
+    /// 就把用户主动关掉的灯带又开起来。</summary>
+    public Task? StartTaskInFlight => _startTask is { IsCompleted: false } ? _startTask : null;
+
     /// <summary>slot → 设备 key 快照 (UI 设备卡片/轮询用)</summary>
     public IReadOnlyDictionary<int, string> Slots => _slots;
 
@@ -251,12 +259,21 @@ public partial class App : Application
     /// 校准窗打开期间挂起 (校准临时配置由校准窗自己下发, 关闭时恢复)。</summary>
     public void ApplyConfig()
     {
+        ApplyConfigHot();
+        if (Calibrating) return;
+        ConfigStore.SaveDevice();
+    }
+
+    /// <summary>**只**把当前配置热更给会话, 不落盘。给"拖动中高频变化"的场景用
+    /// (轮 28): 原来拖动中每次热更都同步 `File.WriteAllText`, 25 次/秒压在 UI 线程上。
+    /// 调用方负责在停手后补一次落盘。</summary>
+    public void ApplyConfigHot()
+    {
         if (Calibrating) return;
         var cfg = ConfigStore.Device.ToCoreConfig();
         int slot = SlotOf(ConfigStore.SelectedKey);
         if (slot >= 0)
             Interop.AmbientCore.SetConfigEx(slot, ref cfg);
-        ConfigStore.SaveDevice();
     }
 
     /// <summary>全屏校准窗打开标记 (M4): ApplyConfig 挂起防抖动。</summary>

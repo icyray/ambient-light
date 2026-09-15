@@ -3,29 +3,19 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:AmbientLight.Controls">
-    <!-- M5.1 反馈修复轮 19:
-         ① 连接中断 (DEV_LOST) / 错误 时 banner **不再点亮** —— 渐变只代表"确实在驱动灯带";
-            胶囊改为按状态显示 (DEV_LOST = "正在尝试重连"), 按钮显示"关闭" (按下即打断重连);
-         ② 撤回轮 18 的"InfoBar 加 AnimatedVisibility": InfoBar 模板用 IsOpen 直接切
-            Visibility(Collapsed), Collapsed 就退出布局 → 高度动画无可见效果, 两者只能取其一,
-            保留 IsOpen 原生行为 (瞬时显隐)。
-         轮 18:
-         ① 固件特效 (MCU) 光带由琥珀改**白/灰** (MCU 不参与取色/律动, 中性色避免"琥珀=警告"误读);
-         ② 设备列表的"刷新/重新枚举"去按钮样式: 只留图标 (按钮换成无边框模板, 仅 ContentPresenter);
-         ③ 开启失败不再进入假"开启"态 (见 App.StartAllAsync: 设备被占用/未应答/不在位时**不建兜底会话**),
-            失败原因由 banner 胶囊 (警示色) + InfoBar 呈现, 按钮保持"开启", 再点即重试。
-         轮 17: 去掉抖动噪点层 (无时域抖动时静态噪点只会把画面弄脏); 光层 Rectangle 补
-            RadiusX/RadiusY=7 —— 否则点亮态四角是直角、灰色态是圆角 (WPF Border 不裁子元素)。
-         轮 16: ① 模式卡选中色改 AccentFillColorDefaultBrush —— SystemAccentColor*Brush 是 Accent.xaml
-            写死的 #0067c0, ApplicationAccentColorManager.ApplySystemAccent() 只替换
-            AccentFill/AccentText 那批键, 不更新 SystemAccent* 画刷 → 与按钮不同色;
-         ② 选中底色改铺满整卡 (Padding 从 Border 移到 ContentPresenter, 否则 Tint 层被 padding 缩掉);
-         ③ 亮度行上移到 banner 下方 (常用功能);
-         ④ banner 底 = 普通卡片灰 (`CardBackground`), 点亮时叠一层 LightsLayer:
-            深色渐变底 + 模式色光带 (蓝/绿/紫/白灰);
-         ⑤ 光带 A/B 双矩形交叉淡化, LightsLayer 整体 0↔1 淡入淡出 (换模式/开关灯均平滑);
-         ⑥ 文字/胶囊色用**自有画刷** → 与背景同步 ColorAnimation (关闭态取主题刷色, 5.2 自动跟随)。
-         历史: 轮 15 Gallery 化; 轮 14 卡片间距 8→4; 轮 13 拾色器默认折叠。 -->
+    <!-- 轮 26 (M5.1 主页构件重设计, 依据 docs/M5.1_HOME_REDESIGN_PLAN.md §2~§7):
+         §4 banner 底边辉光 (LightsLayer 内的 GlowBand: Blur + 上透下实 OpacityMask, 圆角自持);
+         §2 固件特效改图标磁贴网格 (FxTileTemplate), 折叠头右侧「当前 XX」胶囊;
+         §3 纯色拾色器改 HSV (H/S 两根, V = 主页「亮度」行; 删 RGB 滑块);
+         §5 运行指标压成一行状态条, 指标集随模式换 (指标须"不适用 = —", 不显示 0.0);
+         §6 设备信息结构化 (类型图标 + 名称 + 语义胶囊 + 第二行小字; 「当前」= 左侧 3px 强调条);
+         §7 几何环收进折叠「布局预览」, 中心只放静态几何参数。
+         轮 19: DEV_LOST/ERROR 时 banner **不点亮** (渐变 = "确实驱动上了灯带");
+            提示条只用 InfoBar 自己的 IsOpen, 不叠 AnimatedVisibility (模板自己设 Collapsed, 动画无效)。
+         轮 18: MCU 光带改中性白灰; 设备列表刷新按钮纯图标; 开启失败不进入假"开启"态。
+         轮 17: 去掉抖动噪点层; 光层 Rectangle 必须自带 RadiusX/RadiusY=7 (WPF Border 不裁子元素)。
+         轮 16: 模式卡选中色用 AccentFillColorDefaultBrush (SystemAccentColorPrimaryBrush 是写死的 #0067c0);
+            选中底色铺满整卡 (Padding 挂在 ContentPresenter 上); 亮度行紧贴 banner。 -->
     <Page.Resources>
         <!-- 模式卡模板: 选中 = 强调色 1px 描边 + 淡强调色底 (铺满, Tint 层 14%) + 右上对勾 -->
         <ControlTemplate x:Key="ModeCardTemplate" TargetType="RadioButton">
@@ -62,17 +52,78 @@
             </ControlTemplate.Triggers>
         </ControlTemplate>
 
-        <!-- 只留图标的按钮模板 (轮 18 ②): 去掉底/边框/悬停填充/按下填充, 只保留一个悬停淡入,
-             视觉上就是一个可点的图标。保留 ui:Button 宿主是为了沿用 Click / 键盘 / ToolTip。 -->
-        <ControlTemplate x:Key="IconOnlyButtonTemplate" TargetType="ui:Button">
-            <ContentPresenter x:Name="IconHost" HorizontalAlignment="Center"
-                              VerticalAlignment="Center" Opacity="0.7" />
+        <!-- 固件特效磁贴模板 (§2): 与模式卡同一套视觉语言 (强调描边 + 14% 淡强调底 + 右上对勾),
+             但尺寸更紧凑 —— 24px 图标 + 名称, 最小宽 152 / 高 56。
+             轮 28: ContentPresenter 加 HorizontalAlignment="Center" —— "居中"指的是**磁贴内的
+             内容**居中 (图标+文字原来贴左边); 磁贴组本身的对齐方式不动。 -->
+        <ControlTemplate x:Key="FxTileTemplate" TargetType="RadioButton">
+            <Border x:Name="Root" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
+                    CornerRadius="6">
+                <Grid>
+                    <Border x:Name="Tint" CornerRadius="6" Opacity="0"
+                            Background="{DynamicResource AccentFillColorDefaultBrush}" />
+                    <ContentPresenter Margin="12,8" HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                    <ui:SymbolIcon x:Name="CheckIcon" Symbol="Checkmark24" FontSize="12"
+                                   Margin="0,6,6,0"
+                                   HorizontalAlignment="Right" VerticalAlignment="Top"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                   Visibility="Collapsed" />
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter TargetName="Tint" Property="Opacity" Value="0.14" />
+                    <Setter TargetName="Root" Property="BorderBrush"
+                            Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                    <Setter TargetName="CheckIcon" Property="Visibility" Value="Visible" />
+                </Trigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsMouseOver" Value="True" />
+                        <Condition Property="IsChecked" Value="False" />
+                    </MultiTrigger.Conditions>
+                    <Setter TargetName="Root" Property="Background"
+                            Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                </MultiTrigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!-- 只留图标的按钮模板已提到 App.xaml (轮 29: 采集页/拾音页也要用同一个) -->
+
+        <!-- 预设色板单个色块 (轮 27, 轮 28 修同心, 轮 29 去掉"原始/生效色"行):
+             必须是**圆形**, 悬停**不能**套用 Button 默认模板的灰色高亮。
+             几何 (全部非负 Margin 居中 → 天然同心):
+               实心圆   Margin=4   → 半径 11
+               选中圈   Margin=3   → 半径 12, 粗 2 → 覆盖 11~13 (内沿 11 = 实心圆外沿, 无缝)
+               悬停圈   Margin=1.5 → 半径 13.5, 粗 1 → 覆盖 13~14 (内沿 13 = 选中圈外沿, 也无缝)
+             (上一版实心圆 Margin=3、圈 Margin=0, 中间空出 2px 深色环, 看着就是"圆和圆环不同心"。)
+             按钮的 BorderBrush 只在选中/未选中之间换色 —— 未选中给一个深灰描边, 免得出现"空圈"。 -->
+        <ControlTemplate x:Key="PresetSwatchTemplate" TargetType="Button">
+            <Grid Width="30" Height="30" Background="Transparent">
+                <Ellipse Fill="{TemplateBinding Background}" Margin="3.5" />
+                <Ellipse Stroke="{TemplateBinding BorderBrush}" StrokeThickness="3" Margin="1.5" />
+                <Ellipse x:Name="HoverRing" Margin="0.5" Opacity="0" StrokeThickness="3"
+                         Stroke="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Grid>
             <ControlTemplate.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="IconHost" Property="Opacity" Value="1" />
+                    <Setter TargetName="HoverRing" Property="Opacity" Value="0.7" />
                 </Trigger>
             </ControlTemplate.Triggers>
         </ControlTemplate>
+
+        <!-- 色相轨道彩虹渐变 (§3): 0°红 60°黄 120°绿 180°青 240°蓝 300°品红 360°红 -->
+        <LinearGradientBrush x:Key="HueRainbowBrush" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Offset="0.0000" Color="#FFFF3B30" />
+            <GradientStop Offset="0.1667" Color="#FFFFCC00" />
+            <GradientStop Offset="0.3333" Color="#FF34C759" />
+            <GradientStop Offset="0.5000" Color="#FF32D0E0" />
+            <GradientStop Offset="0.6667" Color="#FF007AFF" />
+            <GradientStop Offset="0.8333" Color="#FFAF52DE" />
+            <GradientStop Offset="1.0000" Color="#FFFF3B30" />
+        </LinearGradientBrush>
 
         <!-- banner 深色渐变底: 多段 + 低对比 (段数多本身不消带; 小跨度 + 长缓坡已足够平滑,
              轮 17 已去掉抖动噪点层 —— 无时域抖动时静态噪点只会让画面发脏) -->
@@ -120,7 +171,7 @@
     </Page.Resources>
     <StackPanel Margin="16,12,16,16">
 
-        <!-- Hero banner. 底 = 普通卡片灰; LightsLayer = 点亮时的深色渐变 + 模式色光带,
+        <!-- Hero banner. 底 = 普通卡片灰; LightsLayer = 点亮时的深色渐变 + 模式色光带 + 底边辉光,
              整层 Opacity 淡入淡出; StreakA/B 交叉淡化实现换模式的平滑过渡。
              **三条光层都是 Rectangle, 必须显式写 RadiusX/RadiusY**: WPF 的 Border 只把
              自己的 Background 裁到圆角, **不会裁子元素** → 不加圆角的 Rectangle 会把 banner
@@ -135,6 +186,25 @@
                                Fill="{StaticResource BannerStreakBlueBrush}" />
                     <Rectangle x:Name="StreakB" RadiusX="7" RadiusY="7"
                                Fill="{StaticResource BannerStreakBlueBrush}" Opacity="0" />
+                    <!-- §4 底边辉光带 (轮 27 重做): 形状(中心亮→两边衰减)与颜色只跟**模式**有关,
+                         所以画刷是静态的、由 code-behind 按模式换; 每次只改 Opacity (= 数值大小)。
+                         这样视觉上是 WPF 动画插值出的 60fps, 不再每帧重建 64 段画刷 (那正是卡顿来源)。
+                         **不亮的地方是透明的 (alpha=0), 不是黑色** —— 辉光是"叠加上去"的, 不能压成黑带。
+                         OpacityMask 做"上透下实"; 圆角自持 (Border 不裁子元素)。
+                         LightsLayer 整层淡变 → 关灯时辉光跟着回卡片灰。 -->
+                    <Border x:Name="GlowBand" Height="56" VerticalAlignment="Bottom"
+                            CornerRadius="0,0,7,7" Opacity="0">
+                        <Border.Effect>
+                            <BlurEffect Radius="18" KernelType="Gaussian" RenderingBias="Performance" />
+                        </Border.Effect>
+                        <Border.OpacityMask>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Offset="0" Color="#00000000" />
+                                <GradientStop Offset="0.45" Color="#66FFFFFF" />
+                                <GradientStop Offset="1" Color="#FFFFFFFF" />
+                            </LinearGradientBrush>
+                        </Border.OpacityMask>
+                    </Border>
                 </Grid>
                 <Grid Margin="20,18">
                     <Grid.ColumnDefinitions>
@@ -165,7 +235,7 @@
                         </Grid.RowDefinitions>
                         <ui:Button x:Name="ToggleBtn" Appearance="Primary" Content="开启"
                                    Padding="24,8" Click="OnToggle" HorizontalAlignment="Stretch" />
-                        <TextBlock x:Name="BannerFpsText" Grid.Row="1" Text="0.0 fps" FontSize="11"
+                        <TextBlock x:Name="BannerFpsText" Grid.Row="1" Text="0.0 FPS" FontSize="11"
                                    HorizontalAlignment="Right" VerticalAlignment="Bottom" />
                     </Grid>
                 </Grid>
@@ -182,7 +252,7 @@
         <ui:InfoBar x:Name="DiagBar" Margin="0,0,0,4" Severity="Error" Title="核心诊断"
                     IsOpen="False" IsClosable="False" />
 
-        <!-- 亮度 (常用功能 → 紧贴 banner) -->
+        <!-- 亮度 (常用功能 → 紧贴 banner)。§3: 这一行同时就是纯色拾色器的 V (明度) —— 不再另设第三根滑块 -->
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BrightnessHigh24}" Title="亮度"
                              Description="追光/纯色直接调光; 拾音律动作为最高亮度上限">
             <StackPanel Orientation="Horizontal">
@@ -209,8 +279,8 @@
             </Grid.ColumnDefinitions>
         </Grid>
 
-        <!-- 纯色灯光拾色器: 仅「纯色灯光」模式时显示 (AnimatedVisibility), 且显示时默认折叠 —
-             Header 已带 HEX 输入 + 色块预览, 预设色板/RGB 滑块点标题条才展开 -->
+        <!-- §3 纯色灯光拾色器: 仅「纯色灯光」模式时显示 (AnimatedVisibility), 且显示时默认折叠 —
+             H + S 两根滑块即完整 HSV (V = 上方「亮度」行), 精确匹配走 Header 的 HEX 框 -->
         <ui:CardExpander x:Name="SolidCard" Margin="0,0,0,4" Icon="{ui:SymbolIcon Color24}"
                          ContentPadding="0" IsExpanded="False"
                          controls:AnimatedVisibility.Expanded="False">
@@ -227,7 +297,7 @@
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="纯色灯光" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                               Text="当前模式的灯光颜色" />
+                               Text="当前模式的灯光颜色 — 原始色 (未含亮度)" />
                     <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="8,0,4,0">
                         <ui:TextBox x:Name="HexBox" Width="110" Text="#FFE1D6" MaxLength="9"
@@ -239,7 +309,8 @@
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel Margin="16,12,16,16">
-                <!-- 预设色板 -->
+                <!-- 预设色板 + 自定义槽 (轮 29): 12 个预设, 中间一条竖分割线, 右边 5 个自定义槽
+                     (自动记住你调出来的颜色, 右键清除单个槽)。选中 = 强调色圆环。 -->
                 <ItemsControl x:Name="PresetStrip" Margin="0,0,0,4">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -247,56 +318,65 @@
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
-                <!-- RGB 滑块行: 色块 + 白字 + 值 + 滑块 (三行统一行距 10, 与颜色页同构) -->
-                <Grid Margin="0,10,0,0">
-                    <Grid.ColumnDefinitions>
+
+                <!-- 色相 H: 彩虹轨道。滑块自身的轨道用局部资源刷覆盖成透明, 渐变交给下层 Border 承担
+                     (WPF-UI 4.3.0 模板里轨道是 Border#TrackBackground, Background = SliderTrackFill)。 -->
+                <Grid x:Name="HueRow" Margin="0,10,0,0">                    <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="16" Height="16" CornerRadius="3" Background="#FF6B6B" />
-                        <TextBlock Text="R" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
+                        <Ellipse Width="16" Height="16" Fill="{StaticResource HueRainbowBrush}"/>
+                        <TextBlock Text="色相" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBlock x:Name="SRValue" Grid.Column="1" Text="255" MinWidth="36"
+                    <TextBlock x:Name="HValueText" Grid.Column="1" Text="24" MinWidth="36"
                                TextAlignment="Right" Margin="8,0,12,0" VerticalAlignment="Center" />
-                    <Slider x:Name="SRSlider" Grid.Column="2" Width="200" Minimum="0" Maximum="255" Value="255"
-                            controls:SliderJump.Enabled="True" VerticalAlignment="Center" />
+                    <Grid Grid.Column="2" Width="200" VerticalAlignment="Center">
+                        <Border x:Name="HueTrackBar" Height="4" CornerRadius="2"
+                                VerticalAlignment="Center" Background="{StaticResource HueRainbowBrush}" />
+                        <Slider x:Name="HueSlider" Minimum="0" Maximum="360" Value="24"
+                                LargeChange="0" controls:SliderJump.Enabled="True"
+                                VerticalAlignment="Center">
+                            <Slider.Resources>
+                                <SolidColorBrush x:Key="SliderTrackFill" Color="Transparent" />
+                                <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="Transparent" />
+                            </Slider.Resources>
+                        </Slider>
+                    </Grid>
                 </Grid>
-                <Grid Margin="0,10,0,0">
+
+                <!-- 饱和度 S: 轨道 = 当前 H 的灰 → 全饱和 (H 变化时重画) -->
+                <Grid x:Name="SatRow" Margin="0,10,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="16" Height="16" CornerRadius="3" Background="#7DD97D" />
-                        <TextBlock Text="G" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
+                        <Ellipse x:Name="SatSwatch" Width="16" Height="16" Fill="#FFFF3B30"/>
+                        <TextBlock Text="饱和度" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBlock x:Name="SGValue" Grid.Column="1" Text="225" MinWidth="36"
+                    <TextBlock x:Name="SValueText" Grid.Column="1" Text="22" MinWidth="36"
                                TextAlignment="Right" Margin="8,0,12,0" VerticalAlignment="Center" />
-                    <Slider x:Name="SGSlider" Grid.Column="2" Width="200" Minimum="0" Maximum="255" Value="225"
-                            controls:SliderJump.Enabled="True" VerticalAlignment="Center" />
-                </Grid>
-                <Grid Margin="0,10,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Width="16" Height="16" CornerRadius="3" Background="#7D9DFF" />
-                        <TextBlock Text="B" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <TextBlock x:Name="SBValue" Grid.Column="1" Text="214" MinWidth="36"
-                               TextAlignment="Right" Margin="8,0,12,0" VerticalAlignment="Center" />
-                    <Slider x:Name="SBSlider" Grid.Column="2" Width="200" Minimum="0" Maximum="255" Value="214"
-                            controls:SliderJump.Enabled="True" VerticalAlignment="Center" />
+                    <Grid Grid.Column="2" Width="200" VerticalAlignment="Center">
+                        <Border x:Name="SatTrackBar" Height="4" CornerRadius="2"
+                                VerticalAlignment="Center" />
+                        <Slider x:Name="SatSlider" Minimum="0" Maximum="100" Value="22"
+                                LargeChange="0" controls:SliderJump.Enabled="True"
+                                VerticalAlignment="Center">
+                            <Slider.Resources>
+                                <SolidColorBrush x:Key="SliderTrackFill" Color="Transparent" />
+                                <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="Transparent" />
+                            </Slider.Resources>
+                        </Slider>
+                    </Grid>
                 </Grid>
             </StackPanel>
         </ui:CardExpander>
 
-        <!-- 模式: 固件特效折叠 (位于拾色器之后; IsExpanded 跟随 MCU 模式自动展开) -->
+        <!-- §2 固件特效: 图标磁贴网格 (位于拾色器之后; IsExpanded 跟随 MCU 模式自动展开)。
+             折叠头右侧钉「当前 XX」胶囊 —— 收起状态也能一眼看到正在用哪款。 -->
         <ui:CardExpander x:Name="FxExpander" Margin="0,0,0,4" Icon="{ui:SymbolIcon Sparkle24}"
                          ContentPadding="0">
             <ui:CardExpander.Header>
@@ -305,63 +385,84 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="固件特效" FontSize="14" />
-                    <TextBlock Grid.Row="1" FontSize="12"
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="固件特效" FontSize="14" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                Text="11 款 · 由灯带固件渲染, 主机仅发命令 (无预览)" />
+                    <Border x:Name="FxCurrentPill" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                            CornerRadius="10" Padding="8,2" Margin="8,0,4,0"
+                            VerticalAlignment="Center" Visibility="Collapsed"
+                            Background="{DynamicResource AccentFillColorDefaultBrush}">
+                        <!-- ⚠️ 强调色**底**上的文字要用 TextOnAccentFillColorPrimaryBrush;
+                             用 AccentTextFillColorPrimaryBrush 会变成"强调色写强调色"→ 看不见字
+                             (轮 27 用户报的"不明橙色胶囊"就是这个)。 -->
+                        <TextBlock x:Name="FxCurrentText" FontSize="11"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                    </Border>
                 </Grid>
             </ui:CardExpander.Header>
-            <WrapPanel x:Name="FxPanel" Margin="16" />
+            <ItemsControl x:Name="FxPanel" Margin="16,12,16,8">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <!-- 轮 28: 回到上一版 —— 磁贴**组**的对齐方式不动 (上一轮误把"磁贴内内容居中"
+                             改成了"磁贴组居中", 而 WrapPanel 的 DesiredSize 本来就占满可用宽度,
+                             Center 实际是空操作, 只会让人以为改错了地方)。 -->
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
         </ui:CardExpander>
 
-        <!-- 灯带预览 -->
-        <ui:Card Margin="0,0,0,4">
-            <StackPanel>
+        <!-- §5 运行指标 (轮 27 双层 / 轮 29 关闭时自动动画收起)。
+             收起用 AnimatedVisibility (与拾音页「输入/输出设备」同一套机制): 灯带没开的时候
+             这块整个高度收掉, 不留一行占位; 开起来再动画展开。
+             指标集随模式换 (MetricKeysForMode 纯函数); 不做健康着色。 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="调试信息" />
+        <!-- §7 布局预览 (折叠): 几何环保留 M4 的真实比例几何, 但日常收起不参与 4Hz 重绘;
+             中心区只放**静态几何参数** —— 展开它的人目的是核对灯序/边数/偏移, 要的就是几何事实。
+             起点序号与绕向箭头移进校准向导中心区 (Views/CalibrateWindow.xaml)。 -->
+        <ui:CardExpander x:Name="LayoutCard" Margin="0,0,0,4" Icon="{ui:SymbolIcon BorderAll24}"
+                         ContentPadding="0" IsExpanded="False">
+            <ui:CardExpander.Header>
                 <Grid>
-                    <TextBlock Text="灯带预览" FontWeight="SemiBold" />
-                    <TextBlock x:Name="ModeTagText" Text="" Opacity="0.55" FontSize="11"
-                               HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="布局预览" FontSize="14" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="按真实长宽比核对灯序与边数" />
+                    <TextBlock x:Name="LayoutSummary" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                               FontSize="12" Margin="8,0,4,0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </Grid>
-                <!-- 高度由 LedRingView 按灯数/边数自适应 (纵向列不截断) -->
-                <controls:LedRingView x:Name="Ring" MinHeight="150" Margin="0,10,0,0" />
-            </StackPanel>
+            </ui:CardExpander.Header>
+            <!-- 高度由 LedRingView 按灯数/边数自适应 (纵向列不截断) -->
+            <controls:LedRingView x:Name="Ring" MinHeight="150" Margin="16,12,16,16" />
+        </ui:CardExpander>
+        <ui:Card x:Name="MetricsCard" Padding="16,10" Margin="0,0,0,4"
+                 controls:AnimatedVisibility.Expanded="False">
+            <Grid x:Name="MetricsGrid" />
         </ui:Card>
 
-        <!-- 运行指标 (诊断区: 帧率在 banner 右下角已有, 这里是明细) -->
-        <ui:Card Margin="0,0,0,4">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                    <TextBlock Text="帧率" Opacity="0.6" FontSize="11" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="FpsText" Text="0.0" FontSize="16" HorizontalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                    <TextBlock Text="已发帧" Opacity="0.6" FontSize="11" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="FramesText" Text="0" FontSize="16" HorizontalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                    <TextBlock Text="处理耗时" Opacity="0.6" FontSize="11" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="ProcText" Text="0 ms" FontSize="16" HorizontalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Grid.Column="3" HorizontalAlignment="Center">
-                    <TextBlock Text="串口写入" Opacity="0.6" FontSize="11" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="WireText" Text="0 ms" FontSize="16" HorizontalAlignment="Center" />
-                </StackPanel>
-            </Grid>
-        </ui:Card>
-
-        <!-- 设备 / 显示器 -->
+        <!-- §6 设备 / 显示器 (结构化行) -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="设备" />
         <ui:Card>
             <StackPanel>
                 <Grid>
-                    <TextBlock Text="设备" FontWeight="SemiBold" />
+                    <TextBlock Text="连接设备" FontWeight="SemiBold" />
                     <!-- 只要图标, 不要按钮样式 (轮 18 ②) -->
-                    <ui:Button Template="{StaticResource IconOnlyButtonTemplate}" ToolTip="刷新"
+                    <ui:Button x:Name="RefreshDevicesBtn" Template="{StaticResource IconOnlyButtonTemplate}"
+                               ToolTip="刷新"
                                HorizontalAlignment="Right" Click="OnRefreshDevices">
                         <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18" Margin="8,2"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -371,14 +472,15 @@
                 <Separator Margin="0,10" />
                 <Grid>
                     <TextBlock Text="显示器" FontWeight="SemiBold" />
-                    <ui:Button Template="{StaticResource IconOnlyButtonTemplate}" ToolTip="重新枚举"
+                    <ui:Button x:Name="RefreshMonitorsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
+                               ToolTip="重新枚举"
                                HorizontalAlignment="Right" Click="OnRefreshMonitorsClick">
                         <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18" Margin="8,0"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </ui:Button>
                 </Grid>
-                <TextBlock x:Name="MonitorsText" Text="" TextWrapping="Wrap" FontSize="12" Opacity="0.85"
-                           Margin="0,8,0,0" />
+                <!-- 显示器改成按真实长宽比画的缩略矩形 + 语义标记; 采集在此处不可切换 (选择器在「采集」页) -->
+                <StackPanel x:Name="MonitorsPanel" Margin="0,8,0,0" />
             </StackPanel>
         </ui:Card>
 
