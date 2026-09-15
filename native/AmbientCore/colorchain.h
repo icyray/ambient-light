@@ -5,7 +5,7 @@
 namespace color {
 
 struct Params {
-    double brightness = 1.0;   // HSL L 乘数
+    double brightness = 1.0;   // 线性调光乘数 (HSL 链之后, 最终 8bit 值上线性缩放; M5.1 §8.1)
     double vibrance   = 9.0;   // HSL S 乘数
     double hueMul     = 1.0;   // HSL H 乘数
     double gamma      = 0.65;

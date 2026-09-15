@@ -60,13 +60,17 @@ void AdjustLedColors(const Params& p, double r, double g, double b, uint8_t out[
         hsl.S = clamp01(hsl.S * p.vibrance);   // 厂商原链
     }
     if (p.hueMul     != 1.0) hsl.H = clamp01(hsl.H * p.hueMul);
-    if (p.brightness != 1.0) hsl.L = clamp01(hsl.L * p.brightness);
+    // 亮度 = 真调光 (M5.1 §8.1)。**不要**再写 hsl.L *= brightness:
+    // HSL 的 L 是 max/min 通道的中点、S 是相对量, 把 L 砍半等于把颜色从"浅色调区"推进"饱和色区"
+    // (暖白 #FFE1D6 @50% 会变成饱和红 #E51E00)。改为在 HSL 链之后对最终 8bit 值线性缩放 —— 色相/饱和度
+    // 不变, 只是暗一档。拾音模式不走本函数 (brightness 本来就在音量包络上做线性乘数)。
     double c[3];
     HSLtoRGB(hsl, c);
     for (int i = 0; i < 3; i++) {
         double v = c[i] * 255.0;
         if (p.gamma != 1.0) v = 255.0 * pow(v / 255.0, 1.0 / p.gamma);
         if (i == 0) v *= p.rGain; else if (i == 1) v *= p.gGain; else v *= p.bGain;
+        if (p.brightness != 1.0) v *= p.brightness;
         c[i] = std::min(255.0, std::max(0.0, v));
     }
     int r8 = (int)c[0], g8 = (int)c[1], b8 = (int)c[2];
