@@ -1656,7 +1656,9 @@ public partial class HomePage : Page
         var line2 = new System.Windows.Controls.TextBlock
         {
             FontSize = 11,
-            Margin = new Thickness(0, 4, 0, 0),
+            // 横向缩进归零: 图标已经独立成一列, 这一行天然就在信息列左缘, 不必再手算图标宽度对齐。
+            // 垂直仍用 8 —— 那是用户在手调里定的行距, 别顺手改小。
+            Margin = new Thickness(0, 8, 0, 0),
         };
         line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
                                    "TextFillColorTertiaryBrush");
