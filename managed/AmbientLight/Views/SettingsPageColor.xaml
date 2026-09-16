@@ -92,7 +92,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="16" Height="16" Fill="#FF6B6B"/>
+                        <Border Width="16" Height="16" CornerRadius="8" Background="#FF6B6B"/>
                         <TextBlock Text="R" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="RGainValue" Grid.Column="1" Text="1.00" MinWidth="36"
@@ -108,7 +108,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="16" Height="16" Fill="#7DD97D"/>
+                        <Border Width="16" Height="16" CornerRadius="8" Background="#7DD97D"/>
                         <TextBlock Text="G" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="GGainValue" Grid.Column="1" Text="1.00" MinWidth="36"
@@ -124,7 +124,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="16" Height="16" Fill="#7D9DFF"/>
+                        <Border Width="16" Height="16" CornerRadius="8" Background="#7D9DFF"/>
                         <TextBlock Text="B" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="BGainValue" Grid.Column="1" Text="1.00" MinWidth="36"

@@ -327,7 +327,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="16" Height="16" Fill="{StaticResource HueRainbowBrush}"/>
+                        <Border Width="16" Height="16" CornerRadius="8" Background="{StaticResource HueRainbowBrush}"/>
                         <TextBlock Text="色相" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="HValueText" Grid.Column="1" Text="24" MinWidth="36"
@@ -354,7 +354,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse x:Name="SatSwatch" Width="16" Height="16" Fill="#FFFF3B30"/>
+                        <Border x:Name="SatSwatch" Width="16" Height="16" CornerRadius="8" Background="#FFFF3B30"/>
                         <TextBlock Text="饱和度" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="SValueText" Grid.Column="1" Text="22" MinWidth="36"

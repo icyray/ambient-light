@@ -549,7 +549,7 @@ public partial class HomePage : Page
         var (fr, fg, fb) = HsvToRgb(h, 1.0, 1.0);
         SatTrackBar.Background = new LinearGradientBrush(
             Colors.White, Color.FromRgb((byte)fr, (byte)fg, (byte)fb), 0);
-        SatSwatch.Fill = Frozen(Color.FromRgb((byte)fr, (byte)fg, (byte)fb));
+        SatSwatch.Background = Frozen(Color.FromRgb((byte)fr, (byte)fg, (byte)fb));
     }
 
     private void ApplySolid(int r, int g, int b)
@@ -1249,7 +1249,7 @@ public partial class HomePage : Page
         var text = new System.Windows.Controls.TextBlock
         {
             Text = (index + 1).ToString(),
-            FontSize = 10.5,
+            FontSize = 10,
             FontWeight = FontWeights.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1258,9 +1258,9 @@ public partial class HomePage : Page
                                   "TextOnAccentFillColorPrimaryBrush");
         var badge = new Border
         {
-            Width = 20,
-            Height = 20,
-            CornerRadius = new CornerRadius(10),      // = 半边长 → 正圆
+            Width = 16,
+            Height = 16,
+            CornerRadius = new CornerRadius(8),      // = 半边长 → 正圆
             VerticalAlignment = VerticalAlignment.Center,
             Child = text,
         };
@@ -1638,7 +1638,7 @@ public partial class HomePage : Page
         var line2 = new System.Windows.Controls.TextBlock
         {
             FontSize = 11,
-            Margin = new Thickness(24, 2, 0, 0),
+            Margin = new Thickness(24, 8, 0, 0),
         };
         line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
                                    "TextFillColorTertiaryBrush");
