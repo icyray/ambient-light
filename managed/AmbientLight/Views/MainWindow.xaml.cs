@@ -36,17 +36,12 @@ public partial class MainWindow : FluentWindow
             if (RootNav.MenuItems[0] is Wpf.Ui.Controls.NavigationViewItem home)
                 home.IsActive = true;           // SelectedItem setter 内部不可达, IsActive 等效
             RootNav.Navigate(typeof(HomePage));
-            // M5.1 半透明: 按 WPF-UI 官方 WindowBackgroundManager.UpdateBackground 序列
-            // (RemoveBackdrop → 窗口层透明 → ApplyBackdrop); Background 用本地值 Transparent
-            // 直接盖过 FluentWindow 样式的 DynamicResource WindowBackground (不透明)。
-            // 不支持 Mica 时保持不透明。浅色主题可读性在 5.2 主题轮走查。
-            if (WindowBackdrop.IsSupported(WindowBackdropType.Mica))
-            {
-                WindowBackdrop.RemoveBackdrop(this);
-                Background = System.Windows.Media.Brushes.Transparent;
-                WindowBackdrop.RemoveBackground(this);
-                WindowBackdrop.ApplyBackdrop(this, WindowBackdropType.Mica);
-            }
+            // Mica 半透明**不在这里做**: 由 MainWindow.xaml 的 WindowBackdropType="Mica" 触发
+            // FluentWindow.OnSourceInitialized → OnBackdropTypeChanged 的官方序列
+            // (SetWindowChrome → RemoveBackground → ApplyBackdrop → RemoveTitlebarBackground)。
+            // 轮 25 之前手搓那套缺前两步/时机也不对, 所以一直不生效 (PROJECT_PLAN §8.2 有完整根因)。
+            // 不支持 Mica 的环境由 WPF-UI 自己兜底 (IsSupported 为假时不应用 backdrop) ——
+            // 极端情况下窗口会退回不透明, 不会花屏; 浅色主题可读性走 5.2 主题轮。
         };
         Closing += (_, e) =>
         {

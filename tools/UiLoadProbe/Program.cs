@@ -331,6 +331,17 @@ static void Run()
         bool hostOk = win.FindName("RootDialogHost") is Wpf.Ui.Controls.ContentDialogHost;
         Console.WriteLine((hostOk ? "OK   " : "FAIL ") +
                           $"MainWindow.RootDialogHost 是 ContentDialogHost = {hostOk}");
+        // Mica/亚克力 (PROJECT_PLAN §8.2): 走 FluentWindow 官方管线 —— XAML 声明 WindowBackdropType,
+        // 由 OnSourceInitialized → OnBackdropTypeChanged 做完整序列。这里的**硬契约**是:
+        // 只要用了 backdrop, ExtendsContentIntoTitleBar 就必须为 True, 否则 4.3.0 直接抛
+        // InvalidOperationException ("Cannot apply backdrop effect if ... is false")。
+        // 不断言具体是哪种 backdrop (改成 Acrylic 也不该报警)。
+        bool backdropSet = win.WindowBackdropType != Wpf.Ui.Controls.WindowBackdropType.None;
+        bool backdropOk = !backdropSet || win.ExtendsContentIntoTitleBar;
+        Console.WriteLine((backdropOk ? "OK   " : "FAIL ") +
+                          $"半透明: WindowBackdropType={win.WindowBackdropType}, " +
+                          $"ExtendsContentIntoTitleBar={win.ExtendsContentIntoTitleBar} " +
+                          $"(用了 backdrop 就必须为 True) = {backdropOk}");
     }
     catch (Exception ex)
     {

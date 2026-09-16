@@ -6,7 +6,15 @@
                  Title="AmbientLight" Width="880" Height="680"
                  MinWidth="600" MinHeight="230"
                  WindowStartupLocation="CenterScreen"
-                 ExtendsContentIntoTitleBar="True">
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica">
+    <!-- Mica 半透明 (PROJECT_PLAN §8.2): **必须在 XAML 上声明 WindowBackdropType**, 不能手搓。
+         FluentWindow 在 OnSourceInitialized 里跑的是完整序列:
+           SetWindowChrome() → RemoveBackground() → ApplyBackdrop() → RemoveTitlebarBackground()
+         轮 25 之前我们自己在 Loaded 里手搓了"后三步", 缺 SetWindowChrome() 与 RemoveTitlebarBackground(),
+         时机也从 OnSourceInitialized 挪到了 Loaded → 一直不生效。
+         ⚠️ ExtendsContentIntoTitleBar 必须为 True —— FluentWindow.OnBackdropTypeChanged 里
+         这一条不满足会直接抛 InvalidOperationException。 -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
