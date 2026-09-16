@@ -221,28 +221,28 @@ public partial class HomePage : Page
                 continue;
             }
 
-            // 主模式卡 (Gallery 风): 44px 圆角色块图标 + 标题 + 一句功能说明;
+            // 主模式卡 (Gallery 风): 44px 圆角**渐变**图标 + 标题 + 一句功能说明;
             // 等宽三列, 列位 = 序号×2 (中间列是 8px 间隙)
-            // 色块 = 与 banner 光带同色系 (蓝/绿/紫), 便于"看色识模式"
-            var (icon, tileColor) = index switch
+            // 渐变 = 与 banner 光带/辉光同一套基色 (追光蓝 / 拾音绿 / 纯色紫), 便于"看色识模式"
+            var icon = index switch
             {
-                0 => (SymbolRegular.WeatherSunny24, Color.FromRgb(0x4C, 0x8D, 0xFF)),
-                1 => (SymbolRegular.SoundWaveCircle24, Color.FromRgb(0x2D, 0xC0, 0x8A)),
-                _ => (SymbolRegular.Color24, Color.FromRgb(0xA7, 0x8B, 0xFA)),
+                0 => SymbolRegular.WeatherSunny24,
+                1 => SymbolRegular.SoundWaveCircle24,
+                _ => SymbolRegular.Color24,
             };
             var tileIcon = new Border
             {
                 Width = 44,
                 Height = 44,
                 CornerRadius = new CornerRadius(8),
-                Background = new System.Windows.Media.SolidColorBrush(tileColor),
+                Background = ModeTileBrush(index),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 12, 0),
                 Child = new Wpf.Ui.Controls.SymbolIcon
                 {
                     Symbol = icon,
                     FontSize = 22,
-                    // 色块是亮色 → 图标取近黑: 深浅主题下对比都成立
+                    // 底色是亮色 → 图标取近黑: 深浅主题下对比都成立
                     Foreground = new System.Windows.Media.SolidColorBrush(Color.FromRgb(0x14, 0x1A, 0x1F)),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -308,6 +308,22 @@ public partial class HomePage : Page
         13 => SymbolRegular.WeatherSnow24,        // 北极冰山
         _ => SymbolRegular.Sparkle24,
     };
+
+    /// <summary>主模式卡图标底色 = 同色系"亮→深"的 135° 渐变 (轮 32: 原来是纯色块)。
+    /// 三个模式各自对应 banner 光带/辉光的同一套基色 (追光蓝 / 拾音绿 / 纯色紫),
+    /// 固件特效预留一组中性色 (后续"固件特效升为主模式卡"时直接可用)。
+    /// 想调手感就改这张表 —— 两端色都是"同一色系的亮色与深色", 所以图标用近黑在深浅主题下都清楚。</summary>
+    private static LinearGradientBrush ModeTileBrush(int mode)
+    {
+        var (from, to) = mode switch
+        {
+            0 => (Rgb(0x7F, 0xB4, 0xFF), Rgb(0x2E, 0x62, 0xD9)),   // 追光 · 蓝
+            1 => (Rgb(0x4F, 0xD9, 0xA6), Rgb(0x12, 0x85, 0x5F)),   // 拾音 · 绿
+            11 => (Rgb(0xC4, 0xA6, 0xFF), Rgb(0x7A, 0x46, 0xD8)),  // 纯色 · 紫
+            _ => (Rgb(0xDC, 0xE4, 0xEE), Rgb(0x8E, 0x9C, 0xB0)),   // 固件特效 · 中性
+        };
+        return new LinearGradientBrush(from, to, 135.0);            // 135° = 左上 → 右下
+    }
 
     private void RefreshModeButtons()
     {
@@ -1605,14 +1621,18 @@ public partial class HomePage : Page
             : !managedHere && d.devType < 0 ? Pill("未应答", PillAmberBg, PillAmberFg, left: 8)
             : Pill("就绪", null, null, "ControlFillColorDefaultBrush", "TextFillColorSecondaryBrush", left: 8);
 
-        var line1 = new StackPanel { Orientation = Orientation.Horizontal };
+        // 类型图标**独立一列**、跨两行垂直居中 (轮 32 用户反馈: 原来它在 line1 里, 于是跟第一行
+        // 文字同一水平线; 现在与"名称+胶囊"和"COM/供电/灯数"两行整体居中)。
         var icon = new Wpf.Ui.Controls.SymbolIcon
         {
             Symbol = DevIcon(devType),
-            FontSize = 16,
+            FontSize = 18,
             VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0),   // 与左侧 3px 强调条留出间距
         };
         icon.Foreground = ThemeBrush("TextFillColorSecondaryBrush");
+
+        var line1 = new StackPanel { Orientation = Orientation.Horizontal };
         var name = new System.Windows.Controls.TextBlock
         {
             Text = connecting ? $"{DevTypeName(devType)} · 读取中"
@@ -1620,10 +1640,8 @@ public partial class HomePage : Page
                               : $"{DevTypeName(devType)} · id {devId}",
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        line1.Children.Add(icon);
         line1.Children.Add(name);
         if (selected)
         {
@@ -1638,7 +1656,7 @@ public partial class HomePage : Page
         var line2 = new System.Windows.Controls.TextBlock
         {
             FontSize = 11,
-            Margin = new Thickness(24, 8, 0, 0),
+            Margin = new Thickness(0, 4, 0, 0),
         };
         line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
                                    "TextFillColorTertiaryBrush");
@@ -1654,8 +1672,7 @@ public partial class HomePage : Page
         {
             Margin = new Thickness(10, 0, 12, 0),
             VerticalAlignment = VerticalAlignment.Center,
-        };
-        infoCol.Children.Add(line1);
+        };        infoCol.Children.Add(line1);
         if (line2.Text.Length > 0) infoCol.Children.Add(line2);
 
         var actions = new StackPanel
@@ -1697,9 +1714,10 @@ public partial class HomePage : Page
         }
 
         var outer = new Grid { Margin = new Thickness(0, 5, 0, 5) };
-        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3) });
+        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3) });   // 当前条
+        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });     // 类型图标
         outer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });     // 动作按钮
 
         var bar = new Border
         {
@@ -1710,9 +1728,11 @@ public partial class HomePage : Page
         if (selected) bar.SetResourceReference(Border.BackgroundProperty, "AccentFillColorDefaultBrush");
 
         Grid.SetColumn(bar, 0);
-        Grid.SetColumn(infoCol, 1);
-        Grid.SetColumn(actions, 2);
+        Grid.SetColumn(icon, 1);
+        Grid.SetColumn(infoCol, 2);
+        Grid.SetColumn(actions, 3);
         outer.Children.Add(bar);
+        outer.Children.Add(icon);
         outer.Children.Add(infoCol);
         outer.Children.Add(actions);
         return outer;
