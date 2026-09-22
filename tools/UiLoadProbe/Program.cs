@@ -1029,6 +1029,44 @@ static void Run()
     SwapTheme(themeBefore == Wpf.Ui.Appearance.ApplicationTheme.Unknown
         ? Wpf.Ui.Appearance.ApplicationTheme.Dark : themeBefore);
 
+    Console.WriteLine();
+    Console.WriteLine("---- 轮 34 补 4: 总开关按钮的放开条件 (纯函数真值表) ----");
+    // 用户要求: 关闭后**收尾没完**不许点开启 (native StopEx 的 join 可能还在跑 1~5s);
+    // 判据 = 不在处理本次点击 && 没有启动任务在飞 && 队列里没有未完成的生命周期调用。
+    var toggleCases = new (bool Toggling, bool Starting, bool Busy, bool Expect, string Desc)[]
+    {
+        (false, false, false, true, "空闲"),
+        (true, false, false, false, "正在处理这次点击"),
+        (false, true, false, false, "启动任务在飞"),
+        (false, false, true, false, "关闭收尾中 (端口还没释放)"),
+        (false, true, true, false, "启动在飞 + 收尾中"),
+    };
+    foreach (var c in toggleCases)
+    {
+        bool got = AmbientLight.Views.HomePage.ToggleEnabled(c.Toggling, c.Starting, c.Busy);
+        Console.WriteLine((got == c.Expect ? "OK   " : "FAIL ") +
+                          $"开关按钮 可点({c.Desc}) = {got} (期望 {c.Expect})");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("---- 轮 34 补 4: 布局预览中心提示的空行 (校准窗只显示标题时不该多一行) ----");
+    // 用户反馈: 校准窗里中心只有「LED 预览」一行, 底衬却按两行给高度。
+    var ring = new AmbientLight.Controls.LedRingView();
+    var hint = ring.FindName("HintText") as TextBlock;
+    bool hintHiddenByDefault = hint is not null && hint.Visibility == Visibility.Collapsed;
+    ring.SetHint("");
+    bool hintHiddenWhenEmpty = hint is not null && hint.Visibility == Visibility.Collapsed;
+    ring.SetHint("60灯·4边");
+    bool hintShownWhenSet = hint is not null && hint.Visibility == Visibility.Visible;
+    ring.SetHint("   ");
+    bool hintHiddenWhenBlank = hint is not null && hint.Visibility == Visibility.Collapsed;
+    Console.WriteLine((hint is not null ? "OK   " : "FAIL ") + $"能找到 HintText = {hint is not null}");
+    Console.WriteLine((hintHiddenByDefault ? "OK   " : "FAIL ") +
+                      $"未设提示时整行收起 (不留空行) = {hintHiddenByDefault}");
+    Console.WriteLine((hintHiddenWhenEmpty && hintHiddenWhenBlank ? "OK   " : "FAIL ") +
+                      $"SetHint(\"\") / 全空白 → 收起 = {hintHiddenWhenEmpty && hintHiddenWhenBlank}");
+    Console.WriteLine((hintShownWhenSet ? "OK   " : "FAIL ") + $"SetHint(\"60灯·4边\") → 显示 = {hintShownWhenSet}");
+
     app.Shutdown();
 }
 
