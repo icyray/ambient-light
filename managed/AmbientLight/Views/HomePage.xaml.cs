@@ -1742,14 +1742,16 @@ public partial class HomePage : Page
         line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
                                    "TextFillColorTertiaryBrush");
         // 供电 = 灯带固件周期状态字节的 bit0 (MCU 回报, 见 PROJECT_PLAN §7.1)。
-        // ⚠️ **实测: 握手连上后该位会 0 → 1** (即使本型号只有 USB 供电 —— 原厂因此也显示"电源已连接"),
-        // 所以 bit0 = 0 有两种可能: 真的没接外接电源, 或者"这一帧的状态字节还没读到"
-        // (会话刚起时状态结构体全 0)。两者分不开 → **bit0 = 0 时干脆什么都不显示**:
-        // 比谎报"供电 USB"诚实, 也顺手消掉了"连接瞬间 USB → 外接"那一下极快翻转。
-        // 同理 DEV_LOST 时 ledStatusByte 是残留值, 也不显示 (原厂断连时会 SetStatus(0,0) 清缓存)。
+        // 语义是"该设备自己的供电是否正常": 厂商那些**真需要外接供电的型号**(桌面氛围灯/带电池的)
+        // 它会跟着外接电源变; 而 USB 供电型号**连上就恒 1** (实战: 握手后 0 → 1)。
+        // 所以文案用「供电 正常」而不是"外接"——本型号上它不代表外接电源已接入。
+        // bit0 = 0 有两种可能: 真的供电异常, 或者"这一帧的状态字节还没读到"(会话刚起时结构体全 0),
+        // 两者分不开 → **0 时什么都不显示**: 比谎报"供电 USB"诚实, 也顺手消掉了
+        // "连接瞬间 供电 USB → 供电 外接"那一下极快翻转。DEV_LOST 同理不显示 (残留值;
+        // 原厂断连时也是 SetStatus(0,0) 清缓存)。
         long statusByte = sess?.ledStatusByte ?? 0;
         string power = sessState == AmbientCore.StateRunning && (statusByte & 1) == 1
-            ? "供电 外接" : "";
+            ? "供电 正常" : "";
         // 只用查得到的配置, 不 GetOrCreate —— 光是"看一眼设备列表"不该给没见过的设备建配置文件
         string leds = managedHere && ConfigStore.Devices.TryGetValue(key, out var ds)
             ? $"{ds.LedCount} 灯" : "";
