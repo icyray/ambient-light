@@ -762,6 +762,28 @@ static void Run()
     Console.WriteLine((baudOk ? "OK   " : "FAIL ") +
                       $"波特率候选含默认值 2000000 且排首位 = {baudOk}  · " +
                       string.Join(" / ", AmbientLight.Views.SettingsPageAdvanced.BaudChoices));
+    // ⚠️ 轮 33 真 bug 回归: 光有"候选数组"不够, 下拉必须**真的被填上** —— 当时忘了给 ComboBox
+    // 设 ItemsSource, 空列表上设 SelectedIndex 既不报错也不生效, 于是用户看到空下拉。
+    // 这里断言"控件里确实有项, 且选中项与配置往返一致" (数据驱动, 不写死数量/文案)。
+    advPage.BuildForProbe();
+    var baudCombo = advPage.FindName("BaudCombo") as ComboBox;
+    var portCombo = advPage.FindName("PortCombo") as ComboBox;
+    int baudCount = baudCombo?.Items.Count ?? 0;
+    bool baudFilled = baudCount == AmbientLight.Views.SettingsPageAdvanced.BaudChoices.Length
+                      && baudCombo!.SelectedIndex == Array.IndexOf(
+                             AmbientLight.Views.SettingsPageAdvanced.BaudChoices,
+                             AmbientLight.Services.ConfigStore.Device.BaudRate);
+    Console.WriteLine((baudFilled ? "OK   " : "FAIL ") +
+                      $"波特率下拉已填充 {baudCount} 项 (== 候选数) 且选中项 == 配置值 " +
+                      $"{AmbientLight.Services.ConfigStore.Device.BaudRate} = {baudFilled}");
+    string portSel = portCombo?.SelectedItem is AmbientLight.Views.SettingsPageAdvanced.PortItem pi
+        ? AmbientLight.Views.SettingsPageAdvanced.PortValueOf(pi) : "(无选中)";
+    bool portFilled = portCombo is { Items.Count: > 0 }
+                      && string.Equals(portSel, AmbientLight.Services.ConfigStore.Device.ComPort,
+                                       StringComparison.OrdinalIgnoreCase);
+    Console.WriteLine((portFilled ? "OK   " : "FAIL ") +
+                      $"端口下拉已填充 {portCombo?.Items.Count ?? 0} 项, 选中项写回 \"{portSel}\" " +
+                      $"== 配置的端口 \"{AmbientLight.Services.ConfigStore.Device.ComPort}\" = {portFilled}");
     Console.WriteLine("INFO 本机 COM 口 (注册表 SERIALCOMM): " +
                       string.Join(", ", AmbientLight.Services.SerialPorts.All().DefaultIfEmpty("(无)")));
 
