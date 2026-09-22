@@ -225,7 +225,8 @@ public partial class App : Application
 
         if (devices.Length == 0)
             return ("未发现灯带",
-                    "未发现灯带 (VID_2E3C & PID_5740)。检查 USB 连接、确认 Ansnake 未占用端口, 然后点「开启」重试。");
+                    "未发现灯带 (VID_2E3C & PID_5740)。检查 USB 连接、确认 Ansnake 未占用端口, 然后点「开启」重试。" +
+                    "若你的灯带是别的芯片或用 USB 转串口桥接, 可在「高级 → 连接」里手动指定端口。");
 
         return ("设备未启用",
                 "已发现可用灯带, 但该设备未勾选「启动时自动开启灯带」。可到高级设置勾选, 或在下方设备列表里单独点「开启」。");

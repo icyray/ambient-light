@@ -38,6 +38,8 @@ public partial class HomePage : Page
     private string _lastCenter = "\0";          // 布局预览中心区的静态几何文本
     private string _metricsSig = "\0";          // 指标集签名, 变则重建指标条
     private bool _devRowsPending;               // 设备行是在"会话身份还没回填"时刷的, 需要补刷一次
+    private bool _devicesRefreshing;            // 设备枚举在飞 (枚举会独占打开端口, 不能并发)
+    private bool _devicesRefreshQueued;         // 刷新期间又来了新事件 → 结束后补跑一次
     private bool _updatingMode;                 // 程序化设 IsChecked 时不回环下发
     private bool _hexEditing;                   // HexBox / H,S 滑块的程序化写入期间避免回环
     private readonly Dictionary<int, System.Windows.Controls.Control> _modeBtns = new();
@@ -100,6 +102,9 @@ public partial class HomePage : Page
     {
         App.Instance.Poller.Polled += OnPolled;
         App.Instance.Poller.DevicesChanged += OnDevicesChanged;
+        // 轮 33: 会话状态变化也要刷设备行 —— 托盘菜单开关、灯带物理断开都不经过主页的按钮,
+        // 主页自己收不到信号。状态是**边沿触发**的 (只在真的变了时来一次), 不会造成刷新风暴。
+        App.Instance.Poller.StateChanged += OnCoreStateChanged;
 
         BuildModeGrid();
         var dev = ConfigStore.Device;
@@ -122,6 +127,7 @@ public partial class HomePage : Page
     {
         App.Instance.Poller.Polled -= OnPolled;
         App.Instance.Poller.DevicesChanged -= OnDevicesChanged;
+        App.Instance.Poller.StateChanged -= OnCoreStateChanged;
         StopGlowTimer();
         _lastPolledState = -1;
     }
@@ -1305,6 +1311,11 @@ public partial class HomePage : Page
 
     private void OnDevicesChanged() => _ = RefreshDevicesAsync();
 
+    /// <summary>会话状态变化 → 重刷设备行 (轮 33)。托盘菜单开关会让会话整体消失/重建;
+    /// 灯带物理断开会让会话转 DEV_LOST —— 两种都不经过主页的按钮, 之前这一行不会更新,
+    /// 用户看到的还是"运行中"。</summary>
+    private void OnCoreStateChanged(int oldState, int newState) => _ = RefreshDevicesAsync();
+
     // ---- 总开关 (状态卡与多设备列表同步: 开关后延时刷新, 等会话端口/状态回填) ----
     // 暂停期间整个流程持锁 + 按钮禁用: 快速连点会连发 Start/Stop, 核心侧留下
     // "device lost: no usable port" 之类的残留诊断 (轮 16 用户反馈)
@@ -1413,6 +1424,8 @@ public partial class HomePage : Page
     private static readonly SolidColorBrush PillAmberFg = Frozen(Color.FromRgb(0xF6, 0xCE, 0x92));
     private static readonly SolidColorBrush PillBlueBg = Frozen(Color.FromArgb(0x2E, 0x4C, 0x8D, 0xFF));
     private static readonly SolidColorBrush PillBlueFg = Frozen(Color.FromRgb(0xA9, 0xD8, 0xFF));
+    private static readonly SolidColorBrush PillRedBg = Frozen(Color.FromArgb(0x2E, 0xE2, 0x4B, 0x4A));
+    private static readonly SolidColorBrush PillRedFg = Frozen(Color.FromRgb(0xF5, 0xB0, 0xAF));
 
     private static Border Pill(string text, Brush? bg, Brush? fg,
                                string? bgKey = null, string? fgKey = null, double left = 0)
@@ -1526,6 +1539,31 @@ public partial class HomePage : Page
     private async Task RefreshDevicesAsync()
     {
         if (DevicesPanel == null) return;
+        // 设备枚举 = 逐个"独占打开端口 + 握手", 绝不能并发 (会互抢端口, 还会和会话抢)。
+        // 状态变化可能连着来 (断开→重连) → 排队重跑一次, 而不是丢掉这次刷新。
+        if (_devicesRefreshing)
+        {
+            _devicesRefreshQueued = true;
+            return;
+        }
+        _devicesRefreshing = true;
+        try
+        {
+            await RefreshDevicesCoreAsync();
+        }
+        finally
+        {
+            _devicesRefreshing = false;
+            if (_devicesRefreshQueued)
+            {
+                _devicesRefreshQueued = false;
+                _ = RefreshDevicesAsync();
+            }
+        }
+    }
+
+    private async Task RefreshDevicesCoreAsync()
+    {
         DevicesPanel.Children.Clear();
         DevicesPanel.Children.Add(new System.Windows.Controls.TextBlock
         {
@@ -1541,7 +1579,8 @@ public partial class HomePage : Page
             {
                 DevicesPanel.Children.Add(new System.Windows.Controls.TextBlock
                 {
-                    Text = "未发现灯带 (VID_2E3C & PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口",
+                    Text = "未发现灯带 (VID_2E3C & PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口。\n" +
+                           "换芯片或 USB 转串口桥接的灯带, 可在「高级 → 连接」里手动指定端口。",
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 12,
                 });
@@ -1591,6 +1630,48 @@ public partial class HomePage : Page
         }
     }
 
+    /// <summary>设备行胶囊的色调 (与 banner 同一套色板)</summary>
+    public enum PillTone { Gray, Blue, Green, Amber, Red }
+
+    /// <summary>设备行的语义胶囊 —— **纯函数**, 探针打真值表。
+    /// 关键: 有会话时**必须看会话状态**, 不能只看"slot 存在"。
+    /// 轮 33 用户反馈的两个现象都由这条规则解释:
+    ///   · 灯带被拔掉 → 会话转 DEV_LOST, 但 slot 还在 → 旧代码一律显示"运行中";
+    ///   · 托盘菜单关灯 → 会话整体消失, 状态转 STOPPED, 但当时没有刷新信号, 行还是旧的。
+    /// 判据里 `hasSlot` = 该端口归属本核心的某个会话。</summary>
+    public static (string Label, PillTone Tone) DevicePill(
+        bool hasSlot, int state, bool inUse, int devType, bool likelyOurs)
+    {
+        if (hasSlot)
+        {
+            return state switch
+            {
+                AmbientCore.StateStarting => ("连接中…", PillTone.Blue),
+                AmbientCore.StateRunning => ("运行中", PillTone.Green),
+                // 锁屏/熄屏: 串口还连着, 只是画面源不可用
+                AmbientCore.StateWaitDisp => ("屏幕不可用", PillTone.Gray),
+                // 拔线/端口消失: 会话会自动重连, 但此刻灯带确实不在位
+                AmbientCore.StateDevLost => ("灯带不在位", PillTone.Amber),
+                AmbientCore.StateError => ("异常", PillTone.Red),
+                _ => ("已停止", PillTone.Gray),
+            };
+        }
+        if (likelyOurs) return ("连接中…", PillTone.Blue);
+        if (inUse) return ("端口被占用", PillTone.Amber);
+        if (devType < 0) return ("未应答", PillTone.Amber);
+        return ("就绪", PillTone.Gray);
+    }
+
+    /// <summary>胶囊色调 → 画刷 (灰=默认底色/次要字, 其余用固定语义色对)</summary>
+    private static Border TonePill(string text, PillTone tone) => tone switch
+    {
+        PillTone.Green => Pill(text, PillGreenBg, PillGreenFg, left: 8),
+        PillTone.Amber => Pill(text, PillAmberBg, PillAmberFg, left: 8),
+        PillTone.Blue => Pill(text, PillBlueBg, PillBlueFg, left: 8),
+        PillTone.Red => Pill(text, PillRedBg, PillRedFg, left: 8),
+        _ => Pill(text, null, null, "ControlFillColorDefaultBrush", "TextFillColorSecondaryBrush", left: 8),
+    };
+
     // 每台设备一行 (§6): 类型图标 + 名称 + 语义胶囊 + 右侧动作; COM/供电/灯数下沉第二行小字。
     // 「当前」设备用左侧 3px 强调条与强调色标签标出 (与模式卡选中态同语言)。
     // sess = 该端口被本核心会话占用时的会话状态 (探测拿不到握手, 类型取自会话);
@@ -1601,11 +1682,12 @@ public partial class HomePage : Page
         bool managedHere = sess != null;
         int devType = sess?.devType ?? d.devType;
         int devId = sess?.devId ?? d.devId;
+        int sessState = sess?.state ?? AmbientCore.StateStopped;
         bool usable = managedHere || (d.devType >= 0 && d.inUse == 0);
         int slot = managedHere ? sessSlot : -1;
         bool connecting = managedHere && devType < 0;
         // 端口被占着但会话还没登记 → 极可能是"我们自己正在起"(应用启动时的那次总开启):
-        // StartEx 要先握手才返回, 而握手要先独占端口 → 这中间 `_slots` 里没有条目。
+        // 会话线程是异步起的, 握手要先独占端口 → 这中间 `_slots` 里没有条目。
         // 不区分就会在首次打开时显示"未知 · id -1 + 端口被占用"(轮 27 用户实测现象)。
         bool likelyOurs = !managedHere && d.inUse == 1
                           && (App.Instance.CoreRunning || App.Instance.Starting);
@@ -1614,13 +1696,9 @@ public partial class HomePage : Page
             : $"{devType}_{devId}";
         bool selected = usable && ConfigStore.SelectedKey == key;
 
-        // 语义胶囊: 绿=运行中 / 琥珀=端口被占用·未应答 / 灰=就绪·未在位 / 蓝=连接中
-        Border pill =
-            connecting || likelyOurs ? Pill("连接中…", PillBlueBg, PillBlueFg, left: 8)
-            : slot >= 0 ? Pill("运行中", PillGreenBg, PillGreenFg, left: 8)
-            : !managedHere && d.inUse == 1 ? Pill("端口被占用", PillAmberBg, PillAmberFg, left: 8)
-            : !managedHere && d.devType < 0 ? Pill("未应答", PillAmberBg, PillAmberFg, left: 8)
-            : Pill("就绪", null, null, "ControlFillColorDefaultBrush", "TextFillColorSecondaryBrush", left: 8);
+        // 语义胶囊 (轮 33 起口径 = 会话状态, 见 DevicePill)
+        var (pillLabel, pillTone) = DevicePill(managedHere, sessState, d.inUse == 1, devType, likelyOurs);
+        Border pill = TonePill(pillLabel, pillTone);
 
         // 类型图标**独立一列**、跨两行垂直居中 (轮 32 用户反馈: 原来它在 line1 里, 于是跟第一行
         // 文字同一水平线; 现在与"名称+胶囊"和"COM/供电/灯数"两行整体居中)。
@@ -1663,8 +1741,11 @@ public partial class HomePage : Page
         };
         line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
                                    "TextFillColorTertiaryBrush");
-        string power = managedHere && sess is { } ss
-            ? (((ss.ledStatusByte & 1) == 1) ? "供电 外接" : "供电 USB")
+        // 供电 = 灯带固件周期状态字节的 bit0 (MCU 回报, 见 AmbientCore_API.md)。
+        // **只在真的在跑时显示**: DEV_LOST 时 ledStatusByte 是上一次的残留值, 摆出来会误导。
+        long statusByte = sess?.ledStatusByte ?? 0;
+        string power = sessState == AmbientCore.StateRunning
+            ? ((statusByte & 1) == 1 ? "供电 外接" : "供电 USB")
             : "";
         // 只用查得到的配置, 不 GetOrCreate —— 光是"看一眼设备列表"不该给没见过的设备建配置文件
         string leds = managedHere && ConfigStore.Devices.TryGetValue(key, out var ds)
