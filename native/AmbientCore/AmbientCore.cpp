@@ -529,6 +529,9 @@ void CoreLoopInner(Sess* g)
         }
         for (auto& cand : candidates) {
             if (WaitStop(g, 0)) return false;                            // 停止时放弃
+            // 与 UI 的设备枚举 (serial::ProbeDevice) 串行化: 两边都会独占打开同一端口,
+            // 并发时会互相抢成"忙" → 会话误判无可用端口。见 serial.h ProbeLock 的说明。
+            std::lock_guard probeLk(serial::ProbeLock());
             if (!sp.Open(cand, c.baudRate)) {
                 ACLOGW("open %ls failed (busy or gone)", cand.c_str());
                 continue;
@@ -679,6 +682,10 @@ void CoreLoopInner(Sess* g)
                     SetDiag(g, "WARN ", "device lost: no usable port (VID_2E3C&PID_5740)");
                 phase = AC_STATE_DEV_LOST;
                 SetPhase(g, phase);
+                // 这里会 continue 跳过 §9 状态快照 —— 但"灯带被拔掉/端口消失"恰恰是最需要让 UI
+                // 知道热插拔计数器变了的时刻: 不回写的话 UI 的 DevicesChanged 永不触发,
+                // 主页设备列表就一直不刷新 (轮 32 用户反馈)。故单独补一次。
+                { std::unique_lock lk(g->stMx); g->st.deviceChanged = C->deviceChanged.load(); }
                 int delay = fastLeft > 0 ? (fastLeft--, 500) : 2000;
                 if (WaitStop(g, (DWORD)delay)) break;   // 等待期间收到停止
                 continue;

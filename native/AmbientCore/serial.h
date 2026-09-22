@@ -2,6 +2,7 @@
 #pragma once
 #include <windows.h>
 #include <stdint.h>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,14 @@ bool Handshake(SerialPort& sp, uint8_t& resp);
 
 // 独占探测: 打开→复位→握手→关闭; 返回 0=成功(resp 有效) -1=打开失败(占用/不存在) -2=握手失败
 int ProbeDevice(const std::wstring& port, uint32_t baud, uint8_t& resp);
+
+// 全局"打开端口并握手"互斥 (进程内单例)。**所有打开端口的操作都必须持有它**:
+//   ① 会话的 TryConnect (AmbientCore.cpp)  ② UI 设备枚举走的 ProbeDevice。
+// 两者会抢同一个端口: 枚举先打开 → 会话 `Open` 拿到"忙" → 全部候选失败 →
+// 报 "device lost: no usable port" 并进 DEV_LOST (约 0.5s 后才连上)。
+// 这就是"程序启动时偶现警告"的根因 —— 启动瞬间 UI 正好在枚举设备、会和自己的会话抢端口。
+// 加锁后只是**排队**(枚举占几十~几百 ms), 不会失败。
+std::mutex& ProbeLock();
 
 // 543B 全零 "Ada" 帧 (关灯帧 / 解析器复位帧)
 void BuildZeroFrame(std::vector<uint8_t>& f);

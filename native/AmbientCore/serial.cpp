@@ -146,10 +146,18 @@ bool Handshake(SerialPort& sp, uint8_t& resp)
 
 int ProbeDevice(const std::wstring& port, uint32_t baud, uint8_t& resp)
 {
+    // 与会话的 TryConnect 串行化: 否则启动瞬间 UI 枚举 + 会话握手会互相抢成"忙" (见 serial.h)
+    std::lock_guard lk(ProbeLock());
     SerialPort sp;
     if (!sp.Open(port, baud)) return -1;      // 占用或不存在
     if (!Handshake(sp, resp)) return -2;
     return 0;
+}
+
+std::mutex& ProbeLock()
+{
+    static std::mutex m;                      // 进程内单例
+    return m;
 }
 
 } // namespace serial
