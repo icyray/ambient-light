@@ -149,13 +149,15 @@ void BuildZeroFrame(std::vector<uint8_t>& f){
     f[0] = 'A'; f[1] = 'd'; f[2] = 'a';
 }
 
-bool Handshake(SerialPort& sp, uint8_t& resp)
+bool Handshake(SerialPort& sp, uint8_t& resp, HANDLE abortEvent)
 {
     std::vector<uint8_t> zeros;
     BuildZeroFrame(zeros);
     sp.Write(zeros.data(), (DWORD)zeros.size());   // 复位固件帧解析器
     Sleep(20);
     for (int attempt = 0; attempt < 3; attempt++) {
+        // 停止请求已到 → 别再把时间花在这个端口上 (调用方在 join 我们)
+        if (abortEvent && WaitForSingleObject(abortEvent, 0) == WAIT_OBJECT_0) return false;
         const uint8_t hs[3] = { 'A', 'd', '0' };
         sp.Write(hs, 3);
         Sleep(30);

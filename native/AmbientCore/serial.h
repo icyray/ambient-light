@@ -52,7 +52,10 @@ int EnumerateVidPidPorts(std::vector<ComPortInfo>& out);
 int EnumerateAllPorts(std::vector<std::wstring>& out);
 
 // 在已打开端口上执行: 全零复位帧 → "Ad0" 握手 ×3 → 应答字节
-bool Handshake(SerialPort& sp, uint8_t& resp);
+// abortEvent (可选): 每次尝试前检查一次, 已置位就立刻放弃 —— 用于"停止时尽快跳出"。
+//   没有它的话, 一个**不是灯带**的端口每次握手要 ~1.1s (实测 COM4 1122ms),
+//   而会话线程卡在这里时 AC_StopEx 的 join 会把调用方(UI 线程)一起拖住。
+bool Handshake(SerialPort& sp, uint8_t& resp, HANDLE abortEvent = nullptr);
 
 // 独占探测: 打开→复位→握手→关闭; 返回 0=成功(resp 有效) -1=打开失败(占用/不存在) -2=握手失败
 int ProbeDevice(const std::wstring& port, uint32_t baud, uint8_t& resp);

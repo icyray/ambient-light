@@ -545,7 +545,7 @@ void CoreLoopInner(Sess* g)
                 continue;
             }
             uint8_t resp = 0;
-            if (serial::Handshake(sp, resp)) {
+            if (serial::Handshake(sp, resp, g->evStop)) {
                 serialOpen = true;
                 activePort = cand;
                 {
