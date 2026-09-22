@@ -749,7 +749,7 @@ static void Run()
     bool noDup = portItems.Select(i => i.Port ?? "").Distinct(StringComparer.OrdinalIgnoreCase).Count()
                  == portItems.Count;
     Console.WriteLine((autoFirst ? "OK   " : "FAIL ") +
-                      $"第一项是「自动探测」且写回空串 = {autoFirst} (空串才会让 native 按 VID/PID 自动跟随)");
+                      $"第一项是「自动检测」且写回空串 = {autoFirst} (空串才会让 native 按 VID/PID 自动跟随)");
     Console.WriteLine((allPresent && noDup ? "OK   " : "FAIL ") +
                       $"在位端口全列出且去重 (大小写不敏感) = {allPresent && noDup}");
     Console.WriteLine((keepsConfigured ? "OK   " : "FAIL ") +
