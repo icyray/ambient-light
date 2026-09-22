@@ -12,9 +12,9 @@ public sealed class AppOptions
     public bool AutoStart { get; set; } = false;   // shell:startup 快捷方式 (M4)
     public string SelectedDevice { get; set; } = "0_1";   // 当前编辑的设备 key (M3)
     public bool BannerGlow { get; set; } = true;          // 主页 banner 底边辉光 (M5.1 §4, 实验开关)
-    /// <summary>主题 (M5.2): "system"(默认, 跟随系统) / "light" / "dark"。
+    /// <summary>主题 (M5.2): "dark"(默认) / "light" / "system"(跟随系统)。
     /// 未知值一律按 system 处理 (见 ThemeService.Parse, 永不抛)。</summary>
-    public string Theme { get; set; } = "system";
+    public string Theme { get; set; } = "dark";
     /// <summary>拾色器的自定义色槽 (轮 29): 记住最近调出来的颜色, 最新的在前, 最多 5 个。
     /// 只存非预设色 —— 预设本身就在列表里, 再记一遍没意义。</summary>
     public List<string> CustomColors { get; set; } = [];
