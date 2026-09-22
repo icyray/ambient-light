@@ -729,7 +729,15 @@ public partial class HomePage : Page
 
         // 按钮 = "有没有会话", 与 OnToggle 的判定同一个口径 → 标签和动作永远一致。
         // 连接中断时会话仍在 (核心每 2s 自动重连), 所以按钮是"关闭": 按下即打断重连, 回到未连接态 (轮 19)
-        ToggleBtn.Content = App.Instance.CoreRunning ? "关闭" : "开启";
+        //
+        // 轮 34 补 4 (用户要求): 关闭后**收尾没完不许点开启**。native 的 StopEx 要 join 会话线程,
+        // 而线程可能正卡在握手一个错误端口上 (实测 1~5s) —— 以前靠 OnToggle 里 600ms 延时放开,
+        // 于是"端口还没释放"就能点开启。现在改成由轮询统一裁决:
+        //   禁用 = 正在处理这次点击 || 启动任务在飞 || 队列里还有没跑完的生命周期调用 (收尾中)
+        // 标签也顺便说实话: 收尾期间显示「关闭中…」(否则按钮写着"开启"却是灰的, 像卡死)。
+        ToggleBtn.Content = App.Instance.CoreRunning ? "关闭"
+            : App.Instance.LifecycleBusy ? "关闭中…" : "开启";
+        ToggleBtn.IsEnabled = ToggleEnabled(_toggling, App.Instance.Starting, App.Instance.LifecycleBusy);
 
         PortText.Text = st.state == AmbientCore.StateStopped && !App.Instance.CoreRunning
             ? "未连接设备"
@@ -1333,14 +1341,24 @@ public partial class HomePage : Page
     /// 用户看到的还是"运行中"。</summary>
     private void OnCoreStateChanged(int oldState, int newState) => _ = RefreshDevicesAsync();
 
+    /// <summary>总开关按钮此刻能不能点 —— **纯函数**, 探针打真值表。
+    /// 轮 34 补 4 (用户要求): 关闭后**收尾没完不许点开启**。native 的 `StopEx` 要 join 会话线程,
+    /// 而线程可能正卡在握手一个错误端口上 (实测 1~5s) —— 以前靠 OnToggle 里的 600ms 延时放开,
+    /// 于是"端口还没释放"就能点开启。现在的口径:
+    ///   禁用 = 正在处理这次点击 (`toggling`) || 启动任务在飞 (`starting`)
+    ///          || 队列里还有没跑完的生命周期调用 (`lifecycleBusy` = 收尾中)
+    /// 收尾期间按钮文案显示「关闭中…」, 而不是灰着的"开启" (那看着像卡死)。</summary>
+    public static bool ToggleEnabled(bool toggling, bool starting, bool lifecycleBusy)
+        => !toggling && !starting && !lifecycleBusy;
+
     // ---- 总开关 (状态卡与多设备列表同步: 开关后延时刷新, 等会话端口/状态回填) ----
-    // 暂停期间整个流程持锁 + 按钮禁用: 快速连点会连发 Start/Stop, 核心侧留下
-    // "device lost: no usable port" 之类的残留诊断 (轮 16 用户反馈)
+    // 暂停期间整个流程持锁 + 按钮禁用 (禁用现在由轮询统一裁决, 见 UpdateBanner/OnPolled 里那条 ——
+    // 收尾没完 (App.LifecycleBusy) 或启动任务在飞时按钮保持灰):
+    //   快速连点会连发 Start/Stop, 核心侧留下 "device lost: no usable port" 之类的残留诊断 (轮 16 用户反馈)
     private async void OnToggle(object sender, RoutedEventArgs e)
     {
         if (_toggling) return;
-        _toggling = true;
-        ToggleBtn.IsEnabled = false;
+        _toggling = true;                       // 轮询据此立刻禁用按钮
         try
         {
             if (App.Instance.CoreRunning)
@@ -1359,11 +1377,12 @@ public partial class HomePage : Page
             }
             await Task.Delay(600);              // 等会话端口/状态回填再刷设备列表
             _ = RefreshDevicesAsync();
+            // 关闭场景不用在这里死等 native 收尾: 按钮的禁用/放开由轮询裁决
+            // (条件里有 App.LifecycleBusy) → 收尾期间保持「关闭中…」的灰态, 收尾完自动放开。
         }
         finally
         {
-            _toggling = false;
-            ToggleBtn.IsEnabled = true;
+            _toggling = false;                  // 之后的禁用/放开交给轮询裁决
         }
     }
 

@@ -130,12 +130,24 @@ public partial class App : Application
     //      发起开启, 照样会卡。
     // 串行链保证"调用顺序 = 执行顺序"(native 侧还有 g_lifeMx 兜第二层), 而 UI 立刻返回。
     private static Task _lifecycle = Task.CompletedTask;
+    private static int _lifecycleBusy;
 
-    private static Task QueueLifecycle(Action job) => _lifecycle = _lifecycle.ContinueWith(_ =>
+    /// <summary>队列里还有没执行完的 native 生命周期调用 (开启 / 关闭的收尾)。
+    /// UI 用它决定"总开关"按钮能不能点 —— 收尾没完就点开启, native 那边要排队等 `g_lifeMx`,
+    /// 观感像"点了没反应"。计数在**入队时**加、任务结束时减 (不是任务开始时加),
+    /// 否则从"点下按钮"到"任务真的开跑"之间有一瞬间是 false, 轮询会误判成可以点。</summary>
+    public bool LifecycleBusy => Volatile.Read(ref _lifecycleBusy) > 0;
+
+    private static Task QueueLifecycle(Action job)
     {
-        try { job(); }
-        catch (Exception ex) { WriteCrashLog("核心生命周期调用", ex, terminating: false); }
-    }, TaskScheduler.Default);
+        Interlocked.Increment(ref _lifecycleBusy);
+        return _lifecycle = _lifecycle.ContinueWith(_ =>
+        {
+            try { job(); }
+            catch (Exception ex) { WriteCrashLog("核心生命周期调用", ex, terminating: false); }
+            finally { Interlocked.Decrement(ref _lifecycleBusy); }
+        }, TaskScheduler.Default);
+    }
 
     /// <summary>建会话。**不阻塞 UI**: native 调用排队到后台; 结果通过 `_slots` / 诊断反映。</summary>
     public void StartDevice(string key) => _ = StartDeviceAsync(key);
