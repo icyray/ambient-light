@@ -118,7 +118,30 @@ public partial class App : Application
 
     public string? KeyOf(int slot) => _slots.TryGetValue(slot, out var k) ? k : null;
 
-    public bool StartDevice(string key)
+    // ---- 核心生命周期调用: 一律走后台**串行链** (轮 34 补 3) --------------------------
+    // 为什么不能直接在 UI 线程上调:
+    //   ① `AC_StopEx` = `SetEvent(evStop)` + **join(会话线程)** —— 而会话线程可能正卡在
+    //      "打开/握手一个不是灯带的端口"上。实测 (native 侧那个诊断工具):
+    //        COM4 (在位但不是灯带):  握手失败要 1122ms
+    //        COM3 (在位但打不开):    光 CreateFile 就 5183ms
+    //        COM5 (灯带):            146ms
+    //      于是"点关闭 → UI 无响应 2s"就是这么来的 (用户实测反馈)。
+    //   ② `AC_StartEx` 会先抢 native 的 `g_lifeMx` —— 上一次 Stop 还在 join 时在 UI 线程上
+    //      发起开启, 照样会卡。
+    // 串行链保证"调用顺序 = 执行顺序"(native 侧还有 g_lifeMx 兜第二层), 而 UI 立刻返回。
+    private static Task _lifecycle = Task.CompletedTask;
+
+    private static Task QueueLifecycle(Action job) => _lifecycle = _lifecycle.ContinueWith(_ =>
+    {
+        try { job(); }
+        catch (Exception ex) { WriteCrashLog("核心生命周期调用", ex, terminating: false); }
+    }, TaskScheduler.Default);
+
+    /// <summary>建会话。**不阻塞 UI**: native 调用排队到后台; 结果通过 `_slots` / 诊断反映。</summary>
+    public void StartDevice(string key) => _ = StartDeviceAsync(key);
+
+    /// <summary>内部用 (总开启): 需要知道是否真的建起来了。</summary>
+    private async Task<bool> StartDeviceAsync(string key)
     {
         if (SlotOf(key) >= 0) return true;
         int slot = -1;
@@ -132,7 +155,12 @@ public partial class App : Application
             return false;
         }
         var cfg = ConfigStore.GetOrCreate(key).ToCoreConfig();
-        int rc = Interop.AmbientCore.StartEx(slot, ref cfg);
+        int rc = 0;
+        await QueueLifecycle(() =>
+        {
+            var c = cfg;                       // ref 参数不能跨 lambda → 链内复制一份
+            rc = Interop.AmbientCore.StartEx(slot, ref c);
+        });
         if (rc != Interop.AmbientCore.ErrOk)
         {
             string reason = rc switch
@@ -145,26 +173,42 @@ public partial class App : Application
                 $"启动 {key} 失败: {reason}\n{Interop.AmbientCore.LastDiagEx(slot)}", closeText: "知道了");
             return false;
         }
-        _slots[slot] = key;
+        _slots[slot] = key;                    // await 之后回到 UI 线程 → 字典访问安全
         UpdateTrayToggle();
         return true;
     }
 
+    /// <summary>关灯。**先把 `_slots` 清掉让 UI 立刻反映"已停"**, native 的收尾 (join 会话线程,
+    /// 最长可达数秒 —— 见 QueueLifecycle 的注释) 丢到后台串行链上。</summary>
     public void StopDevice(string key)
     {
         int slot = SlotOf(key);
         if (slot < 0) return;
-        Interop.AmbientCore.StopEx(slot);
         _slots.Remove(slot);
         UpdateTrayToggle();
+        _ = QueueLifecycle(() => Interop.AmbientCore.StopEx(slot));
     }
 
     public void StopAllDevices()
     {
         foreach (var slot in _slots.Keys.ToList())
         {
-            Interop.AmbientCore.StopEx(slot);
+            int s = slot;                                   // 闭包捕获 (别捕获循环变量本身)
+            _slots.Remove(s);
+            _ = QueueLifecycle(() => Interop.AmbientCore.StopEx(s));
+        }
+        UpdateTrayToggle();
+    }
+
+    /// <summary>退出路径专用: **同步**等 native 收尾 (那时没有 UI 可卡, 而且必须确保真的关灯 +
+    /// 释放端口)。先把在飞的生命周期调用等掉, 免得"队列里还排着一次开启"把灯又点起来。</summary>
+    private void StopAllDevicesBlocking()
+    {
+        try { _lifecycle.Wait(3000); } catch { /* 超时也继续 */ }
+        foreach (var slot in _slots.Keys.ToList())
+        {
             _slots.Remove(slot);
+            Interop.AmbientCore.StopEx(slot);
         }
         UpdateTrayToggle();
     }
@@ -201,13 +245,13 @@ public partial class App : Application
             foreach (var d in usable)
             {
                 var key = $"{d.devType}_{d.devId}";
-                if (ConfigStore.GetOrCreate(key).AutoStartCore && StartDevice(key))
+                if (ConfigStore.GetOrCreate(key).AutoStartCore && await StartDeviceAsync(key))
                     any = true;
             }
             // 用户明确点了"开启": 只要选中设备这次枚举到且可用就直接开 —— AutoStartCore 管的是
             // "应用启动时自动连", 不该拦住手动开启 (否则会出现"点了没反应、也不说为什么")
             if (!any && usable.Any(d => $"{d.devType}_{d.devId}" == ConfigStore.SelectedKey))
-                any = StartDevice(ConfigStore.SelectedKey);
+                any = await StartDeviceAsync(ConfigStore.SelectedKey);
 
             if (!any) LastStartProblem = DescribeNoStart(devices);
         }
@@ -399,13 +443,14 @@ public partial class App : Application
     private void ExitApp()
     {
         if (_main != null) _main.AllowClose = true;
-        StopAllDevices();
+        // 关灯交给 OnExit 的**同步**版: 这里调异步版会"窗口先没了、native 还在后台收尾",
+        // 用户看到的是托盘图标消失但进程残留 (还可能被随后的 StartEx 抢回去)。
         Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        StopAllDevices();
+        StopAllDevicesBlocking();
         Services.ThemeService.Detach();   // M5.2: SystemEvents 是静态事件, 不退订会吊着它的隐藏窗口
         if (ConfigStore.ConfigDir.Length > 0)
         {
