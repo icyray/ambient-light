@@ -1032,12 +1032,13 @@ static void Run()
     Console.WriteLine();
     Console.WriteLine("---- 轮 34 补 5: 设备行端口文案 (显示\"实际会用的口\") ----");
     // 用户反馈: 高级页给某台手动指定了 COM4 后, 设备行仍显示枚举到的 COM5, 点开启却去连 COM4。
-    // 规则: 会话端口 > 配置端口(标\"手动指定\") > 枚举端口。
+    // 规则: **手动指定优先** (它是"必须用它") > 会话端口 > 枚举端口。
     var portCases = new (string? Sess, string? Cfg, string? Enum, string Text, bool Manual, string Desc)[]
     {
-        ("COM5", "COM4", "COM5", "COM5", false, "有会话 → 以会话端口为准 (即使配置里写了别的)"),
-        ("", "COM4", "COM5", "COM4 (手动指定)", true, "无会话 + 手动指定 → 配置端口 + 标记"),
-        ("", "", "COM5", "COM5", false, "无会话 + 没指定 → 枚举端口"),
+        ("COM5", "COM4", "COM5", "COM4 (手动指定)", true, "手动指定 + 有会话 → 仍以配置为准 (会话口只是此刻在用)"),
+        ("", "COM4", "COM5", "COM4 (手动指定)", true, "手动指定 + 无会话"),
+        ("COM5", "", "COM5", "COM5", false, "没指定 → 会话端口"),
+        ("", "", "COM5", "COM5", false, "没指定 + 无会话 → 枚举端口"),
         (null, "   ", "COM6", "COM6", false, "全空白配置视为未指定"),
     };
     foreach (var c in portCases)
@@ -1046,6 +1047,32 @@ static void Run()
         bool ok = text == c.Text && manual == c.Manual;
         Console.WriteLine((ok ? "OK   " : "FAIL ") +
                           $"{c.Desc} → \"{text}\" (标记 {manual}), 期望 \"{c.Text}\" ({c.Manual})");
+    }
+
+    // ★ **接线断言** (轮 33 的教训: 断言了常量没断言控件, 于是空下拉漏到用户手里):
+    //   光验纯函数不够 —— 真正的 bug 是调用点把"配置里的端口"多套了一个 managedHere 条件,
+    //   导致**无会话时永远显示枚举端口**。这里真的建一行, 看第二行文字是什么。
+    const string probeKey = "9_3";                       // 用个不会被选中的 key, 免得影响别的断言
+    AmbientLight.Services.ConfigStore.Devices[probeKey] =
+        new AmbientLight.Services.DeviceSettings { ComPort = "COM4" };
+    try
+    {
+        // 注: `ACDeviceInfo.comPort` 是 fixed byte 缓冲, 托管侧没法直接赋字符串 → 这里留空。
+        // 不影响断言意图: 若调用点漏传配置端口, 第二行会是**空的** (没有枚举端口可回落),
+        // 而不是 "COM4 (手动指定)" —— 正是用户看到的那两种情况。
+        var devRow = home.BuildDeviceRow(new ACDeviceInfo
+        {
+            devType = 9, devId = 3, inUse = 0,
+        }, sess: null, sessSlot: -1);
+        var texts = LogicalDescendants(devRow).OfType<TextBlock>().Select(t => t.Text).ToArray();
+        bool wired = texts.Any(t => t.Contains("COM4 (手动指定)"));
+        Console.WriteLine((wired ? "OK   " : "FAIL ") +
+                          $"设备行(无会话)第二行真的显示了配置端口 = {wired} · 行内文字: " +
+                          string.Join(" | ", texts.Where(t => t.Length > 0)));
+    }
+    finally
+    {
+        AmbientLight.Services.ConfigStore.Devices.Remove(probeKey);
     }
 
     Console.WriteLine();

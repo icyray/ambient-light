@@ -1697,20 +1697,22 @@ public partial class HomePage : Page
     }
 
     /// <summary>设备行第二行的**端口**文案 —— 纯函数, 探针打真值表 (轮 34 补 5)。
-    /// 要显示的是"**实际会用到**的那个口", 而不是"枚举出来的那个口":
-    ///   ① 有会话且会话报出了端口 → 用它 (核心**正在用**的事实, 优先级最高);
-    ///   ② 该设备配置里手动指定了端口 → 配置端口 + 「手动指定」标记 (点开启就会连它);
-    ///   ③ 否则 → 枚举端口 (自动探测: 两台同型号时"谁先被占谁先分", 所以它只代表"可能连的那个")。
-    /// 为什么要区分 ②③: 以前无条件显示枚举端口, 于是"高级页给这台指定了 COM4"时,
+    /// 要显示的是"**实际会用到**的那个口":
+    ///   ① **配置里手动指定了** → 配置端口 + 「手动指定」标记 (优先级最高 —— 它是"必须用它";
+    ///      会话端口只是"此刻恰好在用它": 改了端口后 native 会关掉当前口重连,
+    ///      所以显示配置端口才是用户接下来会看到的结果; 也免得"刚改完端口, 行里还写着旧口");
+    ///   ② 没指定但**有会话** → 会话端口 (核心正在用的事实);
+    ///   ③ 都没有 → 枚举端口 (自动探测: 两台同型号时"谁先被占谁先分", 它只代表"可能连的那个")。
+    /// 为什么必须有 ②③ 的区分: 以前无条件显示枚举端口, 于是"高级页给这台指定了 COM4"时,
     /// 行里写着 COM5、点开启却去连 COM4 —— **界面在说谎** (用户实测反馈)。
     /// 注: 端口是**每设备**配置 (高级页改的是当前选中那台), 不是全局设置。</summary>
     public static (string Text, bool Manual) PortLabel(
         string? sessionPort, string? configuredPort, string? enumeratedPort)
     {
-        string sess = sessionPort?.Trim() ?? "";
-        if (sess.Length > 0) return (sess, false);
         string cfg = configuredPort?.Trim() ?? "";
         if (cfg.Length > 0) return ($"{cfg} (手动指定)", true);
+        string sess = sessionPort?.Trim() ?? "";
+        if (sess.Length > 0) return (sess, false);
         return (enumeratedPort?.Trim() ?? "", false);
     }
 
@@ -1729,7 +1731,9 @@ public partial class HomePage : Page
     // sess = 该端口被本核心会话占用时的会话状态 (探测拿不到握手, 类型取自会话);
     // sessSlot = 那个会话的 slot —— 会话刚起时 devType 还没回填 (=-1), 组不出正确的设备 key,
     // 必须用 slot 反查 (否则"连接中"那一行点开启会去 StartDevice("-1_-1"))。
-    private UIElement BuildDeviceRow(ACDeviceInfo d, ACStatus? sess, int sessSlot)
+    // **public 是给探针用的**: 第二行的端口文案要断"接线"(配置里的端口有没有真的传到行里) ——
+    // 纯函数真值表挡不住调用点写错 (轮 34 补 5 就是调用点多套了一个 managedHere 条件)。
+    public UIElement BuildDeviceRow(ACDeviceInfo d, ACStatus? sess, int sessSlot)
     {
         bool managedHere = sess != null;
         int devType = sess?.devType ?? d.devType;
@@ -1809,9 +1813,10 @@ public partial class HomePage : Page
         string leds = managedHere && hasCfg ? $"{ds.LedCount} 灯" : "";
         // 端口显示**实际会用的那个** (轮 34 补 5): 以前无条件显示枚举端口, 于是在
         // "高级页给这台手动指定了别的口"时, 行里写着 COM5、点开启却去连 COM4 —— 界面在说谎。
-        // 规则见 PortLabel (纯函数, 探针打真值表)。
-        var portLabel = PortLabel(sess?.ComPort, managedHere && hasCfg ? ds!.ComPort : "",
-                                  d.ComPort);
+        // ⚠️ 查配置**不能**加 managedHere 条件 (那曾是个真 bug): 手动指定端口的场合里,
+        // "还没开会话"恰恰是最常见的状态 —— 加上它就等于"无会话时永远显示枚举端口"。
+        // 规则见 PortLabel (纯函数, 探针真值表 + 一条接线断言)。
+        var portLabel = PortLabel(sess?.ComPort, hasCfg ? ds!.ComPort : "", d.ComPort);
         line2.Text = string.Join(" · ",
             new[] { portLabel.Text, power, leds }.Where(s => s.Length > 0));
         // 手动指定 → 这一行给个警示色的点, 免得"端口是设过的"这件事被忽略 (只在真的不同/指定了时才标)
