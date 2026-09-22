@@ -43,6 +43,10 @@ public static class ThemeService
     /// <summary>当前配置的选择 (未知值 → 跟随系统)。</summary>
     public static ThemeChoice Current => Parse(ConfigStore.App.Theme);
 
+    /// <summary>当前**生效**的是不是深色主题 (真实来源 = 已应用的资源字典, 不是配置)。
+    /// 高对比度按深色处理 (见 ResolveForApply): 我们的自定义色板不为 HC 适配。</summary>
+    public static bool IsDark => ApplicationThemeManager.GetAppTheme() != ApplicationTheme.Light;
+
     // ---- 纯函数 (探针打真值表) -------------------------------------------
 
     /// <summary>json 值 → 枚举。空/未知/大小写/前后空白一律落到**跟随系统**, 永不抛。</summary>

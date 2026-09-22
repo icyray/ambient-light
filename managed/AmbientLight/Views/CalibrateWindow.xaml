@@ -36,7 +36,9 @@
                 </Grid>
                 <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Opacity="0.85"
                            Text="灯带需处于「屏幕追光」模式。用「左移/右移」直接移动物理灯带的颜色, 使每颗灯的颜色与它所在象限一致 —— 以屏幕四色的分界线为准对齐。中间示意图是标准序号参照 (不随偏移移动): 每格 = 该序号 LED 应在的位置与象限颜色, 序号范围见下方。" />
-                <Separator Margin="0,12" />
+                <!-- 分隔线用**本地白 alpha**而不是 ui:Separator (M5.2): Separator 的描边走主题资源,
+                     浅色主题下会变成一条深色线压在 #E6141418 的深面板上。 -->
+                <Border Height="1" Margin="0,12" Background="#33FFFFFF" />
 
                 <TextBlock x:Name="SchemeText" Text="" Opacity="0.75" />
                 <TextBlock x:Name="ResText" Text="" Opacity="0.75" Margin="0,4,0,0" />

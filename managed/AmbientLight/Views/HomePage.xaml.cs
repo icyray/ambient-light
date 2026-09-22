@@ -19,6 +19,7 @@ using System.Windows.Threading;
 using AmbientLight.Controls;
 using AmbientLight.Interop;
 using AmbientLight.Services;
+using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace AmbientLight.Views;
@@ -105,6 +106,10 @@ public partial class HomePage : Page
         // 轮 33: 会话状态变化也要刷设备行 —— 托盘菜单开关、灯带物理断开都不经过主页的按钮,
         // 主页自己收不到信号。状态是**边沿触发**的 (只在真的变了时来一次), 不会造成刷新风暴。
         App.Instance.Poller.StateChanged += OnCoreStateChanged;
+        // M5.2: 主题热切换后, 页内几处 **code-behind 一次性赋值** 的主题刷 (banner 文字/胶囊、
+        // 设备行的语义色对、固件磁贴图标色) 不会自己更新 —— 它们的容器靠 DynamicResource 是自动的,
+        // 但"当时取到的那个刷子实例"不是。所以这里做一次"重取 + 重建"(全部幂等且便宜)。
+        ApplicationThemeManager.Changed += OnAppThemeChanged;
 
         BuildModeGrid();
         var dev = ConfigStore.Device;
@@ -128,9 +133,26 @@ public partial class HomePage : Page
         App.Instance.Poller.Polled -= OnPolled;
         App.Instance.Poller.DevicesChanged -= OnDevicesChanged;
         App.Instance.Poller.StateChanged -= OnCoreStateChanged;
+        ApplicationThemeManager.Changed -= OnAppThemeChanged;
         StopGlowTimer();
         _lastPolledState = -1;
     }
+
+    /// <summary>M5.2 主题切换后的"重取 + 重建"。见 OnLoaded 里的说明。
+    /// 复位那两个签名, 否则 ApplyBannerLook / CrossFadeStreak 会因为"看起来没变"而短路不刷色。</summary>
+    private void OnAppThemeChanged(ApplicationTheme theme, Color accent)
+        => Dispatcher.BeginInvoke(() =>
+        {
+            if (!_loaded) return;
+            _lastBannerLook = long.MinValue;
+            _lastStreakKey = null;
+            _metricsSig = "\0";                   // 指标条的字色也是 code-behind 赋的, 重建一次
+            ApplyBannerLook(_lastPolledState < 0 ? AmbientCore.StateStopped : _lastPolledState,
+                            ConfigStore.Device.ModeIndex, animate: false);
+            BuildModeGrid();                      // 固件磁贴图标的 Foreground 是构造期取的主题刷
+            RefreshMonitors();
+            _ = RefreshDevicesAsync();            // 设备行的语义胶囊随深/浅换套
+        });
 
     /// <summary>盯着"选中会话的身份何时回填"。会话刚起时 `devType` 还是 -1、`ComPort` 还空着,
     /// 那会儿刷出来的设备行只能是"读取中…"; 等它回填了就要再刷一遍, 行才会变成
@@ -1074,10 +1096,14 @@ public partial class HomePage : Page
     /// <summary>胶囊的文案与配色。未点亮时还分三种情况, 都要"看得出问题但不算开启":
     /// ① 开启失败 (无会话) → 警示色 + 失败原因 (轮 18 ③);
     /// ② 有会话但没在驱动灯带 (DEV_LOST=正在重连 / ERROR) → 用该状态自己的颜色;
-    /// ③ 真的停了 → 主题次色 + "已停止"。</summary>
+    /// ③ 真的停了 → 主题次色 + "已停止"。
+    /// **M5.2 口径**: 点亮 = banner 恒深色 (D1) → 固定深色套; 未点亮 = banner 露出卡片底色
+    /// (浅色主题下就是浅底) → 按当前主题取浅色套, 否则浅底上写浅色字会看不见。
+    /// ①③ 用的是主题资源刷色 (Caution/TextFillColor*), 本来就随主题走。</summary>
     private (string Label, Color Dot, Color Text) PillLook(int state)
     {
-        if (!IsLit(state))
+        bool lit = IsLit(state);
+        if (!lit)
         {
             if (_block is { } b) return (b.Label, CautionColor(), CautionColor());
             if (state == AmbientCore.StateStopped)
@@ -1085,7 +1111,7 @@ public partial class HomePage : Page
                         ThemeColor("TextFillColorTertiaryBrush", Rgb(0x9A, 0x9A, 0x9A)),
                         ThemeColor("TextFillColorSecondaryBrush", Rgb(0xC9, 0xC9, 0xC9)));
         }
-        var (dot, text) = StateColors(state);
+        var (dot, text) = ThemePalette.StateOf(state, lit || ThemeService.IsDark);
         return (StateLabel(state), dot, text);
     }
 
@@ -1170,17 +1196,6 @@ public partial class HomePage : Page
         AmbientCore.StateDevLost => "正在尝试重连",
         AmbientCore.StateError => "错误",
         _ => "已停止",
-    };
-
-    /// <summary>状态 → 胶囊圆点/文字色 (仅在点亮时用)</summary>
-    private static (Color Dot, Color Text) StateColors(int state) => state switch
-    {
-        AmbientCore.StateRunning => (Rgb(0x2D, 0xC0, 0x8A), Rgb(0x8C, 0xE8, 0xC2)),
-        AmbientCore.StateStarting => (Rgb(0x4C, 0x8D, 0xFF), Rgb(0xA9, 0xD8, 0xFF)),
-        AmbientCore.StateWaitDisp => (Rgb(0xF0, 0xA0, 0x2E), Rgb(0xF6, 0xCE, 0x92)),
-        AmbientCore.StateDevLost => (Rgb(0xF0, 0xA0, 0x2E), Rgb(0xF6, 0xCE, 0x92)),
-        AmbientCore.StateError => (Rgb(0xE2, 0x4B, 0x4A), Rgb(0xF2, 0xA9, 0xA9)),
-        _ => (Rgb(0x9A, 0x9A, 0x9A), Rgb(0xC9, 0xC9, 0xC9)),
     };
 
     /// <summary>模式 → 光带色系 (追光=蓝 / 拾音=绿 / 纯色=紫 / 固件特效=中性白灰)。
@@ -1411,21 +1426,19 @@ public partial class HomePage : Page
         _brightnessSaveTimer.Start();
     }
 
-    // ---- 设备 / 显示器 -------------------------------------------------
+    /// <summary>设备 / 显示器 -------------------------------------------------
     private void OnRefreshDevices(object sender, RoutedEventArgs e) => _ = RefreshDevicesAsync();
 
     private void OnRefreshMonitorsClick(object sender, RoutedEventArgs e) => RefreshMonitors();
 
-    /// <summary>语义胶囊 (与 banner 同一色板): 绿=运行中 / 琥珀=端口被占用·未应答 / 灰=未在位 /
-    /// 强调=当前 / 蓝=连接中</summary>
-    private static readonly SolidColorBrush PillGreenBg = Frozen(Color.FromArgb(0x2E, 0x2D, 0xC0, 0x8A));
-    private static readonly SolidColorBrush PillGreenFg = Frozen(Color.FromRgb(0x8C, 0xE8, 0xC2));
-    private static readonly SolidColorBrush PillAmberBg = Frozen(Color.FromArgb(0x2E, 0xF0, 0xA0, 0x2E));
-    private static readonly SolidColorBrush PillAmberFg = Frozen(Color.FromRgb(0xF6, 0xCE, 0x92));
-    private static readonly SolidColorBrush PillBlueBg = Frozen(Color.FromArgb(0x2E, 0x4C, 0x8D, 0xFF));
-    private static readonly SolidColorBrush PillBlueFg = Frozen(Color.FromRgb(0xA9, 0xD8, 0xFF));
-    private static readonly SolidColorBrush PillRedBg = Frozen(Color.FromArgb(0x2E, 0xE2, 0x4B, 0x4A));
-    private static readonly SolidColorBrush PillRedFg = Frozen(Color.FromRgb(0xF5, 0xB0, 0xAF));
+    // 语义胶囊配色 (M5.2): 落在**卡片底**上 → 按当前主题取深/浅两套 (banner 那套由 PillLook 管,
+    // 它点亮时不看主题、恒用深色套)。见 Services/ThemePalette.cs。
+    private static ToneColors ToneBrush(Tone tone) => ThemePalette.Of(tone, ThemeService.IsDark);
+
+    /// <summary>语义色对 (M5.2, 随主题深浅) 的胶囊 —— 与下面那个"指定画刷/资源键"的版本共存,
+    /// 用具名 `left:` 调用时不会歧义 (那个版本 bg/fg 都是必填位置参数)。</summary>
+    private static Border Pill(string text, ToneColors colors, double left = 0)
+        => Pill(text, Frozen(colors.Background), Frozen(colors.Foreground), left: left);
 
     private static Border Pill(string text, Brush? bg, Brush? fg,
                                string? bgKey = null, string? fgKey = null, double left = 0)
@@ -1521,7 +1534,7 @@ public partial class HomePage : Page
         if (m.primary != 0)
             marks.Children.Add(Pill("主屏", null, null, "ControlFillColorDefaultBrush", "TextFillColorSecondaryBrush"));
         if (capturing)
-            marks.Children.Add(Pill("正在采集", PillBlueBg, PillBlueFg, left: 6));
+            marks.Children.Add(Pill("正在采集", ToneBrush(Tone.Blue), left: 6));
 
         var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1662,13 +1675,13 @@ public partial class HomePage : Page
         return ("就绪", PillTone.Gray);
     }
 
-    /// <summary>胶囊色调 → 画刷 (灰=默认底色/次要字, 其余用固定语义色对)</summary>
+    /// <summary>胶囊色调 → 画刷 (灰=默认底色/次要字, 其余用语义色对; 色对随主题深浅)</summary>
     private static Border TonePill(string text, PillTone tone) => tone switch
     {
-        PillTone.Green => Pill(text, PillGreenBg, PillGreenFg, left: 8),
-        PillTone.Amber => Pill(text, PillAmberBg, PillAmberFg, left: 8),
-        PillTone.Blue => Pill(text, PillBlueBg, PillBlueFg, left: 8),
-        PillTone.Red => Pill(text, PillRedBg, PillRedFg, left: 8),
+        PillTone.Green => Pill(text, ToneBrush(Tone.Green), left: 8),
+        PillTone.Amber => Pill(text, ToneBrush(Tone.Amber), left: 8),
+        PillTone.Blue => Pill(text, ToneBrush(Tone.Blue), left: 8),
+        PillTone.Red => Pill(text, ToneBrush(Tone.Red), left: 8),
         _ => Pill(text, null, null, "ControlFillColorDefaultBrush", "TextFillColorSecondaryBrush", left: 8),
     };
 

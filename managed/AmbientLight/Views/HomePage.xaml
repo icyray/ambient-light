@@ -301,8 +301,9 @@
                     <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="8,0,4,0">
                         <Border x:Name="SolidPreview" Width="32" Height="32" CornerRadius="6"
-                                Background="#FFE1D6" BorderBrush="#3A3A44" BorderThickness="1"
-                                VerticalAlignment="Center" />
+                                Background="#FFE1D6"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1" VerticalAlignment="Center" />
                         <ui:TextBox x:Name="HexBox" Width="90" Text="#FFE1D6" MaxLength="9"
                                     VerticalAlignment="Center" TextChanged="OnHexChanged" Margin="8,0,0,0" />
                     </StackPanel>
