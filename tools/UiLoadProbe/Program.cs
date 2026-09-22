@@ -893,6 +893,24 @@ static void Run()
     }
     AmbientLight.Services.ConfigStore.App.Theme = themeKeyBefore;
 
+    // 系统偏好监听 (SystemEvents 是**静态**事件): 挂/摘必须幂等。
+    // 摘不掉 = 那个隐藏窗口吊着进程, 用户点"退出"后进程不消失 (M5.2 用 Attach/Detach 包起来的原因)。
+    bool hookOk = true;
+    try
+    {
+        var hookWin = new AmbientLight.Views.MainWindow();
+        AmbientLight.Services.ThemeService.Attach(hookWin);
+        AmbientLight.Services.ThemeService.Attach(hookWin);   // 重复挂: 不应重复订阅
+        AmbientLight.Services.ThemeService.Detach();
+        AmbientLight.Services.ThemeService.Detach();          // 没挂就摘: 不应抛
+    }
+    catch (Exception ex)
+    {
+        hookOk = false;
+        Console.WriteLine($"INFO 挂/摘异常: {ex.GetType().Name}: {ex.Message}");
+    }
+    Console.WriteLine((hookOk ? "OK   " : "FAIL ") + $"主题服务的系统监听可重复挂/摘 (幂等不抛) = {hookOk}");
+
     Console.WriteLine();
     Console.WriteLine("---- M5.2 主题: 语义色板对比度 (浅色主题写浅色字就翻在这条) ----");
     // 可计算的不变量: 胶囊前景色 vs **它实际落到的底色** 的 WCAG 对比度必须 ≥ 3.0
