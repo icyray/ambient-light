@@ -79,7 +79,7 @@
              或"端口被别的程序占着"时用。默认全是自动, 不动就不会有副作用。 -->
         <TextBlock Style="{StaticResource GroupLabel}" Text="连接" />
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon UsbPlug24}" Title="端口"
-                             Description="自动探测按 VID_2E3C &amp; PID_5740 找; 手动指定用于换芯片/桥接/多灯带">
+                             Description="自动检测按 VID_2E3C &amp; PID_5740 找; 手动指定用于换芯片/桥接/多灯带">
             <StackPanel Orientation="Horizontal">
                 <ui:Button x:Name="RefreshPortsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
                            ToolTip="重新枚举" Margin="8,0,8,0" VerticalAlignment="Center"

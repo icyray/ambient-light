@@ -15,27 +15,29 @@ public partial class SettingsPageAdvanced : Page
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
     // ---- 连接: 端口 / 波特率 (§8.3) --------------------------------------
-    /// <summary>波特率候选 (值)。CDC 虚拟串口下这个值通常被设备端忽略 (实测对波特率不敏感),
-    /// 保留给 USB 转串口桥接或旧固件; 默认 2000000 与厂商一致。</summary>
-    public static readonly int[] BaudChoices = [2000000, 115200, 57600, 9600];
+    /// <summary>波特率候选 (值) —— **与厂商同一套** (115200/57600/38400/28800/19200/14400/9600),
+    /// 默认 2000000 排首位。CDC 虚拟串口下这个值通常被设备端忽略 (实测对波特率不敏感),
+    /// 保留给 USB 转串口桥接或旧固件。</summary>
+    public static readonly int[] BaudChoices =
+        [2000000, 115200, 57600, 38400, 28800, 19200, 14400, 9600];
 
     /// <summary>波特率下拉的显示文案 —— 与 `BaudChoices` **同序同长**。
     /// ⚠️ 轮 33 踩过: 只写了 BaudChoices 却忘了给 ComboBox 设 ItemsSource → 下拉是空的
     /// (空列表上设 SelectedIndex 不报错也不生效)。所以下面构造里显式绑定, 探针也断言"确实填上了"。</summary>
     private static readonly string[] BaudLabels =
-        ["2000000 (默认)", "115200", "57600", "9600"];
+        ["默认 (2000000)", "115200", "57600", "38400", "28800", "19200", "14400", "9600"];
 
     /// <summary>端口下拉的一项。`Port = null` 表示"自动探测" (写回空串)。</summary>
     public sealed record PortItem(string? Port, string Label);
 
     /// <summary>端口下拉的选项 —— **纯函数**, 探针打真值表。规则:
-    ///   ① 第一项永远是「自动探测」(Port = null → 配置写空串, native 才会按 VID/PID 自动跟随);
+    ///   ① 第一项永远是「自动检测」(Port = null → 配置写空串, native 才会按 VID/PID 自动跟随);
     ///   ② 本机所有 COM 口都列出来 (manual 指定就是为"认不到 VID/PID"准备的);
     ///   ③ 配置里那个端口若当前**不在位**, 也要列出来并标注 —— 否则用户会以为设置被吞了
     ///      (native 侧对"配置端口消失"有兜底: 唯一匹配就跟随, 多匹配就逐个握手判型)。</summary>
     public static List<PortItem> BuildPortItems(string configured, IEnumerable<string> present)
     {
-        var list = new List<PortItem> { new(null, "自动探测 (VID_2E3C & PID_5740)") };
+        var list = new List<PortItem> { new(null, "自动检测") };
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in present)
             if (!string.IsNullOrWhiteSpace(p) && seen.Add(p))

@@ -1741,14 +1741,17 @@ public partial class HomePage : Page
         };
         line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
                                    "TextFillColorTertiaryBrush");
-        // 第二行 = COM + 灯数。
-        // **不再显示"供电 XX"** (轮 33): 那个信息来自灯带固件状态字节的 bit0, 而本型号是 USB 直供、
-        // 没有外接电源电路 → 该位恒 0, 摆出来只有噪音(且"未连接"无法区分"不支持"与"没插")。
-        // 字段本身保留在 ABI/配置里, 只是不给用户看了。
+        // 供电 = 灯带固件周期状态字节的 bit0 (MCU 回报, 见 AmbientCore_API.md / PROJECT_PLAN §7.1)。
+        // **只在真的在跑时显示**: DEV_LOST 时 ledStatusByte 是上一次的残留值 (原厂也是断连时
+        // SetStatus(0,0) 清缓存), 摆出来会误导。
+        long statusByte = sess?.ledStatusByte ?? 0;
+        string power = sessState == AmbientCore.StateRunning
+            ? ((statusByte & 1) == 1 ? "供电 外接" : "供电 USB")
+            : "";
         // 只用查得到的配置, 不 GetOrCreate —— 光是"看一眼设备列表"不该给没见过的设备建配置文件
         string leds = managedHere && ConfigStore.Devices.TryGetValue(key, out var ds)
             ? $"{ds.LedCount} 灯" : "";
-        line2.Text = string.Join(" · ", new[] { d.ComPort, leds }.Where(s => s.Length > 0));
+        line2.Text = string.Join(" · ", new[] { d.ComPort, power, leds }.Where(s => s.Length > 0));
 
         var infoCol = new StackPanel
         {
