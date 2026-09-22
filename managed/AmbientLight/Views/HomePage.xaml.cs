@@ -19,7 +19,6 @@ using System.Windows.Threading;
 using AmbientLight.Controls;
 using AmbientLight.Interop;
 using AmbientLight.Services;
-using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace AmbientLight.Views;
@@ -106,10 +105,12 @@ public partial class HomePage : Page
         // 轮 33: 会话状态变化也要刷设备行 —— 托盘菜单开关、灯带物理断开都不经过主页的按钮,
         // 主页自己收不到信号。状态是**边沿触发**的 (只在真的变了时来一次), 不会造成刷新风暴。
         App.Instance.Poller.StateChanged += OnCoreStateChanged;
-        // M5.2: 主题热切换后, 页内几处 **code-behind 一次性赋值** 的主题刷 (banner 文字/胶囊、
-        // 设备行的语义色对、固件磁贴图标色) 不会自己更新 —— 它们的容器靠 DynamicResource 是自动的,
-        // 但"当时取到的那个刷子实例"不是。所以这里做一次"重取 + 重建"(全部幂等且便宜)。
-        ApplicationThemeManager.Changed += OnAppThemeChanged;
+        // M5.2: 主题 / **强调色** 变化后, 页内几处 **code-behind 一次性赋值** 的主题刷
+        // (banner 文字/胶囊、设备行语义色对、固件磁贴图标色、自定义色槽的选中圈) 不会自己更新 ——
+        // 容器靠 DynamicResource 是自动的, 但"当时取到的那个刷子实例"不是。
+        // 用 ThemeService.AppearanceChanged 而不是 ApplicationThemeManager.Changed:
+        // 后者只在**换主题**时触发, 强调色变化不会触发它。
+        ThemeService.AppearanceChanged += OnAppearanceChanged;
 
         BuildModeGrid();
         var dev = ConfigStore.Device;
@@ -133,14 +134,14 @@ public partial class HomePage : Page
         App.Instance.Poller.Polled -= OnPolled;
         App.Instance.Poller.DevicesChanged -= OnDevicesChanged;
         App.Instance.Poller.StateChanged -= OnCoreStateChanged;
-        ApplicationThemeManager.Changed -= OnAppThemeChanged;
+        ThemeService.AppearanceChanged -= OnAppearanceChanged;
         StopGlowTimer();
         _lastPolledState = -1;
     }
 
-    /// <summary>M5.2 主题切换后的"重取 + 重建"。见 OnLoaded 里的说明。
+    /// <summary>M5.2 主题 / 强调色变化后的"重取 + 重建"(见 OnLoaded 里的说明)。
     /// 复位那两个签名, 否则 ApplyBannerLook / CrossFadeStreak 会因为"看起来没变"而短路不刷色。</summary>
-    private void OnAppThemeChanged(ApplicationTheme theme, Color accent)
+    private void OnAppearanceChanged()
         => Dispatcher.BeginInvoke(() =>
         {
             if (!_loaded) return;
@@ -150,6 +151,7 @@ public partial class HomePage : Page
             ApplyBannerLook(_lastPolledState < 0 ? AmbientCore.StateStopped : _lastPolledState,
                             ConfigStore.Device.ModeIndex, animate: false);
             BuildModeGrid();                      // 固件磁贴图标的 Foreground 是构造期取的主题刷
+            BuildPresets();                       // 自定义色槽的选中圈取的是 AccentFillColorDefaultBrush
             RefreshMonitors();
             _ = RefreshDevicesAsync();            // 设备行的语义胶囊随深/浅换套
         });
@@ -504,7 +506,7 @@ public partial class HomePage : Page
                 ? new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex!))
                 : Brushes.Transparent;
-            btn.BorderBrush = ThemeBrush(has ? "ControlStrokeColorDefaultBrush" : "TextFillColorTertiaryBrush");
+            btn.BorderBrush = ThemeBrush(has ? "ControlStrokeColorDefaultBrush" : ThemeService.AppTextHintKey);
             btn.ToolTip = has ? $"{hex} (右键清除)" : "自定义色槽 · 调出颜色后自动记住";
         }
         UpdatePresetSelection();
@@ -1013,7 +1015,7 @@ public partial class HomePage : Page
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
             gray.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                      "TextFillColorTertiaryBrush");
+                                      ThemeService.AppTextHintKey);
             MetricsGrid.Children.Add(gray);
             return;
         }
@@ -1029,7 +1031,7 @@ public partial class HomePage : Page
                 TextAlignment = TextAlignment.Center,
             };
             label.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                       "TextFillColorTertiaryBrush");
+                                       ThemeService.AppTextHintKey);
             var val = new System.Windows.Controls.TextBlock
             {
                 Text = "—",
@@ -1086,8 +1088,8 @@ public partial class HomePage : Page
             // 未点亮取主题刷色 → 5.2 浅色主题下自动跟随 (下次状态变化时重取)
             SetColor(_titleBrush, ThemeColor("TextFillColorPrimaryBrush"), animate);
             SetColor(_subBrush, ThemeColor("TextFillColorSecondaryBrush"), animate);
-            SetColor(_portBrush, ThemeColor("TextFillColorTertiaryBrush"), animate);
-            SetColor(_fpsBrush, ThemeColor("TextFillColorTertiaryBrush"), animate);
+            SetColor(_portBrush, ThemeColor(ThemeService.AppTextHintKey), animate);
+            SetColor(_fpsBrush, ThemeColor(ThemeService.AppTextHintKey), animate);
             SetColor(_pillBgBrush, ThemeColor("ControlFillColorSecondaryBrush"), animate);
         }
         FadeTo(LightsLayer, lit ? 1 : 0, animate);
@@ -1489,7 +1491,7 @@ public partial class HomePage : Page
     {
         var t = new System.Windows.Controls.TextBlock { Text = text, FontSize = 12 };
         t.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                               "TextFillColorTertiaryBrush");
+                               ThemeService.AppTextHintKey);
         return t;
     }
 
@@ -1519,7 +1521,7 @@ public partial class HomePage : Page
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         adapter.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                     "TextFillColorTertiaryBrush");
+                                     ThemeService.AppTextHintKey);
 
         var texts = new StackPanel
         {
@@ -1753,7 +1755,7 @@ public partial class HomePage : Page
             Margin = new Thickness(0, 8, 0, 0),
         };
         line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                   "TextFillColorTertiaryBrush");
+                                   ThemeService.AppTextHintKey);
         // 供电 = 灯带固件周期状态字节的 bit0 (MCU 回报, 见 PROJECT_PLAN §7.1)。
         // 语义是"该设备自己的供电是否正常": 厂商那些**真需要外接供电的型号**(桌面氛围灯/带电池的)
         // 它会跟着外接电源变; 而 USB 供电型号**连上就恒 1** (实战: 握手后 0 → 1)。

@@ -18,7 +18,10 @@
 //            ② 它的 UnWatch 在**未 Loaded** 窗口上会抛异常 —— StartMinimized 时窗口从未 Show;
 //            ③ 它只在有 HWND 的窗口上挂钩, 而 SystemEvents 不需要窗口, 最小化启动也照样跟随;
 //            ④ 它内部要做的两件事 (Apply 主题 / UpdateBackground) Apply 本身都会做。
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
 using Microsoft.Win32;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
@@ -107,7 +110,11 @@ public static class ThemeService
         _main = main;
         if (_hooked) return;
         _hooked = true;
+        // ① SystemEvents: 覆盖系统主题/个性化变化, **不需要 HWND** → 最小化启动也跟随
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        // ② 窗口消息: **强调色**变化走的是 WM_DWMCOLORIZATIONCOLORCHANGED, SystemEvents 收不到它
+        //    (WPF-UI 自己的 SystemThemeWatcher 也专门监听了这条消息, 就是为强调色)。
+        HookWindowMessages(main);
     }
 
     /// <summary>退出时退订 (SystemEvents 是静态事件, 不退订会吊着它的隐藏窗口)。</summary>
@@ -116,28 +123,55 @@ public static class ThemeService
         if (!_hooked) return;
         _hooked = false;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        _hookSource?.RemoveHook(WindowProc);
+        _hookSource = null;
         _main = null;
     }
 
-    /// <summary>应用主题 (用户改设置 / 启动 / 跟随系统变化都走这里)。</summary>
-    public static void Apply(ThemeChoice choice)
+    private static HwndSource? _hookSource;
+    private static DateTime _lastRefreshUtc;
+
+    private static void HookWindowMessages(Window main)
     {
-        ApplicationThemeManager.Apply(ResolveNow(choice), WindowBackdropType.Mica, updateAccent: true);
+        if (_hookSource is not null) return;
+        if (PresentationSource.FromVisual(main) is HwndSource src)
+        {
+            _hookSource = src;
+            src.AddHook(WindowProc);
+            return;
+        }
+        // 窗口还没 Show (StartMinimized) 时没有 HWND → 等它创建出来再挂钩。
+        // 挂上之后顺手补刷一次: 隐藏期间的系统主题/强调色变化只有 SystemEvents 那一半收得到
+        // (强调色走 WM_DWMCOLORIZATIONCOLORCHANGED, 没 HWND 就收不到), 打开窗口时要能对上。
+        main.SourceInitialized += (_, _) =>
+        {
+            if (_hookSource is not null || !_hooked) return;
+            if (PresentationSource.FromVisual(main) is not HwndSource s) return;
+            _hookSource = s;
+            s.AddHook(WindowProc);
+            RefreshFromSystem();
+        };
     }
 
-    /// <summary>只刷新强调色, 不动主题 —— 与 <see cref="ApplicationThemeManager.Apply"/> 内部那一句
-    /// 完全相同 (同一个来源色、同一个变体算法), 这样"改系统强调色"与"切主题"刷出来的观感一致。
-    /// 系统强调色本身走 WinRT UISettings.Accent (取不到才回退 DWM 色化色) —— 我们不提供应用内自选强调色。</summary>
-    public static void ApplyAccentOnly() => ApplicationAccentColorManager.Apply(
-        ApplicationAccentColorManager.GetColorizationColor(),
-        ApplicationThemeManager.GetAppTheme(),
-        false);
+    private static IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_SETTINGCHANGE = 0x001A;
+        const int WM_SYSCOLORCHANGE = 0x0015;
+        const int WM_THEMECHANGED = 0x031A;
+        const int WM_DWMCOLORIZATIONCOLORCHANGED = 0x0320;
+
+        // WM_SETTINGCHANGE 要按 lParam 过滤: 这条消息被很多程序乱发, 不过滤会造成无谓的重刷
+        // (重新膨胀主题字典 = 整字典重建 + 全窗口重绘, 不该被别人的设置变更带着跑)。
+        bool immersiveColorSet = msg == WM_SETTINGCHANGE && lParam != IntPtr.Zero
+            && string.Equals(Marshal.PtrToStringUni(lParam), "ImmersiveColorSet", StringComparison.Ordinal);
+        if (msg is WM_DWMCOLORIZATIONCOLORCHANGED or WM_THEMECHANGED or WM_SYSCOLORCHANGE || immersiveColorSet)
+            RefreshFromSystem();
+        return IntPtr.Zero;
+    }
 
     /// <summary>系统主题 / 强调色 / 个性化变化 → 自动跟随。
-    /// 事件来自 SystemEvents 自己的隐藏窗口线程 → 必须切回 UI 线程。
-    /// 只在"解析出来的主题真的变了"时才整个 Apply (Apply 会 Remove+Apply backdrop, 没必要就别动);
-    /// 主题没变就是纯强调色变化 → 只刷强调色。</summary>
-    private static void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+    /// **两个来源** (SystemEvents 与窗口消息) 可能同时触发 → 200ms 内只算一次。</summary>
+    private static void RefreshFromSystem()
     {
         var app = Application.Current;
         if (app == null) return;
@@ -145,7 +179,11 @@ public static class ThemeService
         {
             try
             {
+                if ((DateTime.UtcNow - _lastRefreshUtc).TotalMilliseconds < 200) return;
+                _lastRefreshUtc = DateTime.UtcNow;
                 var theme = ResolveNow(Current);
+                // 只在"解析出来的主题真的变了"时才整个 Apply (Apply 会 Remove+Apply backdrop);
+                // 主题没变就是纯强调色变化 → 只刷强调色。
                 if (theme != ApplicationThemeManager.GetAppTheme())
                     ApplicationThemeManager.Apply(theme, WindowBackdropType.Mica, updateAccent: true);
                 else
@@ -157,4 +195,100 @@ public static class ThemeService
             }
         });
     }
+
+    private static void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+        => RefreshFromSystem();
+
+    /// <summary>应用自己的"说明 / 提示文字"刷子键 (在 App.xaml 里声明初值, 由本服务按主题改写)。
+    /// 页面用 `{DynamicResource AppTextHintBrush}` 引用。</summary>
+    public const string AppTextHintKey = "AppTextHintBrush";
+
+    /// <summary>外观 (主题或强调色) 变化后触发 —— UI 侧用它"重取 + 重建"那些 **code-behind 一次性赋值**
+    /// 的刷子 (容器上的 DynamicResource 是自动的, 但"当时取到的那个刷子实例"不是)。
+    /// 为什么要自己发这个事件: `ApplicationThemeManager.Changed` **只在换主题时**触发,
+    /// **强调色变化不会触发**它 —— 而换刷子的需求两种变化都有。</summary>
+    public static event Action? AppearanceChanged;
+
+    /// <summary>应用主题 (用户改设置 / 启动 / 跟随系统变化都走这里)。</summary>
+    public static void Apply(ThemeChoice choice)
+    {
+        var theme = ResolveNow(choice);
+        ApplicationThemeManager.Apply(theme, WindowBackdropType.Mica, updateAccent: true);
+        WriteAppBrushes(theme == ApplicationTheme.Dark);
+        AppearanceChanged?.Invoke();
+    }
+
+    /// <summary>只刷新强调色, 不动主题 —— 与 <see cref="ApplicationThemeManager.Apply"/> 内部那一句
+    /// 完全相同 (同一个来源色、同一个变体算法), 这样"改系统强调色"与"切主题"刷出来的观感一致。
+    /// 系统强调色本身走 WinRT UISettings.Accent (取不到才回退 DWM 色化色) —— 我们不提供应用内自选强调色。
+    ///
+    /// ⚠️ 两点都是查 4.3.0 源码 + 探针实测得来 (轮 34 补):
+    /// ① **触发**: 强调色变化发的是 `WM_DWMCOLORIZATIONCOLORCHANGED`, **`SystemEvents` 收不到**这条消息
+    ///    (WPF-UI 自己的 SystemThemeWatcher 也专门监听了它, 就是为强调色) → 跟不上的真正原因是
+    ///    "没人叫醒我们", 见 <see cref="WindowProc"/>。现象就是"自绘控件变了, WPF-UI 的按钮/滑块
+    ///    要手动切一下才变"。
+    /// ② **中介刷子**: WPF-UI 的控件样式引用的是一组住在**主题字典**里的刷子, 例如
+    ///    `AccentButtonBackground.Color = {DynamicResource AccentFillColorDefault}` (按钮 Appearance=Primary)、
+    ///    `SliderThumbBackground.Color   = {DynamicResource SystemAccentColorPrimary}` (滑块) ——
+    ///    这些用 **DynamicResource** 别名的**会**跟着顶层键走 (探针断言了);
+    ///    但 `AccentButtonForeground` / `AccentControlElevationBorderBrush` / `SliderTrackFill` 那几个是
+    ///    **StaticResource 钉死**的 → 只有重新膨胀字典才会重算, 所以下面那一步不能省。</summary>
+    public static void ApplyAccentOnly()
+    {
+        var before = ApplicationAccentColorManager.SystemAccent;   // 当前生效值 (读自资源)
+        ApplicationAccentColorManager.Apply(
+            ApplicationAccentColorManager.GetColorizationColor(),
+            ApplicationThemeManager.GetAppTheme(),
+            false);
+        // 强调色真没变 (重复消息 / 别的程序在发 WM_SETTINGCHANGE) → 什么都不用做。
+        // 变了才重新膨胀字典: 那些**用 StaticResource 钉死**的中介刷子
+        // (AccentButtonForeground ← TextOnAccentFillColorPrimary, AccentControlElevationBorderBrush ←
+        //  ControlStrokeColorOnAccent*) 不会跟着顶层键走 —— 只有重新膨胀才会重算。
+        if (ApplicationAccentColorManager.SystemAccent == before) return;
+        ReinflateThemeDictionary();
+        AppearanceChanged?.Invoke();
+    }
+
+    /// <summary>把 App.xaml 里那个主题字典**重新膨胀**成一份新实例 (同一个 Source)。
+    /// 作用 = 让住在字典里的中介刷子 (AccentButtonBackground / SliderThumbBackground / …)
+    /// 重新解析它们引用的强调色键。不动 merged 列表结构, 也不碰窗口 backdrop。</summary>
+    public static void ReinflateThemeDictionary()
+    {
+        var dicts = Application.Current?.Resources.MergedDictionaries;
+        if (dicts is null) return;
+        for (int i = 0; i < dicts.Count; i++)
+        {
+            var source = dicts[i].Source;
+            string? uri = source?.ToString();
+            if (uri is null) continue;
+            if (!uri.Contains("wpf.ui;", StringComparison.OrdinalIgnoreCase)
+                || !uri.Contains("theme", StringComparison.OrdinalIgnoreCase))
+                continue;
+            dicts[i] = new ResourceDictionary { Source = source };
+            return;
+        }
+    }
+
+    /// <summary>写应用自己的刷子 (目前只有"说明文字")。为什么不用 WPF-UI 的
+    /// `TextFillColorTertiaryBrush`: 浅色主题下它是 `#72000000` (45% 黑), 叠在卡片底上对比度只有
+    /// ~3.3 —— 说明文字发虚 (用户实测反馈)。
+    /// **深色主题不动**: 直接沿用 WPF-UI 当前的 tertiary 色值 (深色观感是用户已验收的, 不能顺手改),
+    /// 浅色主题才换成 `#99000000` (60% 黑, 对比度 ~5.8)。两个主题都有探针断言 (阈值 4.0)。</summary>
+    private static void WriteAppBrushes(bool dark)
+    {
+        var res = Application.Current?.Resources;
+        if (res is null) return;
+        var color = dark ? CurrentTertiaryColor() : Color.FromArgb(0x99, 0x00, 0x00, 0x00);
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        res[AppTextHintKey] = brush;
+    }
+
+    /// <summary>当前主题下 WPF-UI 的次级说明文字色 (深色主题直接沿用它, 保证观感不变)。
+    /// 必须在主题字典换好之后再读 (本类在 Apply 之后调用它)。</summary>
+    private static Color CurrentTertiaryColor()
+        => Application.Current?.TryFindResource("TextFillColorTertiaryBrush") is SolidColorBrush b
+            ? b.Color
+            : Color.FromArgb(0x85, 0xFF, 0xFF, 0xFF);   // 取不到时给个深色主题的近似值
+
 }

@@ -113,7 +113,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="黑边自适应" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Foreground="{DynamicResource AppTextHintBrush}"
                                Text="画面有黑边 (电影/宽屏) 时自动收缩取色边框" />
                     <ui:ToggleSwitch x:Name="BlackBarsToggle" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                      Margin="0,0,4,0" IsChecked="True" Click="OnBlackBarsChanged" />
@@ -128,7 +128,7 @@
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                         <TextBlock Text="黑边判定等级" FontSize="13" />
                         <TextBlock FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Foreground="{DynamicResource AppTextHintBrush}"
                                    Text="越高越保守 (不易误判暗场景), 越低越激进" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

@@ -14,10 +14,18 @@
                         所以不能把它挪进嵌套 ResourceDictionary, 也不能改名/换类型。
                      2. Theme="Dark" 必须显式写: ThemesDictionary 无参构造默认是 Light,
                         运行时主题由 ThemeService 在启动期 Apply 覆盖; 去掉这行启动会先闪一下浅色。
-                     深色是启动期的**兜底值**, 不是"默认主题"(默认主题 = app.json 的 theme, 缺省跟随系统)。 -->
+                     深色既是启动期的兜底值, 也是 app.json 缺省时的默认主题 (M5.2 D2 定稿: 默认深色)。 -->
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
+            <!-- M5.2: 应用自己的"说明 / 提示文字"刷子 (次级文字)。
+                 ⚠️ 不用 WPF-UI 的 TextFillColorTertiaryBrush: 浅色主题下它是 #72000000 (45% 黑),
+                 叠在卡片底上对比度只有 ~3.3 → 说明文字发虚。这里声明**深色主题的值**作为初值,
+                 真正的值由 Services/ThemeService.WriteAppBrushes 在每次 Apply 时按主题改写
+                 (浅色 → #99000000)。所以**不要**在这里改成 DynamicResource 或删掉它 ——
+                 删掉会让页面引用解析失败 (静默变黑字)。
+                 初值 = 深色主题下 WPF-UI tertiary 的实测色 (#87FFFFFF), 也就是深色观感不变的那个值。 -->
+            <SolidColorBrush x:Key="AppTextHintBrush" Color="#87FFFFFF" />
             <!-- M5.1: 页内分组小标签 (组内卡片间距 4px, 组间靠标签上边距拉开);
                  Foreground 必须显式给主题色——StackPanel 直属的 TextBlock 不在
                  CardForeground 继承链内, 默认会是黑色 (深色主题不可读) -->

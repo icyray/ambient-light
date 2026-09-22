@@ -296,7 +296,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="纯色灯光" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Foreground="{DynamicResource AppTextHintBrush}"
                                Text="当前模式的灯光颜色 — 原始色 (未含亮度)" />
                     <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="8,0,4,0">
@@ -392,7 +392,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="固件特效" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Foreground="{DynamicResource AppTextHintBrush}"
                                Text="11 款 · 由灯带固件渲染, 主机仅发命令 (无预览)" />
                     <Border x:Name="FxCurrentPill" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                             CornerRadius="10" Padding="8,2" Margin="8,0,4,0"
@@ -440,7 +440,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="布局预览" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Foreground="{DynamicResource AppTextHintBrush}"
                                Text="按真实长宽比核对灯序与边数" />
                     <TextBlock x:Name="LayoutSummary" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                FontSize="12" Margin="8,0,4,0" VerticalAlignment="Center"
