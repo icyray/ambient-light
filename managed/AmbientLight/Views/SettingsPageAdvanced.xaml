@@ -75,6 +75,28 @@
         </controls:SettingRow>
         <!-- 全屏校准向导已于轮 28 移到「采集」页 (紧挨灯序偏移 —— 那才是它的使用场景) -->
 
+        <!-- 连接 (§8.3): 手动指定端口 / 波特率 —— 换芯片、USB 转串口桥接、两根同型灯带,
+             或"端口被别的程序占着"时用。默认全是自动, 不动就不会有副作用。 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="连接" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon UsbPlug24}" Title="端口"
+                             Description="自动探测按 VID_2E3C &amp; PID_5740 找; 手动指定用于换芯片/桥接/多灯带">
+            <StackPanel Orientation="Horizontal">
+                <ui:Button x:Name="RefreshPortsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
+                           ToolTip="重新枚举" Margin="8,0,8,0" VerticalAlignment="Center"
+                           Click="OnRefreshPorts">
+                    <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </ui:Button>
+                <ComboBox x:Name="PortCombo" Width="220" DisplayMemberPath="Label"
+                          VerticalAlignment="Center" SelectionChanged="OnPortChanged" />
+            </StackPanel>
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="波特率"
+                             Description="USB CDC 虚拟串口下通常不生效 (设备端不看), 保留给桥接/旧固件">
+            <ComboBox x:Name="BaudCombo" Width="150" VerticalAlignment="Center"
+                      SelectionChanged="OnBaudChanged" />
+        </controls:SettingRow>
+
         <!-- 界面 (M5.1 §4: banner 底边辉光的实验开关 —— 功耗/手感不对时可随手关掉,
              退回纯渐变 banner; 5.2 主题 / 5.3 语言等界面项后续也落在这里) -->
         <TextBlock Style="{StaticResource GroupLabel}" Text="界面" />

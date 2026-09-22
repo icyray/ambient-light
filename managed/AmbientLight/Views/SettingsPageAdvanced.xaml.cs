@@ -14,6 +14,34 @@ public partial class SettingsPageAdvanced : Page
     private static readonly int[] PolicyChoices = [2, 1, 0];
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
+    // ---- 连接: 端口 / 波特率 (§8.3) --------------------------------------
+    /// <summary>波特率候选。CDC 虚拟串口下这个值通常被设备端忽略 (实测对波特率不敏感),
+    /// 保留给 USB 转串口桥接或旧固件; 默认 2000000 与厂商一致。</summary>
+    public static readonly int[] BaudChoices = [2000000, 115200, 57600, 9600];
+
+    /// <summary>端口下拉的一项。`Port = null` 表示"自动探测" (写回空串)。</summary>
+    public sealed record PortItem(string? Port, string Label);
+
+    /// <summary>端口下拉的选项 —— **纯函数**, 探针打真值表。规则:
+    ///   ① 第一项永远是「自动探测」(Port = null → 配置写空串, native 才会按 VID/PID 自动跟随);
+    ///   ② 本机所有 COM 口都列出来 (manual 指定就是为"认不到 VID/PID"准备的);
+    ///   ③ 配置里那个端口若当前**不在位**, 也要列出来并标注 —— 否则用户会以为设置被吞了
+    ///      (native 侧对"配置端口消失"有兜底: 唯一匹配就跟随, 多匹配就逐个握手判型)。</summary>
+    public static List<PortItem> BuildPortItems(string configured, IEnumerable<string> present)
+    {
+        var list = new List<PortItem> { new(null, "自动探测 (VID_2E3C & PID_5740)") };
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in present)
+            if (!string.IsNullOrWhiteSpace(p) && seen.Add(p))
+                list.Add(new PortItem(p, p));
+        if (!string.IsNullOrWhiteSpace(configured) && seen.Add(configured))
+            list.Add(new PortItem(configured, $"{configured} (不在位)"));
+        return list;
+    }
+
+    /// <summary>下拉选项 → 配置值 (纯函数): 自动探测 = 空串。</summary>
+    public static string PortValueOf(PortItem? item) => item?.Port ?? "";
+
     public SettingsPageAdvanced()
     {
         InitializeComponent();
@@ -38,6 +66,11 @@ public partial class SettingsPageAdvanced : Page
         AutoStartCoreToggle.IsChecked = ConfigStore.Device.AutoStartCore;
         BannerGlowToggle.IsChecked = ConfigStore.App.BannerGlow;   // M5.1 §4
 
+        // 连接 (§8.3)
+        ReloadPorts();
+        int bi = Array.IndexOf(BaudChoices, dev.BaudRate);
+        BaudCombo.SelectedIndex = bi >= 0 ? bi : 0;                 // 非候选值 (手改过 json) 落回默认
+
         string appVer = CurrentVersion;
         uint core = AmbientCore.Version();
         VersionText.Text = $"AmbientLight {appVer} · AmbientCore v{(core >> 16) & 0xFF}.{(core >> 8) & 0xFF}.{core & 0xFF}";
@@ -46,6 +79,41 @@ public partial class SettingsPageAdvanced : Page
 
     private static string CurrentVersion => typeof(SettingsPageAdvanced).Assembly
         .GetName().Version?.ToString(3) ?? "?";
+
+    /// <summary>重建端口下拉 (本机所有 COM 口 + 配置里那个可能不在位的)。只改选中项, 不写配置。</summary>
+    private void ReloadPorts()
+    {
+        string cur = ConfigStore.Device.ComPort;
+        var items = BuildPortItems(cur, SerialPorts.All());
+        PortCombo.ItemsSource = items;
+        int idx = items.FindIndex(it => string.Equals(PortValueOf(it), cur, StringComparison.OrdinalIgnoreCase));
+        PortCombo.SelectedIndex = idx >= 0 ? idx : 0;      // 兜底: 至少落在"自动探测"上
+    }
+
+    private void OnRefreshPorts(object sender, RoutedEventArgs e)
+    {
+        _loading = true;                                   // 重列期间别把选中变化写回配置
+        ReloadPorts();
+        _loading = false;
+    }
+
+    private void OnPortChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || PortCombo.SelectedItem is not PortItem item) return;
+        string value = PortValueOf(item);
+        if (string.Equals(value, ConfigStore.Device.ComPort, StringComparison.OrdinalIgnoreCase)) return;
+        ConfigStore.Device.ComPort = value;
+        App.Instance.ApplyConfigDebounced();               // native: com/baud 变了 → 关端口重连
+    }
+
+    private void OnBaudChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || BaudCombo.SelectedIndex < 0) return;
+        int v = BaudChoices[BaudCombo.SelectedIndex];
+        if (v == ConfigStore.Device.BaudRate) return;
+        ConfigStore.Device.BaudRate = v;
+        App.Instance.ApplyConfigDebounced();
+    }
 
     private void OnMinBrightnessChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
