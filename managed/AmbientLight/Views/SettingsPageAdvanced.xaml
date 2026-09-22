@@ -78,8 +78,10 @@
         <!-- 连接 (§8.3): 手动指定端口 / 波特率 —— 换芯片、USB 转串口桥接、两根同型灯带,
              或"端口被别的程序占着"时用。默认全是自动, 不动就不会有副作用。 -->
         <TextBlock Style="{StaticResource GroupLabel}" Text="连接" />
+        <!-- ⚠️ 端口是**每设备**配置 (改的是主页当前选中的那台), 不是全局设置 ——
+             说明文案必须写清作用域, 否则用户会以为"我在高级里设过一次, 所有设备都该用它"。 -->
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon UsbPlug24}" Title="端口"
-                             Description="自动检测按 VID_2E3C &amp; PID_5740 找并跟随端口变化; 手动指定后只认该端口 (握手失败即失败, 不再自动跟随)">
+                             Description="仅对当前选中的设备生效; 自动检测按 VID_2E3C &amp; PID_5740 找并跟随端口变化, 手动指定后只认该端口 (握手失败即失败)">
             <StackPanel Orientation="Horizontal">
                 <ui:Button x:Name="RefreshPortsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
                            ToolTip="重新枚举" Margin="8,0,8,0" VerticalAlignment="Center"

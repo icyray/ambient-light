@@ -1030,6 +1030,25 @@ static void Run()
         ? Wpf.Ui.Appearance.ApplicationTheme.Dark : themeBefore);
 
     Console.WriteLine();
+    Console.WriteLine("---- 轮 34 补 5: 设备行端口文案 (显示\"实际会用的口\") ----");
+    // 用户反馈: 高级页给某台手动指定了 COM4 后, 设备行仍显示枚举到的 COM5, 点开启却去连 COM4。
+    // 规则: 会话端口 > 配置端口(标\"手动指定\") > 枚举端口。
+    var portCases = new (string? Sess, string? Cfg, string? Enum, string Text, bool Manual, string Desc)[]
+    {
+        ("COM5", "COM4", "COM5", "COM5", false, "有会话 → 以会话端口为准 (即使配置里写了别的)"),
+        ("", "COM4", "COM5", "COM4 (手动指定)", true, "无会话 + 手动指定 → 配置端口 + 标记"),
+        ("", "", "COM5", "COM5", false, "无会话 + 没指定 → 枚举端口"),
+        (null, "   ", "COM6", "COM6", false, "全空白配置视为未指定"),
+    };
+    foreach (var c in portCases)
+    {
+        var (text, manual) = AmbientLight.Views.HomePage.PortLabel(c.Sess, c.Cfg, c.Enum);
+        bool ok = text == c.Text && manual == c.Manual;
+        Console.WriteLine((ok ? "OK   " : "FAIL ") +
+                          $"{c.Desc} → \"{text}\" (标记 {manual}), 期望 \"{c.Text}\" ({c.Manual})");
+    }
+
+    Console.WriteLine();
     Console.WriteLine("---- 轮 34 补 4: 总开关按钮的放开条件 (纯函数真值表) ----");
     // 用户要求: 关闭后**收尾没完**不许点开启 (native StopEx 的 join 可能还在跑 1~5s);
     // 判据 = 不在处理本次点击 && 没有启动任务在飞 && 队列里没有未完成的生命周期调用。
