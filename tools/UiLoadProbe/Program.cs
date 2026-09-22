@@ -866,6 +866,37 @@ static void Run()
         ? Wpf.Ui.Appearance.ApplicationTheme.Dark : themeBefore);
 
     Console.WriteLine();
+    Console.WriteLine("---- M5.2 主题: 强调色\"中介刷子\" (改强调色后按钮/滑块要立刻跟上) ----");
+    // 用户实测现象: 改系统强调色 → **自绘控件**(直接引 AccentFillColorDefaultBrush)马上变,
+    // 而 WPF-UI 的**按钮/滑块要等下次换主题**才变。原因 (查 4.3.0 源码):
+    //   按钮/滑块引的是**住在主题字典里**的中介刷子 ——
+    //     AccentButtonBackground.Color = {DynamicResource AccentFillColorDefault}
+    //     SliderThumbBackground.Color   = {DynamicResource SystemAccentColorPrimary}
+    //   而强调色还原只改写 Application.Resources **顶层**键 → 字典里那些中介刷子不重算。
+    // 下面断言**修复后的不变量**: ApplyAccentOnly() 之后中介刷子必须与它们引用的键一致。
+    var dictBefore = ThemeDictInstance();
+    Color? AccentKey(string k) => Application.Current.TryFindResource(k) is Color c ? c : null;
+    Color? BrushColorOf(string k) => (Application.Current.TryFindResource(k) as SolidColorBrush)?.Color;
+    Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(
+        Colors.Magenta, Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme(), false);
+    Console.WriteLine("INFO 只改强调色键时, 中介刷子是否落后于键 = " +
+                      $"{BrushColorOf("AccentButtonBackground") != AccentKey("AccentFillColorDefault")} (机制使然, 不是 bug)");
+    AmbientLight.Services.ThemeService.ApplyAccentOnly();
+    bool buttonBrushesAgree = BrushColorOf("AccentButtonBackground") == AccentKey("AccentFillColorDefault")
+                              && BrushColorOf("AccentButtonBackgroundPointerOver") == AccentKey("AccentFillColorSecondary")
+                              && BrushColorOf("AccentButtonBackgroundPressed") == AccentKey("AccentFillColorTertiary");
+    Console.WriteLine((buttonBrushesAgree ? "OK   " : "FAIL ") +
+                      $"按钮中介刷子与强调色键一致 = {buttonBrushesAgree} · " +
+                      $"AccentButtonBackground={BrushColorOf("AccentButtonBackground")} " +
+                      $"vs AccentFillColorDefault={AccentKey("AccentFillColorDefault")}");
+    bool thumbBrushAgrees = BrushColorOf("SliderThumbBackground") == AccentKey("SystemAccentColorPrimary");
+    Console.WriteLine((thumbBrushAgrees ? "OK   " : "FAIL ") +
+                      $"滑块中介刷子与 SystemAccentColorPrimary 一致 = {thumbBrushAgrees} · " +
+                      $"{BrushColorOf("SliderThumbBackground")} vs {AccentKey("SystemAccentColorPrimary")}");
+    bool reinflated = ThemeDictInstance() != dictBefore;
+    Console.WriteLine((reinflated ? "OK   " : "FAIL ") + $"ApplyAccentOnly 重新膨胀了主题字典 = {reinflated}");
+
+    Console.WriteLine();
     Console.WriteLine("---- M5.2 主题: 高级页主题下拉 (控件 ↔ 配置 往返) ----");
     // 轮 33 的教训: 断言了常量数组却没断言控件 → 空下拉漏到用户手里。这里做**往返**断言。
     var themeCombo = advPage.FindName("ThemeCombo") as ComboBox;
@@ -961,7 +992,62 @@ static void Run()
                           $" · vs 深色卡片底 {cw:F2}");
     }
 
+    Console.WriteLine();
+    Console.WriteLine("---- M5.2 主题: 说明文字刷子的对比度 (浅色下不能发虚) ----");
+    // 用户反馈: 浅色模式下说明/次级文字太淡。原来用 WPF-UI 的 TextFillColorTertiaryBrush
+    // (浅色 #72000000 = 45% 黑), 叠在卡片底上对比度只有 ~3.3。改成应用自己的 AppTextHintBrush
+    // (深色与 WPF-UI 一致 #72FFFFFF, 浅色压到 #99000000), 这里按**可计算的不变量**断言两个主题都达标。
+    const double MinHint = 4.0;
+    foreach (var (ch, desc) in new (AmbientLight.Services.ThemeChoice, string)[]
+    {
+        (AmbientLight.Services.ThemeChoice.Dark, "深色"),
+        (AmbientLight.Services.ThemeChoice.Light, "浅色"),
+    })
+    {
+        // 走**生产路径** (ThemeService.Apply) 而不是只换资源字典: 说明文字刷子的值是由
+        // ThemeService.WriteAppBrushes 按主题写进去的, 只 SwapTheme 的话它还是初值 (深色那份)。
+        AmbientLight.Services.ThemeService.Apply(ch);
+        var card = CardSurface();
+        var hint = Application.Current.TryFindResource(
+            AmbientLight.Services.ThemeService.AppTextHintKey) as SolidColorBrush;
+        double hintCr = hint is null ? 0
+            : AmbientLight.Services.ThemePalette.ContrastRatio(
+                AmbientLight.Services.ThemePalette.Blend(hint.Color, card), card);
+        Console.WriteLine((hint is not null && hintCr >= MinHint ? "OK   " : "FAIL ") +
+                          $"{desc}主题: 说明文字刷子存在 = {hint is not null}, 对比度 {hintCr:F2} (≥ {MinHint})");
+        // INFO: 旧键 (WPF-UI 的 tertiary) 的值 —— 那是库的值我们改不了, 只用来对照
+        if (Application.Current.TryFindResource("TextFillColorTertiaryBrush") is SolidColorBrush old)
+            Console.WriteLine($"INFO {desc}主题 WPF-UI tertiary 的对比度 = " +
+                              $"{AmbientLight.Services.ThemePalette.ContrastRatio(
+                                  AmbientLight.Services.ThemePalette.Blend(old.Color, card), card):F2}");
+        // 深色主题必须与 WPF-UI 的 tertiary **同色** —— 深色观感是用户已验收的, 换刷子不许顺手改它
+        if (ch == AmbientLight.Services.ThemeChoice.Dark)
+        {
+            var tertiary = Application.Current.TryFindResource("TextFillColorTertiaryBrush") as SolidColorBrush;
+            bool sameAsTertiary = tertiary is not null && hint is not null && tertiary.Color == hint.Color;
+            Console.WriteLine((sameAsTertiary ? "OK   " : "FAIL ") +
+                              $"深色主题: 说明文字刷子与 WPF-UI tertiary 同色 = {sameAsTertiary} · " +
+                              $"{tertiary?.Color} vs {hint?.Color}");
+        }
+    }
+    SwapTheme(themeBefore == Wpf.Ui.Appearance.ApplicationTheme.Unknown
+        ? Wpf.Ui.Appearance.ApplicationTheme.Dark : themeBefore);
+
     app.Shutdown();
+}
+
+/// <summary>M5.2: 取当前那个 WPF-UI 主题字典**实例** (用来判断"有没有被重新膨胀")。</summary>
+static ResourceDictionary? ThemeDictInstance()
+{
+    foreach (var d in Application.Current.Resources.MergedDictionaries)
+    {
+        string? uri = d.Source?.ToString();
+        if (uri is not null
+            && uri.Contains("wpf.ui;", StringComparison.OrdinalIgnoreCase)
+            && uri.Contains("theme", StringComparison.OrdinalIgnoreCase))
+            return d;
+    }
+    return null;
 }
 
 /// <summary>M5.2: 切一次主题并验证"真的生效了"。返回 false 即 FAIL (而不是让探针崩掉)。
