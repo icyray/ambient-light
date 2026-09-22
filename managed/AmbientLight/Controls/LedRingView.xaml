@@ -13,12 +13,28 @@
         <Border HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420"
                 Background="Transparent" IsHitTestVisible="False">
             <StackPanel>
-                <TextBlock x:Name="HintTitle" Text="LED 预览" FontWeight="SemiBold" FontSize="12"
-                           HorizontalAlignment="Center" Opacity="0.85" />
-                <TextBlock x:Name="HintText" Text="" FontSize="11" Opacity="0.5"
-                           TextWrapping="Wrap" TextAlignment="Center" Margin="12,2,12,0" />
+                <!-- 中心提示文字 (轮 34 补): 它压在**恒暗的屏幕矩形**上, 所以不能靠"继承主题前景色" ——
+                     浅色主题下继承到的是近黑字, 落在近黑的矩形上直接看不见 (用户实测)。
+                     解法 = 给两行字加一层**主题化的底衬**: 浅色主题下是浅色底 + 深色字,
+                     深色主题下底衬只有 5% 白 (几乎看不见, 观感与原来一致)。
+                     为什么不是"把矩形改成浅色": 文字是居中的, 窗口窄时它可能比矩形还宽、溢出到卡片底上 ——
+                     只有"文字 + 底衬同属一套主题"才能在任何宽度 / 任何背景下都可读;
+                     而且校准窗里同一控件是放在**恒暗面板**上的 (那里的矩形保持暗色才对)。
+                     文字层级: 标题 = Primary, 说明 = Secondary (不要再拿 Opacity 压暗 —— 浅色下会低于 3:1)。 -->
+                <Border Background="{DynamicResource CardBackground}" CornerRadius="8"
+                        Padding="10,5" HorizontalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock x:Name="HintTitle" Text="LED 预览" FontWeight="SemiBold" FontSize="12"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock x:Name="HintText" Text="" FontSize="11"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap" TextAlignment="Center" Margin="12,2,12,0" />
+                    </StackPanel>
+                </Border>
                 <!-- 校准向导中心区 (M5.1 §7): 0 号灯起点徽标 + 绕向箭头 —— 主页不用, 那儿的中心
-                     只放静态几何参数 (SetOrientation 控制显隐)。 -->
+                     只放静态几何参数 (SetOrientation 控制显隐)。它自带半透明白底 + 白字,
+                     本来就只在恒暗面板上用, 与主题无关。 -->
                 <StackPanel x:Name="OrientationRow" Orientation="Horizontal"
                             HorizontalAlignment="Center" Margin="0,10,0,0" Visibility="Collapsed">
                     <Border CornerRadius="9" Padding="8,2,8,2" Background="#40FFFFFF">
