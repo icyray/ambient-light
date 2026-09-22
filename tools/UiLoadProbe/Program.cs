@@ -787,7 +787,211 @@ static void Run()
     Console.WriteLine("INFO 本机 COM 口 (注册表 SERIALCOMM): " +
                       string.Join(", ", AmbientLight.Services.SerialPorts.All().DefaultIfEmpty("(无)")));
 
+    Console.WriteLine();
+    Console.WriteLine("---- M5.2 主题: 纯函数 (配置解析 / 高对比度兜底) ----");
+    // 配置值是**字符串**, 手改过 json / 旧文件缺字段 / 大小写不一致都可能发生 → 解析必须永不抛,
+    // 未知一律落到"跟随系统"。
+    var themeParseCases = new (string? Raw, AmbientLight.Services.ThemeChoice Expect, string Desc)[]
+    {
+        ("system", AmbientLight.Services.ThemeChoice.System, "正常值"),
+        ("light", AmbientLight.Services.ThemeChoice.Light, "正常值"),
+        ("dark", AmbientLight.Services.ThemeChoice.Dark, "正常值"),
+        ("LIGHT", AmbientLight.Services.ThemeChoice.Light, "大写"),
+        ("  Dark  ", AmbientLight.Services.ThemeChoice.Dark, "前后空白"),
+        ("", AmbientLight.Services.ThemeChoice.System, "空串"),
+        (null, AmbientLight.Services.ThemeChoice.System, "null"),
+        ("weird-value", AmbientLight.Services.ThemeChoice.System, "未知值"),
+    };
+    foreach (var c in themeParseCases)
+    {
+        var got = AmbientLight.Services.ThemeService.Parse(c.Raw);
+        Console.WriteLine((got == c.Expect ? "OK   " : "FAIL ") +
+                          $"主题解析「{c.Raw ?? "null"}」({c.Desc}) → {got} (期望 {c.Expect})");
+    }
+    bool themeRoundTrip = Enum.GetValues<AmbientLight.Services.ThemeChoice>()
+        .All(ch => AmbientLight.Services.ThemeService.Parse(
+                       AmbientLight.Services.ThemeService.ToKey(ch)) == ch);
+    Console.WriteLine((themeRoundTrip ? "OK   " : "FAIL ") + $"主题 key ↔ 枚举 往返一致 = {themeRoundTrip}");
+    // D3: 高对比度回退深色 (HC 的 4 套字典我们没走查过)
+    bool hcToDark = AmbientLight.Services.ThemeService.ResolveForApply(
+                        AmbientLight.Services.ThemeChoice.System, Wpf.Ui.Appearance.SystemTheme.HC1, true)
+                    == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                    && AmbientLight.Services.ThemeService.ResolveForApply(
+                        AmbientLight.Services.ThemeChoice.System, Wpf.Ui.Appearance.SystemTheme.HCWhite, true)
+                    == Wpf.Ui.Appearance.ApplicationTheme.Dark;
+    Console.WriteLine((hcToDark ? "OK   " : "FAIL ") + $"高对比度回退深色 (M5.2 D3) = {hcToDark}");
+    // 固定浅/深**不受系统影响** —— 这条能抓住"忘了分流、把固定主题也交给系统"这类错
+    bool fixedWins = AmbientLight.Services.ThemeService.ResolveForApply(
+                         AmbientLight.Services.ThemeChoice.Light, Wpf.Ui.Appearance.SystemTheme.Dark, false)
+                     == Wpf.Ui.Appearance.ApplicationTheme.Light
+                     && AmbientLight.Services.ThemeService.ResolveForApply(
+                         AmbientLight.Services.ThemeChoice.Dark, Wpf.Ui.Appearance.SystemTheme.Light, false)
+                     == Wpf.Ui.Appearance.ApplicationTheme.Dark;
+    Console.WriteLine((fixedWins ? "OK   " : "FAIL ") + $"固定浅/深主题不受系统设置影响 = {fixedWins}");
+    bool sysFollow = AmbientLight.Services.ThemeService.ResolveForApply(
+                         AmbientLight.Services.ThemeChoice.System, Wpf.Ui.Appearance.SystemTheme.Dark, false)
+                     == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                     && AmbientLight.Services.ThemeService.ResolveForApply(
+                         AmbientLight.Services.ThemeChoice.System, Wpf.Ui.Appearance.SystemTheme.Light, false)
+                     == Wpf.Ui.Appearance.ApplicationTheme.Light;
+    Console.WriteLine((sysFollow ? "OK   " : "FAIL ") + $"「跟随系统」按系统深浅解析 = {sysFollow}");
+
+    Console.WriteLine();
+    Console.WriteLine("---- M5.2 主题: 机制就位 (静默失败的前置条件 + 切换真的生效) ----");
+    // ★ ApplicationThemeManager.Apply 内部是 ResourceDictionaryManager("wpf.ui;")
+    //   .UpdateDictionary("theme", …) —— 按"Source 同时含 wpf.ui; 与 theme"找到 App.xaml 里那个
+    //   ThemesDictionary **整个替换**; **找不到就 return(false): 不抛异常、什么都不做**。
+    //   所以"它还是不是 Application.Resources 的直接成员"是整条链路唯一的前置条件, 只能靠断言。
+    var merged = app.Resources.MergedDictionaries;
+    bool themeDictPresent = merged.Any(d => d.Source is not null
+        && d.Source.ToString().Contains("wpf.ui;", StringComparison.OrdinalIgnoreCase)
+        && d.Source.ToString().Contains("theme", StringComparison.OrdinalIgnoreCase));
+    Console.WriteLine((themeDictPresent ? "OK   " : "FAIL ") +
+                      $"主题字典是 Application.Resources.MergedDictionaries 的直接成员 = {themeDictPresent}");
+    Console.WriteLine("INFO 合并字典: " +
+                      string.Join(" | ", merged.Select(d => d.Source?.ToString() ?? "(无 Source)")));
+    var themeBefore = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
+    // 切换真实性: ① 公开的 GetAppTheme() 只在字典**真的换掉**时才更新 (能当 isUpdated 的旁证);
+    //           ② 再加一条**方向性**语义域断言 —— 浅色主题的卡片底色必然是亮的。
+    // 不锁具体色值: 用户随手调一个主题色不该让探针报假警, 但"切了却不生效"必须报。
+    bool lightSwapped = SwapTheme(Wpf.Ui.Appearance.ApplicationTheme.Light);
+    Console.WriteLine((lightSwapped ? "OK   " : "FAIL ") +
+                      "切到浅色: GetAppTheme == Light 且卡片底色是亮色");
+    bool darkSwapped = SwapTheme(Wpf.Ui.Appearance.ApplicationTheme.Dark);
+    Console.WriteLine((darkSwapped ? "OK   " : "FAIL ") +
+                      "切到深色: GetAppTheme == Dark 且卡片底色是暗色");
+    var lightCardBg = CardSurfaceUnder(Wpf.Ui.Appearance.ApplicationTheme.Light);
+    var darkCardBg = CardSurfaceUnder(Wpf.Ui.Appearance.ApplicationTheme.Dark);
+    SwapTheme(themeBefore == Wpf.Ui.Appearance.ApplicationTheme.Unknown
+        ? Wpf.Ui.Appearance.ApplicationTheme.Dark : themeBefore);
+
+    Console.WriteLine();
+    Console.WriteLine("---- M5.2 主题: 高级页主题下拉 (控件 ↔ 配置 往返) ----");
+    // 轮 33 的教训: 断言了常量数组却没断言控件 → 空下拉漏到用户手里。这里做**往返**断言。
+    var themeCombo = advPage.FindName("ThemeCombo") as ComboBox;
+    int themeComboCount = themeCombo?.Items.Count ?? 0;
+    bool themeComboFilled = themeComboCount == AmbientLight.Views.SettingsPageAdvanced.ThemeChoices.Length;
+    Console.WriteLine((themeComboFilled ? "OK   " : "FAIL ") +
+                      $"主题下拉已填充 {themeComboCount} 项 (== 候选数) = {themeComboFilled}");
+    string themeKeyBefore = AmbientLight.Services.ConfigStore.App.Theme;
+    var themeRtCases = new (string Key, AmbientLight.Services.ThemeChoice Expect, string Desc)[]
+    {
+        ("light", AmbientLight.Services.ThemeChoice.Light, "浅色"),
+        ("dark", AmbientLight.Services.ThemeChoice.Dark, "深色"),
+        ("weird", AmbientLight.Services.ThemeChoice.System, "未知值 → 跟随系统"),
+        ("system", AmbientLight.Services.ThemeChoice.System, "跟随系统"),
+    };
+    foreach (var c in themeRtCases)
+    {
+        AmbientLight.Services.ConfigStore.App.Theme = c.Key;
+        advPage.BuildForProbe();                       // 无头宿主不触发 Loaded → 手工装配
+        int idx = Array.IndexOf(AmbientLight.Views.SettingsPageAdvanced.ThemeChoices,
+                                AmbientLight.Services.ThemeService.Parse(c.Key));
+        bool ok = themeCombo?.SelectedIndex == idx;
+        Console.WriteLine((ok ? "OK   " : "FAIL ") +
+                          $"配置 theme=\"{c.Key}\" ({c.Desc}) → 下拉选中 {themeCombo?.SelectedIndex} (期望 {idx})");
+    }
+    AmbientLight.Services.ConfigStore.App.Theme = themeKeyBefore;
+
+    Console.WriteLine();
+    Console.WriteLine("---- M5.2 主题: 语义色板对比度 (浅色主题写浅色字就翻在这条) ----");
+    // 可计算的不变量: 胶囊前景色 vs **它实际落到的底色** 的 WCAG 对比度必须 ≥ 3.0
+    // (3.0 = 非文本/大字号阈值; 10.5px 的药丸字在实测里都在 6 以上)。
+    // 底色不是常量: 深色套落在 banner 渐变上 → 取该画刷里**最亮**的一段当最坏情况 (底越亮越糊);
+    // 浅色套落在卡片上 → 取浅色主题的 CardBackground 与白底合成 (半透明底色最坏情况就是纯白)。
+    const double MinContrast = 3.0;
+    var bannerBrush = home.TryFindResource("BannerBaseBrush") as GradientBrush;
+    Console.WriteLine("INFO banner 底渐变段数 = " + (bannerBrush?.GradientStops.Count ?? 0));
+    Color bannerWorst = bannerBrush?.GradientStops.Select(s => s.Color)
+                            .OrderByDescending(AmbientLight.Services.ThemePalette.RelativeLuminance)
+                            .FirstOrDefault() ?? Colors.Black;
+    var tones = new[]
+    {
+        AmbientLight.Services.Tone.Green, AmbientLight.Services.Tone.Amber,
+        AmbientLight.Services.Tone.Blue, AmbientLight.Services.Tone.Red,
+        AmbientLight.Services.Tone.Gray,
+    };
+    foreach (var tone in tones)
+    {
+        var (bg, fg) = AmbientLight.Services.ThemePalette.Of(tone, dark: true);
+        double cr = AmbientLight.Services.ThemePalette.ContrastRatio(
+            fg, AmbientLight.Services.ThemePalette.Blend(bg, bannerWorst));
+        Console.WriteLine((cr >= MinContrast ? "OK   " : "FAIL ") +
+                          $"深色套 {tone}: 字色 vs banner 最亮段 -> 对比度 {cr:F2} (≥ {MinContrast})");
+    }
+    foreach (var tone in tones)
+    {
+        var (bg, fg) = AmbientLight.Services.ThemePalette.Of(tone, dark: false);
+        double cr = AmbientLight.Services.ThemePalette.ContrastRatio(
+            fg, AmbientLight.Services.ThemePalette.Blend(bg, lightCardBg));
+        Console.WriteLine((cr >= MinContrast ? "OK   " : "FAIL ") +
+                          $"浅色套 {tone}: 字色 vs 浅色卡片底 -> 对比度 {cr:F2} (≥ {MinContrast})");
+    }
+    foreach (var (state, desc) in new (int, string)[]
+    {
+        (AmbientCore.StateRunning, "运行中"), (AmbientCore.StateStarting, "连接中"),
+        (AmbientCore.StateWaitDisp, "等待画面"), (AmbientCore.StateDevLost, "灯带不在位"),
+        (AmbientCore.StateError, "异常"), (AmbientCore.StateStopped, "已停止"),
+    })
+    {
+        var (dot, text) = AmbientLight.Services.ThemePalette.StateOf(state, dark: true);
+        double cd = AmbientLight.Services.ThemePalette.ContrastRatio(dot, bannerWorst);
+        double ct = AmbientLight.Services.ThemePalette.ContrastRatio(text, bannerWorst);
+        double cw = AmbientLight.Services.ThemePalette.ContrastRatio(dot, darkCardBg);
+        Console.WriteLine((cd >= MinContrast && ct >= MinContrast ? "OK   " : "FAIL ") +
+                          $"banner 胶囊 {desc}: 圆点/文字 vs 最亮段 -> {cd:F2} / {ct:F2}" +
+                          $" · vs 深色卡片底 {cw:F2}");
+    }
+
     app.Shutdown();
+}
+
+/// <summary>M5.2: 切一次主题并验证"真的生效了"。返回 false 即 FAIL (而不是让探针崩掉)。
+/// 注意用 `updateAccent: false` —— 无窗口的探针宿主里没必要去动 WinRT 强调色那一路。
+/// 副作用: 结束时停留在传入的主题上, 调用方负责恢复。
+///
+/// 判据是**方向性**的, 不锁具体色值:
+///   · 卡片底必然是"浅色主题亮 / 深色主题暗";
+///   · 主题文字色必须与卡片底反向 (深色主题: 白字 > 底色; 浅色主题: 近黑字 < 底色)。
+/// 这两条任意一条不成立, 就说明"切了但资源没换" (Apply 的静默失败模式) 或者换错了。</summary>
+static bool SwapTheme(Wpf.Ui.Appearance.ApplicationTheme theme)
+{
+    try
+    {
+        Wpf.Ui.Appearance.ApplicationThemeManager.Apply(
+            theme, Wpf.Ui.Controls.WindowBackdropType.Mica, updateAccent: false);
+    }
+    catch
+    {
+        return false;
+    }
+    if (Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme() != theme) return false;
+
+    double cardLum = AmbientLight.Services.ThemePalette.RelativeLuminance(CardSurface());
+    var text = Application.Current.TryFindResource("TextFillColorPrimaryBrush") as SolidColorBrush;
+    double textLum = text is null ? cardLum : AmbientLight.Services.ThemePalette.RelativeLuminance(text.Color);
+    return theme == Wpf.Ui.Appearance.ApplicationTheme.Dark
+        ? cardLum < 0.5 && textLum > cardLum
+        : cardLum > 0.5 && textLum < cardLum;
+}
+
+/// <summary>M5.2: 当前主题下卡片底色的**实际观感**。
+/// ⚠️ `CardBackground` 是半透明覆盖色 (浅色 #B3FFFFFF / 深色 #0DFFFFFF) —— 光看颜色通道永远是"接近白",
+/// 必须叠在不透明的 `ApplicationBackgroundBrush` (浅 #FFFAFAFA / 深 #FF202020) 上才是肉眼看到的那个颜色。
+/// (第一版断言就是这么翻的: 深色主题下"卡片底是暗色"永远判 false。)</summary>
+static Color CardSurface()
+{
+    var bg = Application.Current.TryFindResource("CardBackground") as SolidColorBrush;
+    if (bg is null) return Colors.Transparent;
+    var baseBg = Application.Current.TryFindResource("ApplicationBackgroundBrush") as SolidColorBrush;
+    return baseBg is null ? bg.Color : AmbientLight.Services.ThemePalette.Blend(bg.Color, baseBg.Color);
+}
+
+/// <summary>M5.2: 在**指定主题下**取卡片底色 (浅色套色板的参考底)。</summary>
+static Color CardSurfaceUnder(Wpf.Ui.Appearance.ApplicationTheme theme)
+{
+    SwapTheme(theme);
+    return CardSurface();
 }
 
 static void Layout(FrameworkElement el)
