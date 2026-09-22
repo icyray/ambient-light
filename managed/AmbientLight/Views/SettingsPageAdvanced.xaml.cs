@@ -15,9 +15,15 @@ public partial class SettingsPageAdvanced : Page
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
     // ---- 连接: 端口 / 波特率 (§8.3) --------------------------------------
-    /// <summary>波特率候选。CDC 虚拟串口下这个值通常被设备端忽略 (实测对波特率不敏感),
+    /// <summary>波特率候选 (值)。CDC 虚拟串口下这个值通常被设备端忽略 (实测对波特率不敏感),
     /// 保留给 USB 转串口桥接或旧固件; 默认 2000000 与厂商一致。</summary>
     public static readonly int[] BaudChoices = [2000000, 115200, 57600, 9600];
+
+    /// <summary>波特率下拉的显示文案 —— 与 `BaudChoices` **同序同长**。
+    /// ⚠️ 轮 33 踩过: 只写了 BaudChoices 却忘了给 ComboBox 设 ItemsSource → 下拉是空的
+    /// (空列表上设 SelectedIndex 不报错也不生效)。所以下面构造里显式绑定, 探针也断言"确实填上了"。</summary>
+    private static readonly string[] BaudLabels =
+        ["2000000 (默认)", "115200", "57600", "9600"];
 
     /// <summary>端口下拉的一项。`Port = null` 表示"自动探测" (写回空串)。</summary>
     public sealed record PortItem(string? Port, string Label);
@@ -45,11 +51,17 @@ public partial class SettingsPageAdvanced : Page
     public SettingsPageAdvanced()
     {
         InitializeComponent();
+        BaudCombo.ItemsSource = BaudLabels;   // 静态内容 → 构造期就绑; 选中项由 ReloadFromConfig 定
         Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
         Loaded += OnLoaded;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e) => ReloadFromConfig();
+
+    /// <summary>探针用: 无头宿主里 Page 的 Loaded 不触发, 手工走一遍控件装配,
+    /// 让探针能验"下拉是否真的被填上、选中项是否与配置一致"。轮 33 就是漏了下拉填充
+    /// (探针当时只断言了常量数组, 没断言控件) 才让空下拉漏到用户手里。</summary>
+    public void BuildForProbe() => ReloadFromConfig();
 
     /// <summary>把配置读进控件。Loaded 时走一遍; 「恢复默认配置」之后也要再走一遍。
     /// 全程 _loading=true → 各控件的事件处理器一律不回写 (否则会把刚恢复的默认值又覆盖回去)。</summary>
