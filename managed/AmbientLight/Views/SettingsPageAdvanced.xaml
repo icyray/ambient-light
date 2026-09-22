@@ -100,6 +100,13 @@
         <!-- 界面 (M5.1 §4: banner 底边辉光的实验开关 —— 功耗/手感不对时可随手关掉,
              退回纯渐变 banner; 5.2 主题 / 5.3 语言等界面项后续也落在这里) -->
         <TextBlock Style="{StaticResource GroupLabel}" Text="界面" />
+        <!-- M5.2 主题: 即时热切换 (走 FluentWindow/WPF-UI 官方管线, 不重启)。
+             文案「跟随系统」= 随 Windows 的深/浅色**与强调色**变化自动跟随。 -->
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DarkTheme24}" Title="主题"
+                             Description="跟随系统时随 Windows 深浅色与强调色变化即时切换">
+            <ComboBox x:Name="ThemeCombo" Width="150" VerticalAlignment="Center"
+                      SelectionChanged="OnThemeChanged" />
+        </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBrush24}" Title="banner 辉光"
                              Description="主页顶栏底边按灯带实况显示模糊辉光; 关闭后回到纯渐变">
             <ui:ToggleSwitch x:Name="BannerGlowToggle" Click="OnBannerGlowChanged" />

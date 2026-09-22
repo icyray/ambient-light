@@ -27,9 +27,17 @@ public partial class SettingsPageAdvanced : Page
     private static readonly string[] BaudLabels =
         ["默认 (2000000)", "115200", "57600", "38400", "28800", "19200", "14400", "9600"];
 
+    // ---- 主题 (M5.2) ------------------------------------------------------
+    /// <summary>主题下拉的值 (与显示文案**同序同长**)。
+    /// ⚠️ 轮 33 教训: 有了候选表还必须给 ComboBox 设 ItemsSource —— 空列表上设 SelectedIndex
+    /// 既不报错也不生效, 下拉就是空的。探针因此断言"控件里真有项 + 与配置往返一致"。</summary>
+    public static readonly ThemeChoice[] ThemeChoices =
+        [ThemeChoice.System, ThemeChoice.Light, ThemeChoice.Dark];
+
+    private static readonly string[] ThemeLabels = ["跟随系统", "浅色", "深色"];
+
     /// <summary>端口下拉的一项。`Port = null` 表示"自动探测" (写回空串)。</summary>
     public sealed record PortItem(string? Port, string Label);
-
     /// <summary>端口下拉的选项 —— **纯函数**, 探针打真值表。规则:
     ///   ① 第一项永远是「自动检测」(Port = null → 配置写空串, native 才会按 VID/PID 自动跟随);
     ///   ② 本机所有 COM 口都列出来 (manual 指定就是为"认不到 VID/PID"准备的);
@@ -54,6 +62,7 @@ public partial class SettingsPageAdvanced : Page
     {
         InitializeComponent();
         BaudCombo.ItemsSource = BaudLabels;   // 静态内容 → 构造期就绑; 选中项由 ReloadFromConfig 定
+        ThemeCombo.ItemsSource = ThemeLabels; // 同上 (M5.2)
         Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
         Loaded += OnLoaded;
     }
@@ -79,6 +88,7 @@ public partial class SettingsPageAdvanced : Page
         StartMinimizedToggle.IsChecked = ConfigStore.App.StartMinimized;
         AutoStartCoreToggle.IsChecked = ConfigStore.Device.AutoStartCore;
         BannerGlowToggle.IsChecked = ConfigStore.App.BannerGlow;   // M5.1 §4
+        ThemeCombo.SelectedIndex = Array.IndexOf(ThemeChoices, ThemeService.Parse(ConfigStore.App.Theme));  // M5.2 (Parse 永不失败)
 
         // 连接 (§8.3)
         ReloadPorts();
@@ -198,6 +208,22 @@ public partial class SettingsPageAdvanced : Page
         if (_loading) return;
         ConfigStore.App.BannerGlow = BannerGlowToggle.IsChecked == true;
         ConfigStore.SaveApp();
+    }
+
+    /// <summary>主题 (M5.2): 写 app.json + **立刻应用**(不重启)。
+    /// Apply 会整个换掉主题资源字典 → 各页面靠 DynamicResource 自动跟着变;
+    /// 主页那几处 code-behind 一次性赋值的刷子由它自己订阅 ApplicationThemeManager.Changed 重建。</summary>
+    private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        int i = ThemeCombo.SelectedIndex;
+        if (i < 0 || i >= ThemeChoices.Length) return;
+        var choice = ThemeChoices[i];
+        string key = ThemeService.ToKey(choice);
+        if (key == ConfigStore.App.Theme) return;      // 没变就别白跑一次 Apply (它会重刷 backdrop)
+        ConfigStore.App.Theme = key;
+        ConfigStore.SaveApp();
+        ThemeService.Apply(choice);
     }
 
     // ---- 配置目录 --------------------------------------------------------
