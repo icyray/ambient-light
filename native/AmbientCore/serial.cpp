@@ -119,8 +119,32 @@ int EnumerateVidPidPorts(std::vector<ComPortInfo>& out)
     return (int)out.size();
 }
 
-void BuildZeroFrame(std::vector<uint8_t>& f)
+// 本机所有 COM 口 —— 注册表 HARDWARE\DEVICEMAP\SERIALCOMM (与托管侧 SerialPorts.All() 同一来源,
+// 比按 VID/PID 过滤的枚举宽)。只读注册表, 不枚举设备、更不打开端口。
+int EnumerateAllPorts(std::vector<std::wstring>& out)
 {
+    out.clear();
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DEVICEMAP\\SERIALCOMM",
+                      0, KEY_READ, &key) != ERROR_SUCCESS)
+        return 0;
+    for (DWORD i = 0; ; i++) {
+        wchar_t name[256]{};
+        wchar_t data[256]{};
+        DWORD nameLen = (DWORD)(sizeof(name) / sizeof(wchar_t));
+        DWORD dataLen = sizeof(data);
+        DWORD type = 0;
+        if (RegEnumValueW(key, i, name, &nameLen, nullptr, &type,
+                          (LPBYTE)data, &dataLen) != ERROR_SUCCESS)
+            break;
+        if (type == REG_SZ && dataLen >= sizeof(wchar_t) && data[0])
+            out.push_back(data);                       // 形如 L"COM5"
+    }
+    RegCloseKey(key);
+    return (int)out.size();
+}
+
+void BuildZeroFrame(std::vector<uint8_t>& f){
     f.assign((size_t)kFrameLen, 0);
     f[0] = 'A'; f[1] = 'd'; f[2] = 'a';
 }

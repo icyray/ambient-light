@@ -45,6 +45,12 @@ private:
 // 枚举当前在位、实例 ID 含 VID_x&PID_y 的 COM 口 (只枚举, 不打开端口)
 int EnumerateVidPidPorts(std::vector<ComPortInfo>& out);
 
+// 枚举本机**所有** COM 口 (不受 VID/PID 限制): 读 HKLM\HARDWARE\DEVICEMAP\SERIALCOMM。
+// 用途: 用户**手动指定端口**时判断该端口到底在不在位 —— 不能拿上面那个按 VID/PID 过滤过的
+// 列表来判, 否则任何一个"非灯带"的 COM 口都会被当成"端口消失", 于是触发身份跟随、
+// 偷偷连回灯带 (实测现象: 端口填 COM4, 主页开启却连到 COM5)。
+int EnumerateAllPorts(std::vector<std::wstring>& out);
+
 // 在已打开端口上执行: 全零复位帧 → "Ad0" 握手 ×3 → 应答字节
 bool Handshake(SerialPort& sp, uint8_t& resp);
 

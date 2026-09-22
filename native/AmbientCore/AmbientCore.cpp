@@ -509,13 +509,21 @@ void CoreLoopInner(Sess* g)
         MultiByteToWideChar(CP_UTF8, 0, c.comPort, -1, cfgPort, AC_PORT_LEN);
         std::vector<std::wstring> candidates;
         if (cfgPort[0]) {
+            // 手动指定了端口 → 只认它。判"在不在位"必须查**本机所有 COM 口**:
+            // 拿上面那个按 VID/PID 过滤过的 `ports` 来判是错的 —— 任何一个"非灯带"的 COM 口
+            // (例如用户故意填的 COM4) 都不在 `ports` 里, 会被当成"配置端口消失",
+            // 于是走身份跟随、偷偷连回灯带 (实测现象: 端口填 COM4, 主页开启却连到 COM5)。
+            std::vector<std::wstring> allPorts;
+            serial::EnumerateAllPorts(allPorts);
             bool present = false;
-            for (auto& p : ports)
-                if (_wcsicmp(p.port.c_str(), cfgPort) == 0) { present = true; break; }
+            for (auto& p : allPorts)
+                if (_wcsicmp(p.c_str(), cfgPort) == 0) { present = true; break; }
             if (present) {
+                // 只用它: 握手失败就是失败, **不回落到 VID/PID 身份跟随** ——
+                // 手动指定的用途就是"换芯片/桥接/多灯带/排查", 偷偷连回灯带会让人无法判断。
                 candidates.push_back(cfgPort);
             } else {
-                // 配置端口消失 → 按 VID/PID 身份自动跟随新端口 (API 3.6 #5)
+                // 端口真的不在位 → 按 VID/PID 身份自动跟随新端口 (API 3.6 #5)
                 if (ports.size() == 1) {
                     ACLOGW("configured port %ls gone, following VID/PID -> %ls",
                            cfgPort, ports[0].port.c_str());
