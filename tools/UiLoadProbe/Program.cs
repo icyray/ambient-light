@@ -703,6 +703,68 @@ static void Run()
     Console.WriteLine((hueDesc ? "OK   " : "FAIL ") +
                       $"「色相强度」有说明文案 = {hueDesc}  · 当前: {hueRow?.Description}");
 
+    Console.WriteLine();
+    Console.WriteLine("---- 轮 33: 设备行胶囊口径 (有会话时必须看会话状态) ----");
+    // 轮 33 用户报的两个现象都由这条规则解释: 拔线后 slot 还在 → 旧代码一律"运行中";
+    // 托盘关灯 → 会话消失但当时没有刷新信号。这里只断言**色调**(严重度), 文案只打印 ——
+    // 措辞随手可改, 而"灯带不在位不能显示成绿色"是硬的。
+    var pillWithSlot = new (int State, string Desc, AmbientLight.Views.HomePage.PillTone Expect)[]
+    {
+        (AmbientCore.StateRunning, "运行中", AmbientLight.Views.HomePage.PillTone.Green),
+        (AmbientCore.StateStarting, "正在连接", AmbientLight.Views.HomePage.PillTone.Blue),
+        (AmbientCore.StateWaitDisp, "锁屏/熄屏", AmbientLight.Views.HomePage.PillTone.Gray),
+        (AmbientCore.StateDevLost, "灯带被拔掉", AmbientLight.Views.HomePage.PillTone.Amber),
+        (AmbientCore.StateError, "不可恢复错误", AmbientLight.Views.HomePage.PillTone.Red),
+        (AmbientCore.StateStopped, "已停止", AmbientLight.Views.HomePage.PillTone.Gray),
+    };
+    foreach (var c in pillWithSlot)
+    {
+        var (label, tone) = AmbientLight.Views.HomePage.DevicePill(
+            hasSlot: true, state: c.State, inUse: true, devType: 0, likelyOurs: false);
+        Console.WriteLine((tone == c.Expect ? "OK   " : "FAIL ") +
+                          $"有会话 + {c.Desc} → 色调 {tone} (期望 {c.Expect}) · 文案「{label}」");
+    }
+    var pillNoSlot = new (bool InUse, int DevType, bool Ours, AmbientLight.Views.HomePage.PillTone Expect, string Desc)[]
+    {
+        (true, -1, true, AmbientLight.Views.HomePage.PillTone.Blue, "无会话 + 端口被占 + 自己正在起"),
+        (true, -1, false, AmbientLight.Views.HomePage.PillTone.Amber, "无会话 + 端口被别人占"),
+        (false, -1, false, AmbientLight.Views.HomePage.PillTone.Amber, "无会话 + 握手无应答"),
+        (false, 0, false, AmbientLight.Views.HomePage.PillTone.Gray, "无会话 + 设备可用"),
+    };
+    foreach (var c in pillNoSlot)
+    {
+        var (label, tone) = AmbientLight.Views.HomePage.DevicePill(
+            hasSlot: false, state: AmbientCore.StateStopped, inUse: c.InUse, devType: c.DevType, likelyOurs: c.Ours);
+        Console.WriteLine((tone == c.Expect ? "OK   " : "FAIL ") +
+                          $"{c.Desc} → 色调 {tone} (期望 {c.Expect}) · 文案「{label}」");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("---- §8.3 连接: 端口下拉 (纯函数 + 行存在) ----");
+    var portItems = AmbientLight.Views.SettingsPageAdvanced.BuildPortItems("COM7", ["COM5", "COM10", "com5"]);
+    bool autoFirst = portItems.Count > 0 && portItems[0].Port == null
+                     && AmbientLight.Views.SettingsPageAdvanced.PortValueOf(portItems[0]) == "";
+    bool allPresent = portItems.Any(i => i.Port == "COM5") && portItems.Any(i => i.Port == "COM10");
+    bool keepsConfigured = portItems.Any(i => i.Port == "COM7");   // 不在位也要留着, 别吞掉用户设置
+    bool noDup = portItems.Select(i => i.Port ?? "").Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                 == portItems.Count;
+    Console.WriteLine((autoFirst ? "OK   " : "FAIL ") +
+                      $"第一项是「自动探测」且写回空串 = {autoFirst} (空串才会让 native 按 VID/PID 自动跟随)");
+    Console.WriteLine((allPresent && noDup ? "OK   " : "FAIL ") +
+                      $"在位端口全列出且去重 (大小写不敏感) = {allPresent && noDup}");
+    Console.WriteLine((keepsConfigured ? "OK   " : "FAIL ") +
+                      $"配置端口当前不在位时仍保留 = {keepsConfigured}  · 选项: " +
+                      string.Join(" | ", portItems.Select(i => i.Label)));
+    bool rowsExist = advTitles.Any(t => t.Contains("端口")) && advTitles.Any(t => t.Contains("波特率"));
+    bool baudOk = AmbientLight.Views.SettingsPageAdvanced.BaudChoices.Contains(2000000)
+                  && AmbientLight.Views.SettingsPageAdvanced.BaudChoices[0] == 2000000;
+    Console.WriteLine((rowsExist ? "OK   " : "FAIL ") + $"高级页有「端口」「波特率」两行 = {rowsExist}");
+    Console.WriteLine((baudOk ? "OK   " : "FAIL ") +
+                      $"波特率候选含默认值 2000000 且排首位 = {baudOk}  · " +
+                      string.Join(" / ", AmbientLight.Views.SettingsPageAdvanced.BaudChoices));
+    Console.WriteLine("INFO 本机 COM 口 (注册表 SERIALCOMM): " +
+                      string.Join(", ", AmbientLight.Services.SerialPorts.All().DefaultIfEmpty("(无)")));
+
     app.Shutdown();
 }
 
