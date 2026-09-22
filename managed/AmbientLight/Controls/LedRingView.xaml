@@ -27,7 +27,7 @@
                         <TextBlock x:Name="HintTitle" Text="LED 预览" FontWeight="SemiBold" FontSize="12"
                                    HorizontalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                        <TextBlock x:Name="HintText" Text="" FontSize="11"
+                        <TextBlock x:Name="HintText" Text="" FontSize="11" Visibility="Collapsed"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap" TextAlignment="Center" Margin="12,2,12,0" />
                     </StackPanel>

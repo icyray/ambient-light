@@ -20,8 +20,15 @@ public partial class LedRingView : UserControl
 
     public LedRingView() => InitializeComponent();
 
-    /// <summary>中心区提示副标题 (如 "MCU 特效由固件渲染")</summary>
-    public void SetHint(string text) => HintText.Text = text;
+    /// <summary>中心区提示副标题 (如 "MCU 特效由固件渲染" / 主页的静态几何参数)。
+    /// **空串要把整行收起** —— 否则底衬里会多留一行高度 (校准窗只显示标题时就看得出来)。
+    /// 初始状态在 XAML 里也是 Collapsed (没人调过 SetHint 的宿主同样不该留空行)。</summary>
+    public void SetHint(string text)
+    {
+        string s = text ?? "";
+        HintText.Text = s;
+        HintText.Visibility = string.IsNullOrWhiteSpace(s) ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     /// <summary>校准向导中心区 (M5.1 §7): 0 号灯起点徽标 + 绕向箭头。
     /// 主页不显示 —— 那里的中心只放静态几何参数 (展开"布局预览"的人要的是几何事实)。
