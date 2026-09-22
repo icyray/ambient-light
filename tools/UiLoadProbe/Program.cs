@@ -993,42 +993,38 @@ static void Run()
     }
 
     Console.WriteLine();
-    Console.WriteLine("---- M5.2 主题: 说明文字刷子的对比度 (浅色下不能发虚) ----");
-    // 用户反馈: 浅色模式下说明/次级文字太淡。原来用 WPF-UI 的 TextFillColorTertiaryBrush
-    // (浅色 #72000000 = 45% 黑), 叠在卡片底上对比度只有 ~3.3。改成应用自己的 AppTextHintBrush
-    // (深色与 WPF-UI 一致 #72FFFFFF, 浅色压到 #99000000), 这里按**可计算的不变量**断言两个主题都达标。
-    const double MinHint = 4.0;
+    Console.WriteLine("---- M5.2 主题: 文字色层级的对比度 (浅色下说明文字不能发虚) ----");
+    // 用户反馈: 浅色模式下说明/次级文字太淡 —— 量化后是 WPF-UI 的 TextFillColorTertiaryBrush
+    // 浅色只有 #72000000 (45% 黑), 落在卡片底上对比度 3.33。
+    // 结论 (轮 34 补定稿): **不自造刷子**, 说明文字改用 WPF-UI 的 TextFillColorSecondaryBrush;
+    // 这里断言两条**可计算的不变量**, 都不锁具体色值:
+    //   ① 说明文字档 (Secondary) 在两个主题下都 ≥ 4.0;
+    //   ② 层级必须单调递减 Primary > Secondary > Tertiary (同一个底上) —— 这条能抓住"两个键被写反"。
+    const double MinSecondary = 4.0;
+    double ContrastOf(string key, Color card) =>
+        Application.Current.TryFindResource(key) is SolidColorBrush b
+            ? AmbientLight.Services.ThemePalette.ContrastRatio(
+                AmbientLight.Services.ThemePalette.Blend(b.Color, card), card)
+            : 0;
     foreach (var (ch, desc) in new (AmbientLight.Services.ThemeChoice, string)[]
     {
         (AmbientLight.Services.ThemeChoice.Dark, "深色"),
         (AmbientLight.Services.ThemeChoice.Light, "浅色"),
     })
     {
-        // 走**生产路径** (ThemeService.Apply) 而不是只换资源字典: 说明文字刷子的值是由
-        // ThemeService.WriteAppBrushes 按主题写进去的, 只 SwapTheme 的话它还是初值 (深色那份)。
-        AmbientLight.Services.ThemeService.Apply(ch);
+        AmbientLight.Services.ThemeService.Apply(ch);   // 走生产路径, 保证资源确实换过
         var card = CardSurface();
-        var hint = Application.Current.TryFindResource(
-            AmbientLight.Services.ThemeService.AppTextHintKey) as SolidColorBrush;
-        double hintCr = hint is null ? 0
-            : AmbientLight.Services.ThemePalette.ContrastRatio(
-                AmbientLight.Services.ThemePalette.Blend(hint.Color, card), card);
-        Console.WriteLine((hint is not null && hintCr >= MinHint ? "OK   " : "FAIL ") +
-                          $"{desc}主题: 说明文字刷子存在 = {hint is not null}, 对比度 {hintCr:F2} (≥ {MinHint})");
-        // INFO: 旧键 (WPF-UI 的 tertiary) 的值 —— 那是库的值我们改不了, 只用来对照
-        if (Application.Current.TryFindResource("TextFillColorTertiaryBrush") is SolidColorBrush old)
-            Console.WriteLine($"INFO {desc}主题 WPF-UI tertiary 的对比度 = " +
-                              $"{AmbientLight.Services.ThemePalette.ContrastRatio(
-                                  AmbientLight.Services.ThemePalette.Blend(old.Color, card), card):F2}");
-        // 深色主题必须与 WPF-UI 的 tertiary **同色** —— 深色观感是用户已验收的, 换刷子不许顺手改它
-        if (ch == AmbientLight.Services.ThemeChoice.Dark)
-        {
-            var tertiary = Application.Current.TryFindResource("TextFillColorTertiaryBrush") as SolidColorBrush;
-            bool sameAsTertiary = tertiary is not null && hint is not null && tertiary.Color == hint.Color;
-            Console.WriteLine((sameAsTertiary ? "OK   " : "FAIL ") +
-                              $"深色主题: 说明文字刷子与 WPF-UI tertiary 同色 = {sameAsTertiary} · " +
-                              $"{tertiary?.Color} vs {hint?.Color}");
-        }
+        double primary = ContrastOf("TextFillColorPrimaryBrush", card);
+        double secondary = ContrastOf("TextFillColorSecondaryBrush", card);
+        double tertiary = ContrastOf("TextFillColorTertiaryBrush", card);
+        Console.WriteLine((secondary >= MinSecondary ? "OK   " : "FAIL ") +
+                          $"{desc}主题: 说明文字 (Secondary) 对比度 {secondary:F2} (≥ {MinSecondary}) · " +
+                          $"Primary {primary:F2} / Tertiary {tertiary:F2}");
+        bool monotonic = primary > secondary && secondary > tertiary;
+        Console.WriteLine((monotonic ? "OK   " : "FAIL ") +
+                          $"{desc}主题: 文字层级单调递减 (Primary > Secondary > Tertiary) = {monotonic}");
+        Console.WriteLine($"INFO {desc}主题卡片底 = #{card.R:X2}{card.G:X2}{card.B:X2}, " +
+                          $"Primary={ContrastOf("TextFillColorPrimaryBrush", card):F2}");
     }
     SwapTheme(themeBefore == Wpf.Ui.Appearance.ApplicationTheme.Unknown
         ? Wpf.Ui.Appearance.ApplicationTheme.Dark : themeBefore);
