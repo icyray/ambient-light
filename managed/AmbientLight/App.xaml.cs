@@ -66,6 +66,10 @@ public partial class App : Application
         };
 
         ConfigStore.Load();
+        // M5.2 主题: 必须在 new MainWindow() **之前**应用 —— 此时还没有窗口, Apply 的最后一步
+        // (刷 Application.MainWindow 的 backdrop) 是空操作, 窗口创建时 OnSourceInitialized
+        // 会按已经正确的主题走 backdrop 序列, 所以不会"先浅色再变深"闪一下。
+        Services.ThemeService.ApplyAtStartup();
         // 开机自启自愈: app.json 的 AutoStart 是事实源, 快捷方式丢失/残留都对齐
         if (ConfigStore.App.AutoStart && !AutoStart.IsActive())
             AutoStart.Enable();
@@ -77,6 +81,7 @@ public partial class App : Application
         _poller.StateChanged += OnCoreStateChanged;
 
         _main = new MainWindow();
+        Services.ThemeService.Attach(_main);   // M5.2: 接线后开始跟随系统主题/强调色变化
         if (ConfigStore.App.StartMinimized)
             _main.Hide();
         else
@@ -398,6 +403,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         StopAllDevices();
+        Services.ThemeService.Detach();   // M5.2: SystemEvents 是静态事件, 不退订会吊着它的隐藏窗口
         if (ConfigStore.ConfigDir.Length > 0)
         {
             // 第二实例守卫退出时尚未 Load (ConfigDir 为空), 不能用默认值覆盖已存配置

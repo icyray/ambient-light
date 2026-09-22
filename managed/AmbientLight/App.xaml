@@ -6,6 +6,15 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- ⚠️ M5.2 主题 (见 Services/ThemeService.cs): 这两条是**硬约束**, 别动 ——
+                     1. ThemesDictionary 必须是 Application.Resources.MergedDictionaries 的**直接成员**:
+                        ApplicationThemeManager.Apply 靠
+                        ResourceDictionaryManager("wpf.ui;").UpdateDictionary("theme", …) 按
+                        "Source 同时含 wpf.ui; 与 theme" 找它**整个替换**; 找不到就静默 return(不抛异常)。
+                        所以不能把它挪进嵌套 ResourceDictionary, 也不能改名/换类型。
+                     2. Theme="Dark" 必须显式写: ThemesDictionary 无参构造默认是 Light,
+                        运行时主题由 ThemeService 在启动期 Apply 覆盖; 去掉这行启动会先闪一下浅色。
+                     深色是启动期的**兜底值**, 不是"默认主题"(默认主题 = app.json 的 theme, 缺省跟随系统)。 -->
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
