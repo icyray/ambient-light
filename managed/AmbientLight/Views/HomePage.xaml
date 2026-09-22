@@ -129,33 +129,33 @@
              轮 17 已去掉抖动噪点层 —— 无时域抖动时静态噪点只会让画面发脏) -->
         <LinearGradientBrush x:Key="BannerBaseBrush" StartPoint="0,0.08" EndPoint="1,0.92">
             <GradientStop Offset="0" Color="#FF0A2337" />
-            <GradientStop Offset="0.35" Color="#FF10252F" />
-            <GradientStop Offset="0.7" Color="#FF16282C" />
-            <GradientStop Offset="1" Color="#FF1A2A29" />
+            <GradientStop Offset="0.35" Color="#FF10222D" />
+            <GradientStop Offset="0.7" Color="#FF17242A" />
+            <GradientStop Offset="1" Color="#FF1F2324" />
         </LinearGradientBrush>
         <!-- 模式色光带: 长缓 alpha 坡 (0→13→58→70→26→0), 端点全透明 → 无硬边 -->
         <LinearGradientBrush x:Key="BannerStreakBlueBrush" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Offset="0.00" Color="#00000000" />
-            <GradientStop Offset="0.18" Color="#0D4C8DFF" />
-            <GradientStop Offset="0.38" Color="#3A4C8DFF" />
-            <GradientStop Offset="0.52" Color="#464C8DFF" />
-            <GradientStop Offset="0.72" Color="#1A4C8DFF" />
+            <GradientStop Offset="0.18" Color="#0D3E91E0" />
+            <GradientStop Offset="0.38" Color="#3A3E91E0" />
+            <GradientStop Offset="0.52" Color="#463E91E0" />
+            <GradientStop Offset="0.72" Color="#1A3E91E0" />
             <GradientStop Offset="1.00" Color="#00000000" />
         </LinearGradientBrush>
         <LinearGradientBrush x:Key="BannerStreakGreenBrush" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Offset="0.00" Color="#00000000" />
-            <GradientStop Offset="0.18" Color="#0D2DC08A" />
-            <GradientStop Offset="0.38" Color="#3A2DC08A" />
-            <GradientStop Offset="0.52" Color="#462DC08A" />
-            <GradientStop Offset="0.72" Color="#1A2DC08A" />
+            <GradientStop Offset="0.18" Color="#0D21BCBA" />
+            <GradientStop Offset="0.38" Color="#3A21BCBA" />
+            <GradientStop Offset="0.52" Color="#4621BCBA" />
+            <GradientStop Offset="0.72" Color="#1A21BCBA" />
             <GradientStop Offset="1.00" Color="#00000000" />
         </LinearGradientBrush>
         <LinearGradientBrush x:Key="BannerStreakPurpleBrush" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Offset="0.00" Color="#00000000" />
-            <GradientStop Offset="0.18" Color="#0DA78BFA" />
-            <GradientStop Offset="0.38" Color="#3AA78BFA" />
-            <GradientStop Offset="0.52" Color="#46A78BFA" />
-            <GradientStop Offset="0.72" Color="#1AA78BFA" />
+            <GradientStop Offset="0.18" Color="#0DA679DC" />
+            <GradientStop Offset="0.38" Color="#3AA679DC" />
+            <GradientStop Offset="0.52" Color="#46A679DC" />
+            <GradientStop Offset="0.72" Color="#1AA679DC" />
             <GradientStop Offset="1.00" Color="#00000000" />
         </LinearGradientBrush>
         <!-- 固件特效 (MCU) 光带: 中性白灰 —— MCU 由灯带自己渲染, 既不取色也不律动,
@@ -300,11 +300,11 @@
                                Text="当前模式的灯光颜色 — 原始色 (未含亮度)" />
                     <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="8,0,4,0">
-                        <ui:TextBox x:Name="HexBox" Width="110" Text="#FFE1D6" MaxLength="9"
-                                    VerticalAlignment="Center" TextChanged="OnHexChanged" />
                         <Border x:Name="SolidPreview" Width="32" Height="32" CornerRadius="6"
                                 Background="#FFE1D6" BorderBrush="#3A3A44" BorderThickness="1"
-                                VerticalAlignment="Center" Margin="8,0,0,0" />
+                                VerticalAlignment="Center" />
+                        <ui:TextBox x:Name="HexBox" Width="90" Text="#FFE1D6" MaxLength="9"
+                                    VerticalAlignment="Center" TextChanged="OnHexChanged" Margin="8,0,0,0" />
                     </StackPanel>
                 </Grid>
             </ui:CardExpander.Header>

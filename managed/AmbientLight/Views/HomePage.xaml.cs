@@ -241,11 +241,12 @@ public partial class HomePage : Page
                 Child = new Wpf.Ui.Controls.SymbolIcon
                 {
                     Symbol = icon,
-                    FontSize = 22,
+                    FontSize = 24,
                     // 底色是亮色 → 图标取近黑: 深浅主题下对比都成立
-                    Foreground = new System.Windows.Media.SolidColorBrush(Color.FromRgb(0x14, 0x1A, 0x1F)),
+                    Foreground = new System.Windows.Media.SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
+                    Filled = true,
                 },
             };
             var descEl = new System.Windows.Controls.TextBlock
@@ -317,12 +318,12 @@ public partial class HomePage : Page
     {
         var (from, to) = mode switch
         {
-            0 => (Rgb(0x7F, 0xB4, 0xFF), Rgb(0x2E, 0x62, 0xD9)),   // 追光 · 蓝
-            1 => (Rgb(0x4F, 0xD9, 0xA6), Rgb(0x12, 0x85, 0x5F)),   // 拾音 · 绿
-            11 => (Rgb(0xC4, 0xA6, 0xFF), Rgb(0x7A, 0x46, 0xD8)),  // 纯色 · 紫
+            0 => (Rgb(0x46, 0xCC, 0xFC), Rgb(0x2E, 0x80, 0xD7)),   // 追光 · 蓝
+            1 => (Rgb(0x61, 0xED, 0xD4), Rgb(0x0D, 0xA2, 0xAA)),   // 拾音 · 绿
+            11 => (Rgb(0xCA, 0x9F, 0xF1), Rgb(0x8F, 0x68, 0xC9)),  // 纯色 · 紫
             _ => (Rgb(0xDC, 0xE4, 0xEE), Rgb(0x8E, 0x9C, 0xB0)),   // 固件特效 · 中性
         };
-        return new LinearGradientBrush(from, to, 135.0);            // 135° = 左上 → 右下
+        return new LinearGradientBrush(from, to, 50.0);            // 135° = 左上 → 右下
     }
 
     private void RefreshModeButtons()
@@ -838,9 +839,9 @@ public partial class HomePage : Page
     /// <summary>辉光基色 = 与 banner 光带同一套色系 (轮 27 用户定稿: 不再逐灯上色)</summary>
     private static Color ModeGlowColor(string key) => key switch
     {
-        "Blue" => Rgb(0x4C, 0x8D, 0xFF),
-        "Green" => Rgb(0x2D, 0xC0, 0x8A),
-        "Purple" => Rgb(0xA7, 0x8B, 0xFA),
+        "Blue" => Rgb(0x56, 0xB0, 0xF0),
+        "Green" => Rgb(0x46, 0xD4, 0xC5),
+        "Purple" => Rgb(0xC3, 0x8F, 0xF1),
         _ => Rgb(0xE4, 0xEB, 0xF2),
     };
 
