@@ -42,7 +42,10 @@ public partial class SettingsPageAdvanced : Page
     ///   ① 第一项永远是「自动检测」(Port = null → 配置写空串, native 才会按 VID/PID 自动跟随);
     ///   ② 本机所有 COM 口都列出来 (manual 指定就是为"认不到 VID/PID"准备的);
     ///   ③ 配置里那个端口若当前**不在位**, 也要列出来并标注 —— 否则用户会以为设置被吞了
-    ///      (native 侧对"配置端口消失"有兜底: 唯一匹配就跟随, 多匹配就逐个握手判型)。</summary>
+    ///      (native 侧对"配置端口消失"有兜底: 唯一匹配就跟随, 多匹配就逐个握手判型)。
+    /// ⚠️ 轮 34 补: 判"在位"必须用**本机全部 COM 口**(注册表 SERIALCOMM), **不能**拿 native 那份
+    /// 按 VID/PID 过滤过的列表 —— 否则用户填的 COM4 会被当成"端口消失", native 就偷偷连回灯带
+    /// (实测 bug: 端口填 COM4, 主页开启却连到 COM5)。**手动指定后不再回落**, 握手失败就是失败。</summary>
     public static List<PortItem> BuildPortItems(string configured, IEnumerable<string> present)
     {
         var list = new List<PortItem> { new(null, "自动检测") };
@@ -180,8 +183,8 @@ public partial class SettingsPageAdvanced : Page
             _loading = true;                        // 失败回滚开关显示
             AutoStartToggle.IsChecked = !on;
             _loading = false;
-            System.Windows.MessageBox.Show($"开机自启设置失败: {err}", "AmbientLight",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            _ = Controls.AppDialogs.ShowAsync("开机自启",
+                $"设置开机自启失败: {err}", closeText: "知道了");
             return;
         }
         ConfigStore.App.AutoStart = on;
@@ -243,7 +246,7 @@ public partial class SettingsPageAdvanced : Page
     //   有新版 → 同一对话框里给出新版号 + Release 页面链接; 无新版 → "已是最新版本"。
     private async void OnCheckUpdate(object sender, RoutedEventArgs e)
     {
-        await ShowDialogAsync("版本更新",
+        await Controls.AppDialogs.ShowAsync("版本更新",
             $"当前版本 {CurrentVersion}。\n\n"
             + "软件还没有发布到 GitHub Release, 暂时无法检查更新。"
             + "发布之后, 这里会与仓库最新的 Release 版本号比对, 并给出下载入口。",
@@ -253,7 +256,7 @@ public partial class SettingsPageAdvanced : Page
     // ---- 恢复默认配置 (轮 21): 藏在「配置目录」折叠内。破坏性操作, 先确认再动手 ----
     private async void OnRestoreDefaults(object sender, RoutedEventArgs e)
     {
-        bool ok = await ShowDialogAsync("恢复默认配置",
+        bool ok = await Controls.AppDialogs.ShowAsync("恢复默认配置",
             "将把「设置」与「设备配置」全部重置为出厂默认值 —— 亮度、模式、端口、采集与拾音参数、"
             + "灯序校准等都会被覆盖, 且无法撤销。\n\n确定要恢复吗?",
             primaryText: "恢复默认", primaryDanger: true, closeText: "取消");
@@ -266,27 +269,5 @@ public partial class SettingsPageAdvanced : Page
         ReloadFromConfig();             // 本页控件回到默认值。其余页面未做导航缓存, 切过去时会重读
     }
 
-    /// <summary>统一走窗口里的 ContentDialogHost。返回 true = 用户点了主按钮 (确认)。
-    /// 宿主取不到 (无窗口宿主, 例如探针里) 时直接返回 false, 不做任何动作。</summary>
-    private async Task<bool> ShowDialogAsync(string title, string content,
-        string? primaryText = null, bool primaryDanger = false, string? closeText = null)
-    {
-        if (Wpf.Ui.Controls.ContentDialogHost.GetForWindow(Window.GetWindow(this)) is not { } host)
-            return false;
-
-        var dlg = new ContentDialog(host)
-        {
-            Title = title,
-            Content = content,
-            CloseButtonText = string.IsNullOrEmpty(closeText) ? "关闭" : closeText,
-            // 默认焦点一律放「取消 / 关闭」: 恢复默认是不可撤销的破坏性操作, 回车不该替用户确认
-            DefaultButton = ContentDialogButton.Close,
-        };
-        if (primaryText != null)
-        {
-            dlg.PrimaryButtonText = primaryText;
-            if (primaryDanger) dlg.PrimaryButtonAppearance = ControlAppearance.Danger;
-        }
-        return await dlg.ShowAsync() == ContentDialogResult.Primary;
-    }
+    // 统一对话框已提到 Controls/AppDialogs (轮 34 补: 校准窗、启动失败提示等也用它, 一处实现)
 }

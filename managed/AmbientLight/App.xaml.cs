@@ -52,6 +52,8 @@ public partial class App : Application
         DispatcherUnhandledException += (_, e) =>
         {
             WriteCrashLog("Dispatcher (UI 线程)", e.Exception, terminating: false);
+            // ⚠️ 这里**故意**保留 MessageBox (不用 Controls/AppDialogs): 已经在异常路径上,
+            // UI 线程状态未知, 再走 ContentDialog 有二次出错的风险。别顺手"统一"掉。
             MessageBox.Show($"界面线程异常: {e.Exception.Message}\n{e.Exception.StackTrace}",
                 "AmbientLight", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
@@ -124,8 +126,9 @@ public partial class App : Application
             if (!_slots.ContainsKey(i)) { slot = i; break; }
         if (slot < 0)
         {
-            MessageBox.Show($"设备数超过上限 ({Interop.AmbientCore.MaxDevices})", "AmbientLight",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            _ = Controls.AppDialogs.ShowAsync("AmbientLight",
+                $"设备数超过上限 ({Interop.AmbientCore.MaxDevices})。\n"
+                + "请先在主页关掉一台不再使用的设备再试。", closeText: "知道了");
             return false;
         }
         var cfg = ConfigStore.GetOrCreate(key).ToCoreConfig();
@@ -138,8 +141,8 @@ public partial class App : Application
                 Interop.AmbientCore.ErrAlreadyRunning => "该会话已在运行",
                 _ => $"错误码 {rc}",
             };
-            MessageBox.Show($"启动 {key} 失败: {reason}\n{Interop.AmbientCore.LastDiagEx(slot)}",
-                "AmbientLight", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _ = Controls.AppDialogs.ShowAsync("启动失败",
+                $"启动 {key} 失败: {reason}\n{Interop.AmbientCore.LastDiagEx(slot)}", closeText: "知道了");
             return false;
         }
         _slots[slot] = key;

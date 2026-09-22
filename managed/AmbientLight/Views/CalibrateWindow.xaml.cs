@@ -56,9 +56,11 @@ public partial class CalibrateWindow : Window
         int slot = app.SlotOf(key);
         if (slot < 0)
         {
-            System.Windows.MessageBox.Show(
+            // 轮 34 补: 原来用 MessageBox —— 系统样式弹窗跟 Fluent 界面两套观感
+            // (而且不随主题变)。统一走主窗口的 ContentDialogHost。
+            _ = Controls.AppDialogs.ShowAsync("屏幕校准",
                 "当前设备的核心会话未运行。\n请先在主页打开灯带 (校准靠追光采集本屏画面, 会话必须运行中)。",
-                "屏幕校准", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                closeText: "知道了");
             return;
         }
         var win = new CalibrateWindow(slot, key);
