@@ -76,7 +76,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="LED 色彩平衡" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
-                               Foreground="{DynamicResource AppTextHintBrush}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="分通道增益, 白场偏色时微调 (高级)" />
                     <TextBlock x:Name="GainSummaryText" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                Text="×1.00 ×1.00 ×1.00" FontSize="12" Margin="8,0,4,0"

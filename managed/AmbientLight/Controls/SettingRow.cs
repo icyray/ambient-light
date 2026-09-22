@@ -1,8 +1,9 @@
 // Controls/SettingRow.cs — Win11 设置风格行卡片 (M5.1): 图标 + 左侧标题/说明 + 右侧交互控件。
 // 复用 WPF-UI CardControl 模板的三列 Grid (Icon | Header | Content), Header 由
 // Title/Description 自动生成为两行文本, 免去每行 ~20 行样板 (全项目 ~30 行设置项)。
-// 说明文字挂 AppTextHintBrush (应用自己的"次级文字"刷子, M5.2): 浅色主题下 WPF-UI 的
-// TextFillColorTertiaryBrush (#72000000) 落在卡片底上对比度只有 ~3.3, 说明文字发虚;
+// 说明文字挂 TextFillColorSecondaryBrush (WPF-UI 的"次要文字"档, 随主题自动跟随)。
+// 为什么不用 Tertiary: 浅色主题下它是 #72000000 (45% 黑), 落在卡片底上对比度只有 ~3.3 → 发虚;
+// 也别用 Opacity 压暗文字 (同样会掉到 3:1 以下)。
 //
 // 样式注意: WPF 隐式样式按"精确类型"匹配, SettingRow 作为 CardControl 子类拿不到
 // ControlsDictionary 里 TargetType=CardControl 的隐式样式 (无模板 → 只渲染 Content)。
@@ -65,7 +66,7 @@ public class SettingRow : Wpf.Ui.Controls.CardControl
                 Margin = new Thickness(0, 2, 8, 0),
                 TextWrapping = TextWrapping.Wrap,
             };
-            desc.SetResourceReference(TextBlock.ForegroundProperty, AmbientLight.Services.ThemeService.AppTextHintKey);
+            desc.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
             Grid.SetRow(desc, 1);
             grid.Children.Add(desc);
         }

@@ -32,7 +32,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="低灰保真修正 (colorfix)" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" TextWrapping="Wrap"
-                               Foreground="{DynamicResource AppTextHintBrush}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="暗灰色被放大成蓝绿色时开启, 按绝对色度门限钳为中性灰" />
                     <ui:ToggleSwitch x:Name="ColorfixToggle" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                      Margin="0,0,4,0" Click="OnColorfixChanged" />
@@ -48,7 +48,7 @@
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                         <TextBlock Text="色度噪声门限 (sfloor)" FontSize="13" />
                         <TextBlock FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource AppTextHintBrush}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="8bit max-min 低于该门限视为采样噪声 (0-255, 默认 24)" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -79,7 +79,7 @@
              或"端口被别的程序占着"时用。默认全是自动, 不动就不会有副作用。 -->
         <TextBlock Style="{StaticResource GroupLabel}" Text="连接" />
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon UsbPlug24}" Title="端口"
-                             Description="自动检测按 VID_2E3C &amp; PID_5740 找; 手动指定用于换芯片/桥接/多灯带">
+                             Description="自动检测按 VID_2E3C &amp; PID_5740 找并跟随端口变化; 手动指定后只认该端口 (握手失败即失败, 不再自动跟随)">
             <StackPanel Orientation="Horizontal">
                 <ui:Button x:Name="RefreshPortsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
                            ToolTip="重新枚举" Margin="8,0,8,0" VerticalAlignment="Center"
@@ -162,7 +162,7 @@
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                         <TextBlock Text="恢复默认配置" FontSize="13" />
                         <TextBlock FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource AppTextHintBrush}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="把设置与设备配置全部重置为出厂默认 (亮度/模式/端口/采集/拾音/灯序等), 不可撤销" />
                     </StackPanel>
                     <ui:Button x:Name="RestoreDefaultsBtn" Grid.Column="1" Content="恢复默认…"

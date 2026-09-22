@@ -506,7 +506,7 @@ public partial class HomePage : Page
                 ? new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex!))
                 : Brushes.Transparent;
-            btn.BorderBrush = ThemeBrush(has ? "ControlStrokeColorDefaultBrush" : ThemeService.AppTextHintKey);
+            btn.BorderBrush = ThemeBrush(has ? "ControlStrokeColorDefaultBrush" : "TextFillColorSecondaryBrush");
             btn.ToolTip = has ? $"{hex} (右键清除)" : "自定义色槽 · 调出颜色后自动记住";
         }
         UpdatePresetSelection();
@@ -1015,7 +1015,7 @@ public partial class HomePage : Page
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
             gray.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                      ThemeService.AppTextHintKey);
+                                      "TextFillColorSecondaryBrush");
             MetricsGrid.Children.Add(gray);
             return;
         }
@@ -1031,7 +1031,7 @@ public partial class HomePage : Page
                 TextAlignment = TextAlignment.Center,
             };
             label.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                       ThemeService.AppTextHintKey);
+                                       "TextFillColorSecondaryBrush");
             var val = new System.Windows.Controls.TextBlock
             {
                 Text = "—",
@@ -1088,8 +1088,8 @@ public partial class HomePage : Page
             // 未点亮取主题刷色 → 5.2 浅色主题下自动跟随 (下次状态变化时重取)
             SetColor(_titleBrush, ThemeColor("TextFillColorPrimaryBrush"), animate);
             SetColor(_subBrush, ThemeColor("TextFillColorSecondaryBrush"), animate);
-            SetColor(_portBrush, ThemeColor(ThemeService.AppTextHintKey), animate);
-            SetColor(_fpsBrush, ThemeColor(ThemeService.AppTextHintKey), animate);
+            SetColor(_portBrush, ThemeColor("TextFillColorSecondaryBrush"), animate);
+            SetColor(_fpsBrush, ThemeColor("TextFillColorSecondaryBrush"), animate);
             SetColor(_pillBgBrush, ThemeColor("ControlFillColorSecondaryBrush"), animate);
         }
         FadeTo(LightsLayer, lit ? 1 : 0, animate);
@@ -1491,7 +1491,7 @@ public partial class HomePage : Page
     {
         var t = new System.Windows.Controls.TextBlock { Text = text, FontSize = 12 };
         t.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                               ThemeService.AppTextHintKey);
+                               "TextFillColorSecondaryBrush");
         return t;
     }
 
@@ -1521,7 +1521,7 @@ public partial class HomePage : Page
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         adapter.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                     ThemeService.AppTextHintKey);
+                                     "TextFillColorSecondaryBrush");
 
         var texts = new StackPanel
         {
@@ -1755,7 +1755,7 @@ public partial class HomePage : Page
             Margin = new Thickness(0, 8, 0, 0),
         };
         line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                   ThemeService.AppTextHintKey);
+                                   "TextFillColorSecondaryBrush");
         // 供电 = 灯带固件周期状态字节的 bit0 (MCU 回报, 见 PROJECT_PLAN §7.1)。
         // 语义是"该设备自己的供电是否正常": 厂商那些**真需要外接供电的型号**(桌面氛围灯/带电池的)
         // 它会跟着外接电源变; 而 USB 供电型号**连上就恒 1** (实战: 握手后 0 → 1)。

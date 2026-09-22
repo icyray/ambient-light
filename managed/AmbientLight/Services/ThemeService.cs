@@ -199,22 +199,19 @@ public static class ThemeService
     private static void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
         => RefreshFromSystem();
 
-    /// <summary>应用自己的"说明 / 提示文字"刷子键 (在 App.xaml 里声明初值, 由本服务按主题改写)。
-    /// 页面用 `{DynamicResource AppTextHintBrush}` 引用。</summary>
-    public const string AppTextHintKey = "AppTextHintBrush";
-
     /// <summary>外观 (主题或强调色) 变化后触发 —— UI 侧用它"重取 + 重建"那些 **code-behind 一次性赋值**
     /// 的刷子 (容器上的 DynamicResource 是自动的, 但"当时取到的那个刷子实例"不是)。
     /// 为什么要自己发这个事件: `ApplicationThemeManager.Changed` **只在换主题时**触发,
     /// **强调色变化不会触发**它 —— 而换刷子的需求两种变化都有。</summary>
     public static event Action? AppearanceChanged;
 
-    /// <summary>应用主题 (用户改设置 / 启动 / 跟随系统变化都走这里)。</summary>
+    /// <summary>应用主题 (用户改设置 / 启动 / 跟随系统变化都走这里)。
+    /// 不再写任何"应用自己的刷子": 说明文字用 WPF-UI 的 `TextFillColorSecondaryBrush`
+    /// (轮 34 补收回了自造的 AppTextHintBrush, 避免自己造轮子)。</summary>
     public static void Apply(ThemeChoice choice)
     {
         var theme = ResolveNow(choice);
         ApplicationThemeManager.Apply(theme, WindowBackdropType.Mica, updateAccent: true);
-        WriteAppBrushes(theme == ApplicationTheme.Dark);
         AppearanceChanged?.Invoke();
     }
 
@@ -250,8 +247,12 @@ public static class ThemeService
     }
 
     /// <summary>把 App.xaml 里那个主题字典**重新膨胀**成一份新实例 (同一个 Source)。
-    /// 作用 = 让住在字典里的中介刷子 (AccentButtonBackground / SliderThumbBackground / …)
-    /// 重新解析它们引用的强调色键。不动 merged 列表结构, 也不碰窗口 backdrop。</summary>
+    /// 作用 = 让住在字典里、且用 `{StaticResource}` 钉死颜色的那几个中介刷子重算:
+    /// `AccentButtonForeground` ← `TextOnAccentFillColorPrimary`、
+    /// `AccentControlElevationBorderBrush` ← `ControlStrokeColorOnAccent*`、`SliderTrackFill`。
+    /// （用 `{DynamicResource}` 别名的那几个 —— `AccentButtonBackground`、`SliderThumbBackground` ——
+    /// 本来就会跟着顶层键走, 不需要这一步。）
+    /// 不动 merged 列表结构, 也不碰窗口 backdrop。</summary>
     public static void ReinflateThemeDictionary()
     {
         var dicts = Application.Current?.Resources.MergedDictionaries;
@@ -268,27 +269,4 @@ public static class ThemeService
             return;
         }
     }
-
-    /// <summary>写应用自己的刷子 (目前只有"说明文字")。为什么不用 WPF-UI 的
-    /// `TextFillColorTertiaryBrush`: 浅色主题下它是 `#72000000` (45% 黑), 叠在卡片底上对比度只有
-    /// ~3.3 —— 说明文字发虚 (用户实测反馈)。
-    /// **深色主题不动**: 直接沿用 WPF-UI 当前的 tertiary 色值 (深色观感是用户已验收的, 不能顺手改),
-    /// 浅色主题才换成 `#99000000` (60% 黑, 对比度 ~5.8)。两个主题都有探针断言 (阈值 4.0)。</summary>
-    private static void WriteAppBrushes(bool dark)
-    {
-        var res = Application.Current?.Resources;
-        if (res is null) return;
-        var color = dark ? CurrentTertiaryColor() : Color.FromArgb(0x99, 0x00, 0x00, 0x00);
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        res[AppTextHintKey] = brush;
-    }
-
-    /// <summary>当前主题下 WPF-UI 的次级说明文字色 (深色主题直接沿用它, 保证观感不变)。
-    /// 必须在主题字典换好之后再读 (本类在 Apply 之后调用它)。</summary>
-    private static Color CurrentTertiaryColor()
-        => Application.Current?.TryFindResource("TextFillColorTertiaryBrush") is SolidColorBrush b
-            ? b.Color
-            : Color.FromArgb(0x85, 0xFF, 0xFF, 0xFF);   // 取不到时给个深色主题的近似值
-
 }
