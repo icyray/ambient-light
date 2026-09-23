@@ -140,7 +140,9 @@ public partial class HomePage : Page
     }
 
     /// <summary>M5.2 主题 / 强调色变化后的"重取 + 重建"(见 OnLoaded 里的说明)。
-    /// 复位那两个签名, 否则 ApplyBannerLook / CrossFadeStreak 会因为"看起来没变"而短路不刷色。</summary>
+    /// 复位那两个签名, 否则 ApplyBannerLook / CrossFadeStreak 会因为"看起来没变"而短路不刷色。
+    /// ⚠️ 光带/辉光的键本身已含主题 (见 ColorKey), 所以它们本来就会自己重解 ——
+    /// 这里复位主要是为了 banner 文字色与指标条这些"不带主题的签名"。</summary>
     private void OnAppearanceChanged()
         => Dispatcher.BeginInvoke(() =>
         {
@@ -823,12 +825,13 @@ public partial class HomePage : Page
         // 颜色/形状只跟模式有关 (追光蓝 / 拾音绿 / 纯色紫 / 固件白灰)。
         // 换模式时**只动颜色**并用与 banner 渐变同一个时长 (BannerFadeMs) 过渡 ——
         // 上一版是直接换画刷 (瞬变), 所以看起来比渐变"快了一点" (轮 28 用户反馈)。
-        string key = ModeColorKey(mode);
+        // 比较键里含主题 → 换主题时它也变了, 于是辉光/识别线的颜色会自动跟着重解
+        string key = ColorKey(mode, ThemeService.IsDark);
         bool modeChanged = key != _glowBrushKey;
         if (modeChanged)
         {
             _glowBrushKey = key;
-            AnimateGlowColor(ModeGlowColor(key), _glowApplied);
+            AnimateGlowColor(ModeGlowColor(mode, ThemeService.IsDark), _glowApplied);
         }
 
         double level = mode switch
@@ -874,14 +877,34 @@ public partial class HomePage : Page
         return sum / (n * 255.0);
     }
 
-    /// <summary>辉光基色 = 与 banner 光带同一套色系 (轮 27 用户定稿: 不再逐灯上色)</summary>
-    private static Color ModeGlowColor(string key) => key switch
+    /// <summary>辉光基色 = 与 banner 光带同一套色系 (轮 27 用户定稿: 不再逐灯上色)。
+    /// **分主题** (D1-B 起): 浅色主题的辉光是"叠在浅底上的一层着色", 需要跟深色主题用不同的基色 ——
+    /// 初始值照抄深色版 (浅色观感 = 已验收的 B 方案), 想调就改浅色那一列。
+    /// 与 `StreakBrushKey` 一样, 这里是**唯一**的解析处 (调用点不许再分主题写 if)。</summary>
+    public static Color ModeGlowColor(int mode, bool dark) => (ModeColorKey(mode), dark) switch
     {
-        "Blue" => Rgb(0x56, 0xB0, 0xF0),
-        "Green" => Rgb(0x46, 0xD4, 0xC5),
-        "Purple" => Rgb(0xC3, 0x8F, 0xF1),
-        _ => Rgb(0xE4, 0xEB, 0xF2),
+        ("Blue", true) => Rgb(0x56, 0xB0, 0xF0),
+        ("Green", true) => Rgb(0x46, 0xD4, 0xC5),
+        ("Purple", true) => Rgb(0xC3, 0x8F, 0xF1),
+        ("Mono", true) => Rgb(0xE4, 0xEB, 0xF2),
+        // 浅色主题: 照抄深色版的色相 (叠在浅底上会变成"一道着色带"), 你可以单独调这一列
+        ("Blue", false) => Rgb(0x56, 0xB0, 0xF0),
+        ("Green", false) => Rgb(0x46, 0xD4, 0xC5),
+        ("Purple", false) => Rgb(0xC3, 0x8F, 0xF1),
+        // ⚠️ Mono 浅色版**刻意不照抄**: #E4EBF2 是近白灰, 叠在浅底上等于看不见 → 给一档中灰
+        _ => Rgb(0xA8, 0xB6, 0xC4),
     };
+
+    /// <summary>光带画刷键 —— **纯函数** (探针打真值表 + 断言资源真能解析)。
+    /// 约定: 浅色版 = 深色版 key + `Light` 后缀 (`BannerStreakBlueBrush` / `BannerStreakBlueBrushLight`)。
+    /// 与 `BannerBaseKey` 同一套约定, 三种"随主题走的 banner 资源"因此长得一样好记。</summary>
+    public static string StreakBrushKey(int mode, bool dark)
+        => $"BannerStreak{ModeColorKey(mode)}Brush" + (dark ? "" : "Light");
+
+    /// <summary>色系 + 主题的合成键 (只用于"变了才重刷"的比较)。把主题编进来是刻意的:
+    /// **换主题时它自己就变了** → 光带的交叉淡化与辉光的换色会自动重解,
+    /// 不必在每个调用点写"如果主题变了就强制刷新一遍"。</summary>
+    private static string ColorKey(int mode, bool dark) => ModeColorKey(mode) + (dark ? "" : "-light");
 
     /// <summary>"中心亮 → 两边衰减"的光带: 颜色固定, 亮度全压在 **alpha** 上 ——
     /// 暗处 alpha = 0, 所以辉光是叠加上去的, 不会把 banner 压成黑带。
@@ -889,7 +912,8 @@ public partial class HomePage : Page
     private void EnsureGlowBrush()
     {
         if (_glowBrush != null) return;
-        var c = ModeGlowColor("Blue");
+        // 初值用"当前模式 + 当前主题" (首次 UpdateGlow 会再平滑对齐一次)
+        var c = ModeGlowColor(ConfigStore.Device.ModeIndex, ThemeService.IsDark);
         _glowBrush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         for (int i = 0; i < GlowBellAlphas.Length; i++)
         {
@@ -1151,14 +1175,17 @@ public partial class HomePage : Page
     private Color CautionColor()
         => ThemeColor("SystemFillColorCautionBrush", Rgb(0xF0, 0xA0, 0x2E));
 
-    private void CrossFadeStreak(int mode, bool animate)
+    /// **public 是给探针用的**: 要断"换主题后 StreakA 真的换成浅色版那一条"
+    /// (只验资源存在挡不住"资源建了但没人用")。
+    public void CrossFadeStreak(int mode, bool animate)
     {
-        string key = ModeColorKey(mode);
-        if (key == _lastStreakKey) return;      // 色系没变 (如关→开) 不用换, 交给整层淡变
+        // 键 = 色系 + 主题: 换主题时键变了 → 自动换成该主题那一套光带 (不用额外写"主题变了"的判断)
+        string key = ColorKey(mode, ThemeService.IsDark);
+        if (key == _lastStreakKey) return;      // 色系与主题都没变 (如关→开) 不用换, 交给整层淡变
         _lastStreakKey = key;
         var incoming = _streakOnA ? StreakB : StreakA;
         var outgoing = _streakOnA ? StreakA : StreakB;
-        incoming.Fill = (Brush)FindResource($"BannerStreak{key}Brush");
+        incoming.Fill = (Brush)FindResource(StreakBrushKey(mode, ThemeService.IsDark));
         if (animate)
         {
             FadeTo(incoming, 1, true);

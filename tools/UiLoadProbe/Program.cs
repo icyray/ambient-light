@@ -1178,6 +1178,70 @@ static void Run()
         AmbientLight.Services.ThemeService.Parse(AmbientLight.Services.ConfigStore.App.Theme));
 
     Console.WriteLine();
+    Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");
+    // 用户的调参入口有两处: XAML 的 BannerStreak<色系>Brush(Light) 与代码里的 ModeGlowColor(mode, dark)。
+    // 这里断三件事: ① 键的约定 (浅色版 = 深色版 + "Light"); ② **资源真能解析**(解析失败是静默的);
+    // ③ 辉光基色与同色系光带**同色相** (轮 27 定稿的"辉光与光带同一套色系"规则)。
+    var colorModes = new (int Mode, string Key)[] { (0, "Blue"), (1, "Green"), (11, "Purple"), (2, "Mono") };
+    bool namingOk = true;
+    foreach (var (m, k) in colorModes)
+        namingOk &= AmbientLight.Views.HomePage.StreakBrushKey(m, true) == $"BannerStreak{k}Brush"
+                    && AmbientLight.Views.HomePage.StreakBrushKey(m, false) == $"BannerStreak{k}BrushLight";
+    Console.WriteLine((namingOk ? "OK   " : "FAIL ") + $"光带键命名约定 (浅色版 = 深色版 + Light) = {namingOk}");
+
+    foreach (var ch in new[] { AmbientLight.Services.ThemeChoice.Dark,
+                               AmbientLight.Services.ThemeChoice.Light })
+    {
+        // ⚠️ 必须**真的切主题**: CrossFadeStreak / UpdateGlow 判主题用的是 ThemeService.IsDark
+        // ("已生效的资源字典"), 光把 `dark` 变量改掉是没用的 —— 第一版断言就是这么假 FAIL 的。
+        AmbientLight.Services.ThemeService.Apply(ch);
+        bool dark = AmbientLight.Services.ThemeService.IsDark;
+        var missing = colorModes
+            .Where(x => home.TryFindResource(AmbientLight.Views.HomePage.StreakBrushKey(x.Mode, dark))
+                        is not LinearGradientBrush)
+            .Select(x => x.Key).ToArray();
+        Console.WriteLine((missing.Length == 0 ? "OK   " : "FAIL ") +
+                          $"{(dark ? "深色" : "浅色")}主题: 4 条光带画刷都能解析 = {missing.Length == 0}" +
+                          (missing.Length > 0 ? $" · 缺: {string.Join(",", missing)}" : ""));
+        // 同色系: 辉光基色 vs 该色系光带的主色, 色相差 ≤ 20° (近乎无彩色的 (饱和 < 0.05) 跳过色相检查 ——
+        // #E4EBF2 这种近白灰的 hue 数值不稳定, 强行比会误报)
+        var bad = new List<string>();
+        foreach (var (m, k) in colorModes)
+        {
+            var glowC = AmbientLight.Views.HomePage.ModeGlowColor(m, dark);
+            var brush = home.TryFindResource(AmbientLight.Views.HomePage.StreakBrushKey(m, dark))
+                        as LinearGradientBrush;
+            var peak = brush?.GradientStops.OrderByDescending(g => g.Color.A).First().Color ?? Colors.Transparent;
+            double hs = AmbientLight.Services.ThemePalette.SaturationOf(peak);
+            double hg = AmbientLight.Services.ThemePalette.SaturationOf(glowC);
+            if (hs < 0.05 || hg < 0.05) continue;      // 无色系不配色相
+            double dh = Math.Abs(AmbientLight.Services.ThemePalette.HueOf(peak)
+                                 - AmbientLight.Services.ThemePalette.HueOf(glowC));
+            if (dh > 180) dh = 360 - dh;
+            if (dh > 20) bad.Add($"{k}(Δ{dh:F0}°)");
+        }
+        Console.WriteLine((bad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"{(dark ? "深色" : "浅色")}主题: 辉光与光带同色系 = {bad.Count == 0}" +
+                          (bad.Count > 0 ? $" · 偏: {string.Join(",", bad)}" : ""));
+
+        // ★ 接线: 换主题后必须**真的**换上本主题那一条 (资源建了没人用 = 白建)。
+        // ⚠️ 不能只盯 StreakA: CrossFadeStreak 在 A/B 之间交替 (一条淡出、一条淡入),
+        // 所以判据 = "A 或 B 里有一条正是本主题的刷子", 另一条允许还留着上一主题的 (那正是交叉淡化)。
+        var streakA = home.FindName("StreakA") as System.Windows.Shapes.Rectangle;
+        var streakB = home.FindName("StreakB") as System.Windows.Shapes.Rectangle;
+        home.CrossFadeStreak(0, animate: false);
+        var want = home.TryFindResource(AmbientLight.Views.HomePage.StreakBrushKey(0, dark));
+        bool wired = ReferenceEquals(streakA?.Fill, want) || ReferenceEquals(streakB?.Fill, want);
+        Console.WriteLine((wired ? "OK   " : "FAIL ") +
+                          $"{(dark ? "深色" : "浅色")}主题: 光带真的换成本主题那一条 (A/B 任一) = {wired}");
+        string PeakOfBrush(object? br) => br is LinearGradientBrush g
+            ? g.GradientStops.OrderByDescending(x => x.Color.A).First().Color.ToString() : "null";
+        Console.WriteLine($"INFO {(dark ? "深色" : "浅色")}: IsDark={AmbientLight.Services.ThemeService.IsDark} " +
+                          $"期望={PeakOfBrush(want)} A={PeakOfBrush(streakA?.Fill)} B={PeakOfBrush(streakB?.Fill)} " +
+                          $"(A.Opacity={streakA?.Opacity:F0} B.Opacity={streakB?.Opacity:F0})");
+    }
+
+    Console.WriteLine();
     Console.WriteLine("---- 轮 34 补 5: 设备行端口文案 (显示\"实际会用的口\") ----");
     // 用户反馈: 高级页给某台手动指定了 COM4 后, 设备行仍显示枚举到的 COM5, 点开启却去连 COM4。
     // 规则: **手动指定优先** (它是"必须用它") > 会话端口 > 枚举端口;

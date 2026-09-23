@@ -105,4 +105,27 @@ public static class ThemePalette
         double la = RelativeLuminance(a), lb = RelativeLuminance(b);
         return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
     }
+
+    /// <summary>HSV 色相 (0…360)。**近无彩色时数值不稳定** —— 调用方要先看 <see cref="SaturationOf"/>
+    /// 够不够大 (探针里那条"辉光与光带同色系"就是这么用的: 饱和 &lt; 0.05 就跳过色相检查)。</summary>
+    public static double HueOf(Color c)
+    {
+        int max = Math.Max(c.R, Math.Max(c.G, c.B)), min = Math.Min(c.R, Math.Min(c.G, c.B));
+        int d = max - min;
+        if (d == 0) return 0;
+        double h;
+        if (max == c.R) h = 60.0 * (((c.G - c.B) / (double)d) % 6);
+        else if (max == c.G) h = 60.0 * ((c.B - c.R) / (double)d + 2);
+        else h = 60.0 * ((c.R - c.G) / (double)d + 4);
+        return (h + 360) % 360;
+    }
+
+    /// <summary>HSV 饱和度 (0…1) —— 用来判断"这个颜色是不是近无彩色" (见 <see cref="HueOf"/>)。</summary>
+    public static double SaturationOf(Color c)
+    {
+        int max = Math.Max(c.R, Math.Max(c.G, c.B));
+        if (max == 0) return 0;
+        int min = Math.Min(c.R, Math.Min(c.G, c.B));
+        return (max - min) / (double)max;
+    }
 }

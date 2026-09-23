@@ -177,6 +177,51 @@
             <GradientStop Offset="0.72" Color="#1AE4EBF2" />
             <GradientStop Offset="1.00" Color="#00000000" />
         </LinearGradientBrush>
+
+        <!-- ================= 浅色主题版光带 (D1-B) =================
+             命名约定: **浅色版 = 深色版 key + "Light" 后缀**, 一一对应。
+             解析只在 code-behind 的 `StreakBrushKey(mode, dark)` 一处做 —— 调参就改这一组,
+             别在调用点写"如果浅色就用另一个"的分支。
+             初始值 = 深色版那一组 (所以浅色主题现在的观感就是你已验收的 B 方案不变);
+             想调浅色主题下光带的浓淡/色相, 就改下面这四条的 GradientStop。
+
+             为什么 Blue/Green/Purple 直接照抄深色版: 它们的峰值 alpha 只有 27%,
+             饱和色叠在浅底上从"发光"变成"淡彩" (实测 |ΔL| 0.239, 看得见) —— 这是审美取舍, 你调。
+             ⚠️ **Mono 例外** (刻意不照抄): #E4EBF2 是近白灰, 叠在浅底上没有亮度差 → 等于看不见。
+             所以浅色版给了一档中灰 #9AA7B4, 保证"固件特效"在浅色主题下也有光带。 -->
+        <LinearGradientBrush x:Key="BannerStreakBlueBrushLight" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Offset="0.00" Color="#00000000" />
+            <GradientStop Offset="0.18" Color="#0D3E91E0" />
+            <GradientStop Offset="0.38" Color="#3A3E91E0" />
+            <GradientStop Offset="0.52" Color="#463E91E0" />
+            <GradientStop Offset="0.72" Color="#1A3E91E0" />
+            <GradientStop Offset="1.00" Color="#00000000" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="BannerStreakGreenBrushLight" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Offset="0.00" Color="#00000000" />
+            <GradientStop Offset="0.18" Color="#0D21BCBA" />
+            <GradientStop Offset="0.38" Color="#3A21BCBA" />
+            <GradientStop Offset="0.52" Color="#4621BCBA" />
+            <GradientStop Offset="0.72" Color="#1A21BCBA" />
+            <GradientStop Offset="1.00" Color="#00000000" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="BannerStreakPurpleBrushLight" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Offset="0.00" Color="#00000000" />
+            <GradientStop Offset="0.18" Color="#0DA679DC" />
+            <GradientStop Offset="0.38" Color="#3AA679DC" />
+            <GradientStop Offset="0.52" Color="#46A679DC" />
+            <GradientStop Offset="0.72" Color="#1AA679DC" />
+            <GradientStop Offset="1.00" Color="#00000000" />
+        </LinearGradientBrush>
+        <!-- Mono 的浅色版: 一档中灰 (深色版的 #E4EBF2 在浅底上等于看不见) -->
+        <LinearGradientBrush x:Key="BannerStreakMonoBrushLight" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Offset="0.00" Color="#00000000" />
+            <GradientStop Offset="0.18" Color="#0D9AA7B4" />
+            <GradientStop Offset="0.38" Color="#3A9AA7B4" />
+            <GradientStop Offset="0.52" Color="#469AA7B4" />
+            <GradientStop Offset="0.72" Color="#1A9AA7B4" />
+            <GradientStop Offset="1.00" Color="#00000000" />
+        </LinearGradientBrush>
     </Page.Resources>
     <StackPanel Margin="16,12,16,16">
 
