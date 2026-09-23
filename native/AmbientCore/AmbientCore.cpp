@@ -686,8 +686,17 @@ void CoreLoopInner(Sess* g)
                 phase = (capValid || applied.modeIndex != 0) ? AC_STATE_RUNNING : AC_STATE_STARTING;
                 SetPhase(g, phase);
             } else {
-                if (phase != AC_STATE_DEV_LOST)
-                    SetDiag(g, "WARN ", "device lost: no usable port (VID_2E3C&PID_5740)");
+                if (phase != AC_STATE_DEV_LOST) {
+                    // 手动指定了端口时把话说清 (轮 34 补 6): 原来统一报
+                    // "no usable port (VID_2E3C&PID_5740)", 会让人以为"没插灯带/驱动没装",
+                    // 而真实原因常常是"你指定的那个口不是灯带"(用户实测的困惑点)。
+                    if (applied.comPort[0])
+                        SetDiag(g, "WARN ",
+                                "指定端口 %s 未应答 (不是灯带? 检查接线/换口, 或在高级页改回\"自动检测\")",
+                                applied.comPort);
+                    else
+                        SetDiag(g, "WARN ", "device lost: no usable port (VID_2E3C&PID_5740)");
+                }
                 phase = AC_STATE_DEV_LOST;
                 SetPhase(g, phase);
                 // 这里会 continue 跳过 §9 状态快照 —— 但"灯带被拔掉/端口消失"恰恰是最需要让 UI
