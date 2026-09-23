@@ -133,6 +133,15 @@
             <GradientStop Offset="0.7" Color="#FF17242A" />
             <GradientStop Offset="1" Color="#FF1F2324" />
         </LinearGradientBrush>
+        <!-- ★ D1-B 实验分支: 浅色主题下"点亮态"的**浅底** (原方案 A 是"点亮态恒深色")。
+             走向与深色版一致 (冷色 → 中性), 只是整体翻转成浅色。
+             调这里 = 调浅色主题下 banner 的底色观感 (探针会算"点亮态文字 vs 这个底"的对比度)。 -->
+        <LinearGradientBrush x:Key="BannerBaseLightBrush" StartPoint="0,0.08" EndPoint="1,0.92">
+            <GradientStop Offset="0" Color="#FFE3F0FA" />
+            <GradientStop Offset="0.35" Color="#FFEBF2F7" />
+            <GradientStop Offset="0.7" Color="#FFF0F4F6" />
+            <GradientStop Offset="1" Color="#FFF4F6F7" />
+        </LinearGradientBrush>
         <!-- 模式色光带: 长缓 alpha 坡 (0→13→58→70→26→0), 端点全透明 → 无硬边 -->
         <LinearGradientBrush x:Key="BannerStreakBlueBrush" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Offset="0.00" Color="#00000000" />
@@ -181,7 +190,8 @@
                 BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
             <Grid>
                 <Grid x:Name="LightsLayer" Opacity="0" IsHitTestVisible="False">
-                    <Rectangle RadiusX="7" RadiusY="7" Fill="{StaticResource BannerBaseBrush}" />
+                    <Rectangle x:Name="BannerBase" RadiusX="7" RadiusY="7"
+                               Fill="{StaticResource BannerBaseBrush}" />
                     <Rectangle x:Name="StreakA" RadiusX="7" RadiusY="7"
                                Fill="{StaticResource BannerStreakBlueBrush}" />
                     <Rectangle x:Name="StreakB" RadiusX="7" RadiusY="7"

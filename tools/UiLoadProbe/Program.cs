@@ -1099,6 +1099,85 @@ static void Run()
         ? Wpf.Ui.Appearance.ApplicationTheme.Dark : themeBefore);
 
     Console.WriteLine();
+    Console.WriteLine("---- D1-B 实验: 点亮态 banner 浅底 + 深字 (可计算的验收规则) ----");
+    // 原方案 A = 点亮态恒深色; 本实验分支 = 点亮态也随主题 (浅色下浅底深字)。
+    // 靠肉眼判断不够 → 这里断两条**可计算**的规则 (两个主题都要过):
+    //   ① 点亮态文字 vs banner 底色**每一段渐变**的对比度 (取最差) ≥ 4.5 / 说明文字 ≥ 4.0;
+    //   ② 光带峰值色 / 辉光色 铺在该底色上时, 亮度差 |ΔL| ≥ 0.02 (即"有可感的明暗差" ——
+    //      方案 A 的理由正是"加亮型辉光在浅底上会失效", 这条就是对它的量化检验)。
+    //      **阈值 0.02 是量出来的下限, 不是拍的**: 深色主题现状 (M5.1 定稿的含蓄光带) 就是 0.033,
+    //      辉光是 0.377 —— 所以 0.02 只用来挡"彻底看不见", 真正的看点是浅色主题也要过。
+    bool baseKeysOk = AmbientLight.Views.HomePage.BannerBaseKey(true) == "BannerBaseBrush"
+                      && AmbientLight.Views.HomePage.BannerBaseKey(false) == "BannerBaseLightBrush";
+    Console.WriteLine((baseKeysOk ? "OK   " : "FAIL ") + $"底色画刷键按主题选择 = {baseKeysOk}");
+
+    foreach (var (ch, desc) in new (AmbientLight.Services.ThemeChoice, string)[]
+    {
+        (AmbientLight.Services.ThemeChoice.Dark, "深色"),
+        (AmbientLight.Services.ThemeChoice.Light, "浅色"),
+    })
+    {
+        AmbientLight.Services.ThemeService.Apply(ch);
+        bool dark = ch == AmbientLight.Services.ThemeChoice.Dark;
+
+        // ① 文字: 用被测的**纯函数**取值, 底面用被测的**纯函数**选键 → 接线与取值一起断
+        var colors = AmbientLight.Views.HomePage.LitBannerColors(dark,
+            Application.Current.TryFindResource("TextFillColorPrimaryBrush") is SolidColorBrush priB
+                ? priB.Color : Colors.Transparent,
+            Application.Current.TryFindResource("TextFillColorSecondaryBrush") is SolidColorBrush secB
+                ? secB.Color : Colors.Transparent,
+            Application.Current.TryFindResource("ControlFillColorSecondaryBrush") is SolidColorBrush ctlB
+                ? ctlB.Color : Colors.Transparent);
+        // ⚠️ banner 的渐变是 **HomePage.xaml 的页面资源**, 不是 App 资源 → 必须从 home 上找
+        // (用 Application.Current.TryFindResource 会一直是 null, 对比度就永远算成哨兵值 99)
+        var baseBrush = home.TryFindResource(
+            AmbientLight.Views.HomePage.BannerBaseKey(dark)) as LinearGradientBrush;
+        double worstTitle = 99, worstSub = 99;
+        if (baseBrush is not null)
+            foreach (var gs in baseBrush.GradientStops)
+            {
+                double t = AmbientLight.Services.ThemePalette.ContrastRatio(
+                    AmbientLight.Services.ThemePalette.Blend(colors.Title, gs.Color), gs.Color);
+                double s = AmbientLight.Services.ThemePalette.ContrastRatio(
+                    AmbientLight.Services.ThemePalette.Blend(colors.Sub, gs.Color), gs.Color);
+                worstTitle = Math.Min(worstTitle, t);
+                worstSub = Math.Min(worstSub, s);
+            }
+        Console.WriteLine((baseBrush is not null && worstTitle >= 4.5 ? "OK   " : "FAIL ") +
+                          $"{desc}主题: 点亮态标题 vs 底色渐变**最差**段 = {worstTitle:F2} (≥ 4.5)");
+        Console.WriteLine((worstSub >= 4.0 ? "OK   " : "FAIL ") +
+                          $"{desc}主题: 点亮态说明文字 = {worstSub:F2} (≥ 4.0) · " +
+                          $"标题 {colors.Title} / 胶囊底 {colors.PillBg}");
+
+        // ② 光带 / 辉光 在底色上"看得见" (ΔL)
+        if (baseBrush is not null)
+        {
+            var baseStops = baseBrush.GradientStops.Select(g => g.Color).ToArray();
+            Color PeakOf(string key)
+            {
+                var b = home.TryFindResource(key) as LinearGradientBrush;
+                if (b is null) return Colors.Transparent;
+                var p = b.GradientStops.OrderByDescending(g => g.Color.A).First().Color;
+                // 与底色合成一次 (alpha 坡的峰值也不是全不透明)
+                return AmbientLight.Services.ThemePalette.Blend(p, baseStops[^1]);
+            }
+            var streak = PeakOf("BannerStreakBlueBrush");
+            var glowC = AmbientLight.Services.ThemePalette.Blend(
+                Color.FromRgb(0x56, 0xB0, 0xF0), baseStops[^1]);       // ModeGlowColor("Blue")
+            double dStreak = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(streak)
+                                      - AmbientLight.Services.ThemePalette.RelativeLuminance(baseStops[^1]));
+            double dGlow = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(glowC)
+                                    - AmbientLight.Services.ThemePalette.RelativeLuminance(baseStops[^1]));
+            Console.WriteLine((dStreak >= 0.02 ? "OK   " : "FAIL ") +
+                              $"{desc}主题: 光带峰值在底色上可见 (|ΔL| {dStreak:F3} ≥ 0.02)");
+            Console.WriteLine((dGlow >= 0.02 ? "OK   " : "FAIL ") +
+                              $"{desc}主题: 辉光色在底色上可见 (|ΔL| {dGlow:F3} ≥ 0.02)");
+        }
+    }
+    AmbientLight.Services.ThemeService.Apply(
+        AmbientLight.Services.ThemeService.Parse(AmbientLight.Services.ConfigStore.App.Theme));
+
+    Console.WriteLine();
     Console.WriteLine("---- 轮 34 补 5: 设备行端口文案 (显示\"实际会用的口\") ----");
     // 用户反馈: 高级页给某台手动指定了 COM4 后, 设备行仍显示枚举到的 COM5, 点开启却去连 COM4。
     // 规则: **手动指定优先** (它是"必须用它") > 会话端口 > 枚举端口;

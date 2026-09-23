@@ -1073,6 +1073,22 @@ public partial class HomePage : Page
     private static bool IsLit(int state) => state is AmbientCore.StateRunning
                                                        or AmbientCore.StateWaitDisp;
 
+    /// <summary>点亮态 banner 的底色画刷键 —— **纯函数**, 探针用它取对应渐变去算对比度。
+    /// ★ D1-B 实验分支: 浅色主题下**点亮态也用浅底** (原方案 A 是"点亮态恒深色",
+    /// 理由见 M5.2_THEME_PLAN §4.1 的"物理理由" —— 加亮型辉光在浅底上不再发光、变成一道着色带)。</summary>
+    public static string BannerBaseKey(bool dark) => dark ? "BannerBaseBrush" : "BannerBaseLightBrush";
+
+    /// <summary>点亮态 banner 的文字/胶囊底色 —— **纯函数**, 探针打真值表 + 算对比度。
+    /// 深色主题: **原样** (M5.1 定稿的写死白/浅蓝, 实验分支不许动深色观感);
+    /// 浅色主题 (D1-B): 改用**主题色** —— 取值与"未点亮态"完全一致,
+    /// 因为浅底上写浅色字会看不见, 而主题色本来就是为"浅底/卡片底"选的那一套。</summary>
+    public static (Color Title, Color Sub, Color Port, Color Fps, Color PillBg) LitBannerColors(
+        bool dark, Color themePrimary, Color themeSecondary, Color themeControlFillSecondary)
+        => dark
+            ? (Colors.White, Rgb(0xCF, 0xE3, 0xF2), Rgb(0xA9, 0xC0, 0xCE), Rgb(0x9F, 0xB4, 0xC2),
+               Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF))
+            : (themePrimary, themeSecondary, themeSecondary, themeSecondary, themeControlFillSecondary);
+
     private void ApplyBannerLook(int state, int mode, bool animate)
     {
         bool lit = IsLit(state);
@@ -1081,14 +1097,22 @@ public partial class HomePage : Page
         SetColor(_dotBrush, dot, animate);
         SetColor(_pillTextBrush, pillText, animate);
 
+        // ★ D1-B: 底色随主题 (深色主题仍是原来那条深蓝→深灰渐变, 观感零变化)
+        bool dark = ThemeService.IsDark;
+        if (FindResource(BannerBaseKey(dark)) is Brush baseBrush) BannerBase.Fill = baseBrush;
+
         if (lit)
         {
-            SetColor(_titleBrush, Colors.White, animate);
-            SetColor(_subBrush, Rgb(0xCF, 0xE3, 0xF2), animate);
-            SetColor(_portBrush, Rgb(0xA9, 0xC0, 0xCE), animate);
-            SetColor(_fpsBrush, Rgb(0x9F, 0xB4, 0xC2), animate);
-            // 胶囊底保持中性半透明白: 状态色只落在圆点/文字上, 免得与模式色打架
-            SetColor(_pillBgBrush, Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF), animate);
+            var c = LitBannerColors(dark,
+                ThemeColor("TextFillColorPrimaryBrush"),
+                ThemeColor("TextFillColorSecondaryBrush"),
+                ThemeColor("ControlFillColorSecondaryBrush"));
+            SetColor(_titleBrush, c.Title, animate);
+            SetColor(_subBrush, c.Sub, animate);
+            SetColor(_portBrush, c.Port, animate);
+            SetColor(_fpsBrush, c.Fps, animate);
+            // 胶囊底: 深色主题保持中性半透明白 (状态色只落在圆点/文字上); 浅色主题用主题控件底
+            SetColor(_pillBgBrush, c.PillBg, animate);
             CrossFadeStreak(mode, animate);
         }
         else
@@ -1107,9 +1131,8 @@ public partial class HomePage : Page
     /// ① 开启失败 (无会话) → 警示色 + 失败原因 (轮 18 ③);
     /// ② 有会话但没在驱动灯带 (DEV_LOST=正在重连 / ERROR) → 用该状态自己的颜色;
     /// ③ 真的停了 → 主题次色 + "已停止"。
-    /// **M5.2 口径**: 点亮 = banner 恒深色 (D1) → 固定深色套; 未点亮 = banner 露出卡片底色
-    /// (浅色主题下就是浅底) → 按当前主题取浅色套, 否则浅底上写浅色字会看不见。
-    /// ①③ 用的是主题资源刷色 (Caution/TextFillColor*), 本来就随主题走。</summary>
+    /// **D1-B 实验分支口径**: 点亮态 banner 也随主题 (浅色 = 浅底深字) → 胶囊色板一律按当前主题取,
+    /// **不再**有"点亮就固定深色套"这条特例。深色主题下行为与原方案 A 完全一致。</summary>
     private (string Label, Color Dot, Color Text) PillLook(int state)
     {
         bool lit = IsLit(state);
@@ -1121,7 +1144,7 @@ public partial class HomePage : Page
                         ThemeColor("TextFillColorTertiaryBrush", Rgb(0x9A, 0x9A, 0x9A)),
                         ThemeColor("TextFillColorSecondaryBrush", Rgb(0xC9, 0xC9, 0xC9)));
         }
-        var (dot, text) = ThemePalette.StateOf(state, lit || ThemeService.IsDark);
+        var (dot, text) = ThemePalette.StateOf(state, ThemeService.IsDark);
         return (StateLabel(state), dot, text);
     }
 
