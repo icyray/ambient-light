@@ -1672,9 +1672,18 @@ public partial class HomePage : Page
     /// 轮 33 用户反馈的两个现象都由这条规则解释:
     ///   · 灯带被拔掉 → 会话转 DEV_LOST, 但 slot 还在 → 旧代码一律显示"运行中";
     ///   · 托盘菜单关灯 → 会话整体消失, 状态转 STOPPED, 但当时没有刷新信号, 行还是旧的。
-    /// 判据里 `hasSlot` = 该端口归属本核心的某个会话。</summary>
+    /// 判据里 `hasSlot` = 该端口归属本核心的某个会话。
+    ///
+    /// 端口相关的两条 (轮 34 补 6, 用户反馈"手动指定端口后胶囊还显示就绪"):
+    ///   · `portMissing` = 配置里手动指定的那个口**本机不存在** → 「端口不在位」
+    ///     (不用点开启就知道连不上; 数据源是注册表 SERIALCOMM, 一次读很便宜);
+    ///   · `manualPort` = 配置里手动指定了端口 → DEV_LOST 时文案改成「指定端口无应答」
+    ///     (原来的「灯带不在位」暗示"灯带被拔了", 而真实原因往往是"指定的口不是灯带")。
+    /// ⚠️ 故意**不做**"端口在位但不是灯带"的预检: 那得真的打开端口试握手 (~1s + 独占端口),
+    /// 不该出现在 4Hz 的列表刷新里 —— 那种只能等开启后由诊断说明。</summary>
     public static (string Label, PillTone Tone) DevicePill(
-        bool hasSlot, int state, bool inUse, int devType, bool likelyOurs)
+        bool hasSlot, int state, bool inUse, int devType, bool likelyOurs,
+        bool manualPort = false, bool portMissing = false)
     {
         if (hasSlot)
         {
@@ -1684,12 +1693,14 @@ public partial class HomePage : Page
                 AmbientCore.StateRunning => ("运行中", PillTone.Green),
                 // 锁屏/熄屏: 串口还连着, 只是画面源不可用
                 AmbientCore.StateWaitDisp => ("屏幕不可用", PillTone.Gray),
-                // 拔线/端口消失: 会话会自动重连, 但此刻灯带确实不在位
-                AmbientCore.StateDevLost => ("灯带不在位", PillTone.Amber),
+                // 拔线/端口消失: 会话会自动重连, 但此刻灯带确实不在位。
+                // 手动指定端口时换文案: 那不是"灯带被拔了", 而是"指定的口连不上"。
+                AmbientCore.StateDevLost => (manualPort ? "指定端口无应答" : "灯带不在位", PillTone.Amber),
                 AmbientCore.StateError => ("异常", PillTone.Red),
                 _ => ("已停止", PillTone.Gray),
             };
         }
+        if (portMissing) return ("端口不在位", PillTone.Amber);
         if (likelyOurs) return ("连接中…", PillTone.Blue);
         if (inUse) return ("端口被占用", PillTone.Amber);
         if (devType < 0) return ("未应答", PillTone.Amber);
@@ -1705,15 +1716,26 @@ public partial class HomePage : Page
     ///   ③ 都没有 → 枚举端口 (自动探测: 两台同型号时"谁先被占谁先分", 它只代表"可能连的那个")。
     /// 为什么必须有 ②③ 的区分: 以前无条件显示枚举端口, 于是"高级页给这台指定了 COM4"时,
     /// 行里写着 COM5、点开启却去连 COM4 —— **界面在说谎** (用户实测反馈)。
-    /// 注: 端口是**每设备**配置 (高级页改的是当前选中那台), 不是全局设置。</summary>
-    public static (string Text, bool Manual) PortLabel(
+    /// 注: 端口是**每设备**配置 (高级页改的是当前选中那台), 不是全局设置。
+    ///
+    /// `Manual` = 配置里有端口 (文字加「手动指定」标记);
+    /// `Warn` = 配置端口**与本行枚举到的端口不一致**才转警示色 ——
+    /// 两根同型号灯带各钉自己的口、且枚举到的正是那个口时不该无谓地亮警示 (那是正常状态)。
+    /// 大小写不敏感 (`com4` / `COM4` 视为同一个口)。</summary>
+    public static (string Text, bool Manual, bool Warn) PortLabel(
         string? sessionPort, string? configuredPort, string? enumeratedPort)
     {
         string cfg = configuredPort?.Trim() ?? "";
-        if (cfg.Length > 0) return ($"{cfg} (手动指定)", true);
+        string enumPort = enumeratedPort?.Trim() ?? "";
+        if (cfg.Length > 0)
+        {
+            bool same = enumPort.Length > 0
+                && string.Equals(cfg, enumPort, StringComparison.OrdinalIgnoreCase);
+            return ($"{cfg} (手动指定)", true, !same);
+        }
         string sess = sessionPort?.Trim() ?? "";
-        if (sess.Length > 0) return (sess, false);
-        return (enumeratedPort?.Trim() ?? "", false);
+        if (sess.Length > 0) return (sess, false, false);
+        return (enumPort, false, false);
     }
 
     /// <summary>胶囊色调 → 画刷 (灰=默认底色/次要字, 其余用语义色对; 色对随主题深浅)</summary>
@@ -1752,8 +1774,19 @@ public partial class HomePage : Page
             : $"{devType}_{devId}";
         bool selected = usable && ConfigStore.SelectedKey == key;
 
-        // 语义胶囊 (轮 33 起口径 = 会话状态, 见 DevicePill)
-        var (pillLabel, pillTone) = DevicePill(managedHere, sessState, d.inUse == 1, devType, likelyOurs);
+        // 端口信息要在胶囊之前算好 (胶囊的文案/色调与它有关, 见 DevicePill 的两条端口规则)。
+        // 只用查得到的配置, 不 GetOrCreate —— 光是"看一眼设备列表"不该给没见过的设备建配置文件。
+        bool hasCfg = ConfigStore.Devices.TryGetValue(key, out var ds);
+        string cfgPort = hasCfg ? (ds!.ComPort ?? "").Trim() : "";
+        bool manualPort = cfgPort.Length > 0;
+        // "在位"= 注册表 SERIALCOMM 里有这个口 (与高级页端口下拉同一数据源)。在位 ≠ 是灯带 ——
+        // 那个只有在真去握手时才知道, 不在列表刷新里做 (见 DevicePill 的注释)。
+        bool portMissing = manualPort && !SerialPorts.All()
+            .Any(p => string.Equals(p, cfgPort, StringComparison.OrdinalIgnoreCase));
+
+        // 语义胶囊 (轮 33 起口径 = 会话状态; 轮 34 补 6 起叠加两条端口规则)
+        var (pillLabel, pillTone) = DevicePill(managedHere, sessState, d.inUse == 1, devType,
+                                               likelyOurs, manualPort, portMissing);
         Border pill = TonePill(pillLabel, pillTone);
 
         // 类型图标**独立一列**、跨两行垂直居中 (轮 32 用户反馈: 原来它在 line1 里, 于是跟第一行
@@ -1809,18 +1842,18 @@ public partial class HomePage : Page
         string power = sessState == AmbientCore.StateRunning && (statusByte & 1) == 1
             ? "供电 正常" : "";
         // 只用查得到的配置, 不 GetOrCreate —— 光是"看一眼设备列表"不该给没见过的设备建配置文件
-        bool hasCfg = ConfigStore.Devices.TryGetValue(key, out var ds);
-        string leds = managedHere && hasCfg ? $"{ds.LedCount} 灯" : "";
+        string leds = managedHere && hasCfg ? $"{ds!.LedCount} 灯" : "";
         // 端口显示**实际会用的那个** (轮 34 补 5): 以前无条件显示枚举端口, 于是在
         // "高级页给这台手动指定了别的口"时, 行里写着 COM5、点开启却去连 COM4 —— 界面在说谎。
         // ⚠️ 查配置**不能**加 managedHere 条件 (那曾是个真 bug): 手动指定端口的场合里,
         // "还没开会话"恰恰是最常见的状态 —— 加上它就等于"无会话时永远显示枚举端口"。
         // 规则见 PortLabel (纯函数, 探针真值表 + 一条接线断言)。
-        var portLabel = PortLabel(sess?.ComPort, hasCfg ? ds!.ComPort : "", d.ComPort);
+        var portLabel = PortLabel(sess?.ComPort, cfgPort, d.ComPort);
         line2.Text = string.Join(" · ",
             new[] { portLabel.Text, power, leds }.Where(s => s.Length > 0));
-        // 手动指定 → 这一行给个警示色的点, 免得"端口是设过的"这件事被忽略 (只在真的不同/指定了时才标)
-        if (portLabel.Manual) line2.SetResourceReference(
+        // 警示色只在"配置端口 ≠ 本行枚举端口"时才用 (手动指定且一致 = 正常状态, 不该报警);
+        // 端口**不在位**比"不一致"更严重 → 同样转警示色。
+        if (portLabel.Warn || portMissing) line2.SetResourceReference(
             System.Windows.Controls.TextBlock.ForegroundProperty, "SystemFillColorCautionBrush");
 
         var infoCol = new StackPanel

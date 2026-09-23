@@ -740,6 +740,29 @@ static void Run()
     }
 
     Console.WriteLine();
+    Console.WriteLine("---- 轮 34 补 6: 胶囊的两条端口规则 (手动指定端口) ----");
+    // 用户反馈: 手动指定端口后胶囊还显示「就绪」。规则:
+    //   ① 配置的口**本机不存在** → 「端口不在位」(不点开启就知道连不上);
+    //   ② 有会话 + DEV_LOST + 手动指定 → 「指定端口无应答」(而不是"灯带不在位" —— 那暗示灯带被拔了);
+    //   ③ "口在位但不是灯带"**不做**预检 (要真开端口试握手) → 只能等开启后由诊断说明。
+    var portPillCases = new (bool HasSlot, int State, bool Manual, bool Missing, string Expect, string Desc)[]
+    {
+        (false, AmbientCore.StateStopped, true, true, "端口不在位", "无会话 + 指定口不在位"),
+        (false, AmbientCore.StateStopped, true, false, "就绪", "无会话 + 指定口在位 (设备可用)"),
+        (true, AmbientCore.StateDevLost, true, false, "指定端口无应答", "有会话 DEV_LOST + 手动指定"),
+        (true, AmbientCore.StateDevLost, false, false, "灯带不在位", "有会话 DEV_LOST + 自动探测 (原文案不变)"),
+        (true, AmbientCore.StateRunning, true, false, "运行中", "连上了 → 状态优先, 与端口规则无关"),
+    };
+    foreach (var c in portPillCases)
+    {
+        var (label, _) = AmbientLight.Views.HomePage.DevicePill(
+            hasSlot: c.HasSlot, state: c.State, inUse: false, devType: 0, likelyOurs: false,
+            manualPort: c.Manual, portMissing: c.Missing);
+        Console.WriteLine((label == c.Expect ? "OK   " : "FAIL ") +
+                          $"{c.Desc} → 「{label}」 (期望「{c.Expect}」)");
+    }
+
+    Console.WriteLine();
     Console.WriteLine("---- §8.3 连接: 端口下拉 (纯函数 + 行存在) ----");
     var portItems = AmbientLight.Views.SettingsPageAdvanced.BuildPortItems("COM7", ["COM5", "COM10", "com5"]);
     bool autoFirst = portItems.Count > 0 && portItems[0].Port == null
@@ -1032,34 +1055,39 @@ static void Run()
     Console.WriteLine();
     Console.WriteLine("---- 轮 34 补 5: 设备行端口文案 (显示\"实际会用的口\") ----");
     // 用户反馈: 高级页给某台手动指定了 COM4 后, 设备行仍显示枚举到的 COM5, 点开启却去连 COM4。
-    // 规则: **手动指定优先** (它是"必须用它") > 会话端口 > 枚举端口。
-    var portCases = new (string? Sess, string? Cfg, string? Enum, string Text, bool Manual, string Desc)[]
+    // 规则: **手动指定优先** (它是"必须用它") > 会话端口 > 枚举端口;
+    //       `Warn`(警示色) 只在"配置端口 ≠ 本行枚举端口"时才给 —— 一致时只是普通文字。
+    var portCases = new (string? Sess, string? Cfg, string? Enum, string Text, bool Manual, bool Warn, string Desc)[]
     {
-        ("COM5", "COM4", "COM5", "COM4 (手动指定)", true, "手动指定 + 有会话 → 仍以配置为准 (会话口只是此刻在用)"),
-        ("", "COM4", "COM5", "COM4 (手动指定)", true, "手动指定 + 无会话"),
-        ("COM5", "", "COM5", "COM5", false, "没指定 → 会话端口"),
-        ("", "", "COM5", "COM5", false, "没指定 + 无会话 → 枚举端口"),
-        (null, "   ", "COM6", "COM6", false, "全空白配置视为未指定"),
+        ("COM5", "COM4", "COM5", "COM4 (手动指定)", true, true, "手动指定 + 有会话 → 仍以配置为准 (会话口只是此刻在用)"),
+        ("", "COM4", "COM5", "COM4 (手动指定)", true, true, "手动指定 + 无会话"),
+        ("", "COM5", "COM5", "COM5 (手动指定)", true, false, "指定口与枚举一致 → **不**警示 (两根灯带各钉各的口)"),
+        ("", "com5", "COM5", "com5 (手动指定)", true, false, "大小写不敏感 → 视为同一个口"),
+        ("COM5", "", "COM5", "COM5", false, false, "没指定 → 会话端口"),
+        ("", "", "COM5", "COM5", false, false, "没指定 + 无会话 → 枚举端口"),
+        (null, "   ", "COM6", "COM6", false, false, "全空白配置视为未指定"),
     };
     foreach (var c in portCases)
     {
-        var (text, manual) = AmbientLight.Views.HomePage.PortLabel(c.Sess, c.Cfg, c.Enum);
-        bool ok = text == c.Text && manual == c.Manual;
+        var (text, manual, warn) = AmbientLight.Views.HomePage.PortLabel(c.Sess, c.Cfg, c.Enum);
+        bool ok = text == c.Text && manual == c.Manual && warn == c.Warn;
         Console.WriteLine((ok ? "OK   " : "FAIL ") +
-                          $"{c.Desc} → \"{text}\" (标记 {manual}), 期望 \"{c.Text}\" ({c.Manual})");
+                          $"{c.Desc} → \"{text}\" (标记 {manual}/{warn}), 期望 \"{c.Text}\" ({c.Manual}/{c.Warn})");
     }
 
     // ★ **接线断言** (轮 33 的教训: 断言了常量没断言控件, 于是空下拉漏到用户手里):
     //   光验纯函数不够 —— 真正的 bug 是调用点把"配置里的端口"多套了一个 managedHere 条件,
     //   导致**无会话时永远显示枚举端口**。这里真的建一行, 看第二行文字是什么。
+    // 轮 34 补 6 再扩两条: ① 端口不在位时胶囊要是「端口不在位」; ② 警示色真的落到第二行上。
     const string probeKey = "9_3";                       // 用个不会被选中的 key, 免得影响别的断言
-    AmbientLight.Services.ConfigStore.Devices[probeKey] =
-        new AmbientLight.Services.DeviceSettings { ComPort = "COM4" };
+    var cautionBrush = Application.Current.TryFindResource("SystemFillColorCautionBrush") as SolidColorBrush;
     try
     {
         // 注: `ACDeviceInfo.comPort` 是 fixed byte 缓冲, 托管侧没法直接赋字符串 → 这里留空。
         // 不影响断言意图: 若调用点漏传配置端口, 第二行会是**空的** (没有枚举端口可回落),
         // 而不是 "COM4 (手动指定)" —— 正是用户看到的那两种情况。
+        AmbientLight.Services.ConfigStore.Devices[probeKey] =
+            new AmbientLight.Services.DeviceSettings { ComPort = "COM4" };   // 本机**存在**的口
         var devRow = home.BuildDeviceRow(new ACDeviceInfo
         {
             devType = 9, devId = 3, inUse = 0,
@@ -1069,6 +1097,26 @@ static void Run()
         Console.WriteLine((wired ? "OK   " : "FAIL ") +
                           $"设备行(无会话)第二行真的显示了配置端口 = {wired} · 行内文字: " +
                           string.Join(" | ", texts.Where(t => t.Length > 0)));
+        bool readyPill = texts.Contains("就绪");       // 口在位 → 设备可用, 胶囊仍是「就绪」
+        Console.WriteLine((readyPill ? "OK   " : "FAIL ") + $"在位的指定口 → 胶囊仍是「就绪」= {readyPill}");
+
+        // ② 端口**不在位** → 胶囊「端口不在位」+ 第二行转警示色
+        AmbientLight.Services.ConfigStore.Devices[probeKey] =
+            new AmbientLight.Services.DeviceSettings { ComPort = "COM99" };  // 本机不存在的口
+        var missRow = home.BuildDeviceRow(new ACDeviceInfo { devType = 9, devId = 3, inUse = 0 },
+                                          sess: null, sessSlot: -1);
+        var missTexts = LogicalDescendants(missRow).OfType<TextBlock>().ToList();
+        bool missPill = missTexts.Any(t => t.Text == "端口不在位");
+        Console.WriteLine((missPill ? "OK   " : "FAIL ") +
+                          $"指定了口但本机没有 → 胶囊「端口不在位」= {missPill} · 行内文字: " +
+                          string.Join(" | ", missTexts.Select(t => t.Text).Where(s => s.Length > 0)));
+        var lineColor = missTexts.FirstOrDefault(t => t.Text.Contains("COM99 (手动指定)"))
+                                 ?.Foreground as SolidColorBrush;
+        bool caution = cautionBrush is not null && lineColor is not null
+                       && lineColor.Color == cautionBrush.Color;
+        Console.WriteLine((caution ? "OK   " : "FAIL ") +
+                          $"端口不在位时第二行用警示色 = {caution} · 实测 {lineColor?.Color} " +
+                          $"(期望 {cautionBrush?.Color})");
     }
     finally
     {
