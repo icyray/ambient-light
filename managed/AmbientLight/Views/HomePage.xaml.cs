@@ -1596,6 +1596,41 @@ public partial class HomePage : Page
         }
     }
 
+    /// <summary>**设备行 ↔ 会话的配对** —— 纯函数, 探针打真值表 (轮 34 补 7)。
+    /// 顺序 (先到先得):
+    ///   ① **设备 key 相同** —— 最可靠。会话连不上端口时 `ACStatus.comPort` 是**空的**
+    ///      (端口只在握手成功时才回填), 光按端口配就认不出"这一行正是那个会话" →
+    ///      行会一直显示乐观的「就绪」, 而 banner (按 key 找 slot) 早已显示"正在尝试重连"。
+    ///      用户实测: 手动指定一个"在位但不是灯带"的端口后开启 → 行显示「就绪」就是这个原因。
+    ///   ② 端口相同 (会话已连上, 或枚举探测没拿到类型时)。
+    ///   ③ 兜底: 端口看起来被占用 + **恰有一个**非停止会话 → 按归属处理
+    ///      (刚 Start 的会话端口/类型都还没回填)。多个 → 无法归属, 返回 -1。
+    /// 返回 -1 = 这一行没有归属的会话。
+    /// `candidates` = (slot, 该 slot 的设备 key, 会话端口, 会话状态), 由调用方取一次。</summary>
+    public static int MatchSessionSlot(string rowKey, string rowPort, bool portInUse,
+        IReadOnlyList<(int Slot, string Key, string SessionPort, int State)> candidates)
+    {
+        for (int i = 0; i < candidates.Count; i++)
+            if (candidates[i].State != AmbientCore.StateStopped && candidates[i].Key == rowKey)
+                return candidates[i].Slot;
+
+        if (rowPort.Length > 0)
+            for (int i = 0; i < candidates.Count; i++)
+                if (candidates[i].State != AmbientCore.StateStopped
+                    && string.Equals(candidates[i].SessionPort, rowPort, StringComparison.OrdinalIgnoreCase))
+                    return candidates[i].Slot;
+
+        if (!portInUse) return -1;
+        int only = -1;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            if (candidates[i].State == AmbientCore.StateStopped) continue;
+            if (only >= 0) return -1;
+            only = candidates[i].Slot;
+        }
+        return only;
+    }
+
     private async Task RefreshDevicesCoreAsync()
     {
         DevicesPanel.Children.Clear();
@@ -1620,36 +1655,23 @@ public partial class HomePage : Page
                 });
                 return;
             }
+            // 会话快照取**一次** (原来是每行每 slot 各取一次 AC_GetStatusEx)。配对规则见 MatchSessionSlot。
+            var statusBySlot = new Dictionary<int, ACStatus>();
+            var sessions = new List<(int Slot, string Key, string SessionPort, int State)>();
+            foreach (var (slot, key) in App.Instance.Slots)
+            {
+                var st0 = AmbientCore.GetStatusEx(slot);
+                statusBySlot[slot] = st0;
+                sessions.Add((slot, key, st0.ComPort, st0.state));
+            }
+
             foreach (var d in devices)
             {
                 // 本核心会话占用的端口必然探测为 [端口被占用][未应答] —
-                // 类型/编号/运行态改从该会话的 ACStatus 取
-                ACStatus? sess = null;
-                int sessSlot = -1;
-                foreach (var slot in App.Instance.Slots.Keys)
-                {
-                    var st = AmbientCore.GetStatusEx(slot);
-                    if (st.state != AmbientCore.StateStopped &&
-                        string.Equals(st.ComPort, d.ComPort, StringComparison.OrdinalIgnoreCase))
-                    {
-                        sess = st;
-                        sessSlot = slot;
-                        break;
-                    }
-                }
-                if (sess == null && d.inUse == 1)
-                {
-                    // 刚 Start 的会话 ComPort 可能尚未回填: 恰有一个非停止会话时按归属处理
-                    int only = -1;
-                    foreach (var slot in App.Instance.Slots.Keys)
-                    {
-                        var st = AmbientCore.GetStatusEx(slot);
-                        if (st.state == AmbientCore.StateStopped) continue;
-                        if (only >= 0) { only = -2; break; }
-                        only = slot;
-                    }
-                    if (only >= 0) { sess = AmbientCore.GetStatusEx(only); sessSlot = only; }
-                }
+                // 类型/编号/运行态改从该会话的 ACStatus 取 (配对规则见 MatchSessionSlot 的注释)
+                string rowKey = $"{d.devType}_{d.devId}";
+                int sessSlot = MatchSessionSlot(rowKey, d.ComPort ?? "", d.inUse == 1, sessions);
+                ACStatus? sess = sessSlot >= 0 ? statusBySlot[sessSlot] : null;
                 DevicesPanel.Children.Add(BuildDeviceRow(d, sess, sessSlot));
             }
         }
@@ -1758,8 +1780,12 @@ public partial class HomePage : Page
     public UIElement BuildDeviceRow(ACDeviceInfo d, ACStatus? sess, int sessSlot)
     {
         bool managedHere = sess != null;
-        int devType = sess?.devType ?? d.devType;
-        int devId = sess?.devId ?? d.devId;
+        // 类型/编号: **两边都可能还没回填** —— 会话没握手成功时它的 devType 是 -1,
+        // 而"我们的会话正占着那个口"时枚举也探测不到 (probe 拿不到握手)。
+        // 所以谁有值用谁, 而不是"有会话就一律信会话" (轮 34 补 7: 改成按 key 配对后,
+        // 会出现"会话 devType=-1 但枚举认得出类型"的组合, 再照抄会话就会退化成"未知 · 读取中")。
+        int devType = sess?.devType >= 0 ? sess!.Value.devType : d.devType;
+        int devId = sess?.devId >= 0 ? sess!.Value.devId : d.devId;
         int sessState = sess?.state ?? AmbientCore.StateStopped;
         bool usable = managedHere || (d.devType >= 0 && d.inUse == 0);
         int slot = managedHere ? sessSlot : -1;

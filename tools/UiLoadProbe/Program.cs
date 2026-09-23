@@ -35,6 +35,14 @@ static void Run()
 {
     var app = new AmbientLight.App();   // 不触发 OnStartup (单例守卫/托盘/主窗/核心)
     app.InitializeComponent();          // 入口 Main 里才调用, 探针必须手动调: 加载 App.xaml 全局资源
+    // `App.Instance` 是在 OnStartup 里赋的 (`_instance = this`), 而探针不跑 OnStartup →
+    // 任何走 `App.Instance.xxx` 的代码路径都会 NRE。这里用反射把它补上, 让"有会话"这类
+    // 路径也能在无头宿主里跑到 (轮 34 补 7: 设备行按 key 配对需要 App 实例)。
+    typeof(AmbientLight.App)
+        .GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+        ?.SetValue(null, app);
+    Console.WriteLine("INFO App.Instance 已注入 (反射补位, 仅探针用) = "
+                      + (AmbientLight.App.Instance is not null));
     Console.WriteLine($"GroupLabel in app resources: {app.Resources.Contains("GroupLabel")}");
 
     foreach (var pt in new[]
@@ -740,6 +748,44 @@ static void Run()
     }
 
     Console.WriteLine();
+    Console.WriteLine("---- 轮 34 补 7: 设备行 ↔ 会话配对 (纯函数真值表) ----");
+    // 用户实测: 手动指定一个"在位但不是灯带"的口后开启 → banner 显示正在重连、诊断说未应答,
+    // 但**设备行胶囊仍是「就绪」**。根因: 配对原来只看端口, 而连不上的会话 `ACStatus.comPort`
+    // 是空的 (端口只在握手成功时回填) → 行认不出这个会话 → 显示乐观的「就绪」。
+    // 规则: ① 设备 key 相同 > ② 端口相同 > ③ 端口被占且恰有一个非停止会话(兜底)。
+    const int run = AmbientCore.StateRunning, lost = AmbientCore.StateDevLost, stop = AmbientCore.StateStopped;
+    var oneLostSession = new List<(int Slot, string Key, string SessionPort, int State)>
+    {
+        (0, "0_1", "", lost),                 // 连不上: 端口为空
+    };
+    var twoSessions = new List<(int Slot, string Key, string SessionPort, int State)>
+    {
+        (0, "0_1", "", lost), (1, "0_2", "COM6", run),
+    };
+    var matchCases = new (string RowKey, string RowPort, bool InUse,
+                          List<(int Slot, string Key, string SessionPort, int State)> Sess,
+                          int Expect, string Desc)[]
+    {
+        ("0_1", "COM5", false, oneLostSession, 0,
+         "★ key 相同 (会话端口为空) → 仍配上 (用户踩的这条)"),
+        ("0_9", "COM5", false, oneLostSession, -1,
+         "key 不同 + 端口不同 + 端口没被占 → 不配 (不能张冠李戴)"),
+        ("0_9", "COM6", false, twoSessions, 1, "key 不同但端口相同 → 按端口配"),
+        ("0_9", "COM5", true, oneLostSession, 0, "端口被占 + 恰一个非停止会话 → 兜底归属"),
+        ("0_9", "COM5", true, twoSessions, -1, "端口被占 + 两个会话 → 无法归属, 不配"),
+        ("0_9", "COM5", false, twoSessions, -1, "端口没被占 → 不做兜底"),
+        ("0_1", "COM5", false, new List<(int, string, string, int)> { (0, "0_1", "COM5", stop) }, -1,
+         "已停止的会话不算 (state==STOPPED 跳过)"),
+        ("0_1", "COM5", false, twoSessions, 0, "key 优先于端口 (两个会话都有时按 key 挑)"),
+    };
+    foreach (var c in matchCases)
+    {
+        int got = AmbientLight.Views.HomePage.MatchSessionSlot(c.RowKey, c.RowPort, c.InUse, c.Sess);
+        Console.WriteLine((got == c.Expect ? "OK   " : "FAIL ") +
+                          $"{c.Desc} → slot {got} (期望 {c.Expect})");
+    }
+
+    Console.WriteLine();
     Console.WriteLine("---- 轮 34 补 6: 胶囊的两条端口规则 (手动指定端口) ----");
     // 用户反馈: 手动指定端口后胶囊还显示「就绪」。规则:
     //   ① 配置的口**本机不存在** → 「端口不在位」(不点开启就知道连不上);
@@ -1117,6 +1163,24 @@ static void Run()
         Console.WriteLine((caution ? "OK   " : "FAIL ") +
                           $"端口不在位时第二行用警示色 = {caution} · 实测 {lineColor?.Color} " +
                           $"(期望 {cautionBrush?.Color})");
+
+        // ③ 用户实测的完整场景: 手动指定"在位但不是灯带"的口 → 开启 → 会话连不上 (DEV_LOST,
+        //    它的 devType/devId/comPort 都还没回填) → 行必须仍然**认出这个会话**并显示「指定端口无应答」,
+        //    而且类型/编号要退回用枚举的值 (不能因为会话是 -1 就显示"未知 · 读取中")。
+        AmbientLight.Services.ConfigStore.Devices[probeKey] =
+            new AmbientLight.Services.DeviceSettings { ComPort = "COM4" };
+        var lostSess = new ACStatus { devType = -1, devId = -1, state = AmbientCore.StateDevLost };
+        var lostRow = home.BuildDeviceRow(new ACDeviceInfo { devType = 9, devId = 3, inUse = 0 },
+                                          lostSess, sessSlot: 0);
+        var lostTexts = LogicalDescendants(lostRow).OfType<TextBlock>()
+            .Select(t => t.Text).Where(s => s.Length > 0).ToArray();
+        bool lostPill = lostTexts.Contains("指定端口无应答");
+        Console.WriteLine((lostPill ? "OK   " : "FAIL ") +
+                          $"连不上的会话仍被行认出来 → 胶囊「指定端口无应答」= {lostPill} · " +
+                          $"行内文字: {string.Join(" | ", lostTexts)}");
+        bool fallbackType = lostTexts.Any(t => t.Contains("id 3")) && !lostTexts.Any(t => t.Contains("读取中"));
+        Console.WriteLine((fallbackType ? "OK   " : "FAIL ") +
+                          $"会话类型未回填时退回用枚举的类型/编号 (不显示\"读取中\") = {fallbackType}");
     }
     finally
     {
