@@ -888,11 +888,11 @@ public partial class HomePage : Page
         ("Purple", true) => Rgb(0xC3, 0x8F, 0xF1),
         ("Mono", true) => Rgb(0xE4, 0xEB, 0xF2),
         // 浅色主题: 照抄深色版的色相 (叠在浅底上会变成"一道着色带"), 你可以单独调这一列
-        ("Blue", false) => Rgb(0x56, 0xB0, 0xF0),
-        ("Green", false) => Rgb(0x46, 0xD4, 0xC5),
-        ("Purple", false) => Rgb(0xC3, 0x8F, 0xF1),
+        ("Blue", false) => Rgb(0xA3, 0xDD, 0xFF),
+        ("Green", false) => Rgb(0xA2, 0xFF, 0xFA),
+        ("Purple", false) => Rgb(0xFC, 0xBC, 0xFF),
         // ⚠️ Mono 浅色版**刻意不照抄**: #E4EBF2 是近白灰, 叠在浅底上等于看不见 → 给一档中灰
-        _ => Rgb(0xA8, 0xB6, 0xC4),
+        _ => Rgb(0xB3, 0xC2, 0xD1),
     };
 
     /// <summary>光带画刷键 —— **纯函数** (探针打真值表 + 断言资源真能解析)。
