@@ -21,7 +21,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon SoundSource24}" Title="音源"
                              Description="回环跟电脑播放走; 麦克风收环境声 (需在系统隐私设置放行); 固件自拾音多数硬件无麦克风, 仅 0.25s 闪烁 (原厂同样)">
-            <ComboBox x:Name="SourceCombo" Width="200" VerticalAlignment="Center"
+            <ComboBox x:Name="SourceCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnSourceChanged">
                 <ComboBoxItem Content="系统声音" />
                 <ComboBoxItem Content="麦克风" />
@@ -39,7 +39,7 @@
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </ui:Button>
-                <ComboBox x:Name="OutDevCombo" Width="200" DisplayMemberPath="Label"
+                <ComboBox x:Name="OutDevCombo" Width="160" DisplayMemberPath="Label"
                           VerticalAlignment="Center" SelectionChanged="OnOutDevChanged" />
             </StackPanel>
         </controls:SettingRow>

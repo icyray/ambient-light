@@ -359,7 +359,7 @@
                                 Background="#FFE1D6"
                                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                                 BorderThickness="1" VerticalAlignment="Center" />
-                        <ui:TextBox x:Name="HexBox" Width="90" Text="#FFE1D6" MaxLength="9"
+                        <ui:TextBox x:Name="HexBox" Width="120" Text="#FFE1D6" MaxLength="9"
                                     VerticalAlignment="Center" TextChanged="OnHexChanged" Margin="8,0,0,0" />
                     </StackPanel>
                 </Grid>

@@ -28,12 +28,12 @@
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Lightbulb24}" Title="灯数"
                              Description="固件上限 180; 横竖边按屏幕宽高比自动分配">
             <ui:NumberBox x:Name="LedCountBox" Minimum="1" Maximum="180" Value="60"
-                          SmallChange="1" MaxDecimalPlaces="0" Width="140"
+                          SmallChange="1" MaxDecimalPlaces="0" Width="120"
                           VerticalAlignment="Center" />
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BorderAll24}" Title="灯带边数"
                              Description="环绕屏幕取色的边">
-            <ComboBox x:Name="SidesCombo" Width="200" VerticalAlignment="Center"
+            <ComboBox x:Name="SidesCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnSidesChanged">
                 <ComboBoxItem Content="左右 (2 边)" />
                 <ComboBoxItem Content="左右上 (3 边)" />
@@ -42,7 +42,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRotateClockwise24}" Title="起始方向"
                              Description="第 0 颗灯所在角与绕向">
-            <ComboBox x:Name="DirectionCombo" Width="200" VerticalAlignment="Center"
+            <ComboBox x:Name="DirectionCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnDirectionChanged">
                 <ComboBoxItem Content="逆时针 (右下起)" />
                 <ComboBoxItem Content="顺时针 (左下起)" />
@@ -51,7 +51,7 @@
         <controls:SettingRow x:Name="RotateRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSwap24}" Title="灯序偏移"
                              Description="校正灯带物理起点与协议起点的错位">
             <ui:NumberBox x:Name="RotateBox" Minimum="-7" Maximum="7" Value="0"
-                          SmallChange="1" MaxDecimalPlaces="0" Width="140"
+                          SmallChange="1" MaxDecimalPlaces="0" Width="120"
                           VerticalAlignment="Center" ValueChanged="OnRotateChanged" />
         </controls:SettingRow>
         <!-- 全屏校准向导 (轮 28 从「高级」页移来): 紧挨灯序偏移 —— 它就是用来"试出"偏移值的,
@@ -75,7 +75,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DataLine24}" Title="追光平滑"
                              Description="相邻灯共享采样点 (步长 3/4/5 px), 更平滑但失去细节">
-            <ComboBox x:Name="SmoothingCombo" Width="200" VerticalAlignment="Center"
+            <ComboBox x:Name="SmoothingCombo" Width="120" VerticalAlignment="Center"
                       SelectionChanged="OnSmoothingChanged">
                 <ComboBoxItem Content="关闭" />
                 <ComboBoxItem Content="平滑" />
@@ -85,7 +85,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="刷新率上限"
                              Description="限制核心处理帧率, 降低 CPU/串口占用">
-            <ComboBox x:Name="FpsCapCombo" Width="200" VerticalAlignment="Center"
+            <ComboBox x:Name="FpsCapCombo" Width="120" VerticalAlignment="Center"
                       SelectionChanged="OnFpsCapChanged">
                 <ComboBoxItem Content="不限" />
                 <ComboBoxItem Content="240 fps" />

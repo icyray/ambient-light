@@ -66,7 +66,7 @@
         <TextBlock Style="{StaticResource GroupLabel}" Text="屏幕与电源" />
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon WeatherMoon24}" Title="熄屏策略"
                              Description="锁屏/熄屏/切换显示器时灯带的显示策略">
-            <ComboBox x:Name="WaitDispCombo" Width="200" VerticalAlignment="Center"
+            <ComboBox x:Name="WaitDispCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnWaitDispChanged">
                 <ComboBoxItem Content="熄灭" />
                 <ComboBoxItem Content="最暗" />
@@ -89,13 +89,13 @@
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </ui:Button>
-                <ComboBox x:Name="PortCombo" Width="220" DisplayMemberPath="Label"
+                <ComboBox x:Name="PortCombo" Width="160" DisplayMemberPath="Label"
                           VerticalAlignment="Center" SelectionChanged="OnPortChanged" />
             </StackPanel>
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="波特率"
                              Description="USB CDC 虚拟串口下通常不生效 (设备端不看), 保留给桥接/旧固件">
-            <ComboBox x:Name="BaudCombo" Width="150" VerticalAlignment="Center"
+            <ComboBox x:Name="BaudCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnBaudChanged" />
         </controls:SettingRow>
 
@@ -106,7 +106,7 @@
              文案「跟随系统」= 随 Windows 的深/浅色**与强调色**变化自动跟随。 -->
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DarkTheme24}" Title="主题"
                              Description="跟随系统时随 Windows 深浅色与强调色变化即时切换">
-            <ComboBox x:Name="ThemeCombo" Width="150" VerticalAlignment="Center"
+            <ComboBox x:Name="ThemeCombo" Width="120" VerticalAlignment="Center"
                       SelectionChanged="OnThemeChanged" />
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBrush24}" Title="banner 辉光"
