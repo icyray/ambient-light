@@ -1292,13 +1292,8 @@ public partial class HomePage : Page
             LayoutSummary.Text = $"{dev.LedCount} 灯 · {dev.Sides} 边";
         }
         // 中心区只放**静态几何参数**: 展开这个折叠的人目的是核对灯序/边数/偏移, 要的就是几何事实。
-        // "黑边裁切" = 核心按黑边自适应在各边剪掉的像素数 (底/右/顶/左, 厂商初始 5);
-        // 关掉黑边自适应时它不参与布局, 所以直接写"关闭"而不是给一个会被误读的数字。
-        string inset = ConfigStore.Device.BlackBars
-            ? $"黑边裁切 {m0}/{m1}/{m2}/{m3}"
-            : "黑边裁切 关闭";
-        string center = $"{dev.LedCount} 灯 · {dev.Sides} 边 · {inset} · " +
-                        $"起点偏移 {dev.LedRotate:+0;-0;0}";
+        string center = $"{dev.LedCount} 灯 · {dev.Sides} 边 · {(dev.Direction == 0 ? "逆时针" : "顺时针")} · " +
+                        $"灯序偏移 {dev.LedRotate:+0;-0;0}";
         if (center != _lastCenter)
         {
             _lastCenter = center;
