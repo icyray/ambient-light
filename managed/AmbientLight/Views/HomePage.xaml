@@ -503,7 +503,7 @@
                 </Grid>
             </ui:CardExpander.Header>
             <!-- 高度由 LedRingView 按灯数/边数自适应 (纵向列不截断) -->
-            <controls:LedRingView x:Name="Ring" MinHeight="150" Margin="16,12,16,16" />
+            <controls:LedRingView x:Name="Ring" MinHeight="150" MaxHeight="220" Margin="16,12,16,16"/>
         </ui:CardExpander>
         <ui:Card x:Name="MetricsCard" Padding="16,10" Margin="0,0,0,4"
                  controls:AnimatedVisibility.Expanded="False">

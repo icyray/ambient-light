@@ -45,7 +45,7 @@ public partial class LedRingView : UserControl
             ? (Color.FromRgb(0x10, 0x10, 0x16), Color.FromRgb(0x2E, 0x2E, 0x38),
                Color.FromRgb(0xFF, 0xFF, 0xFF), Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF),
                Color.FromArgb(0x4D, 0xFF, 0xFF, 0xFF))
-            : (Color.FromRgb(0xFF, 0xFF, 0xFF), Color.FromRgb(0xD5, 0xDD, 0xE3),
+            : (Color.FromRgb(0xF5, 0xF5, 0xF5), Color.FromRgb(0xD5, 0xDD, 0xE3),
                themePrimary, themeSecondary,
                Color.FromArgb(0x33, 0x00, 0x00, 0x00));
 
@@ -83,7 +83,7 @@ public partial class LedRingView : UserControl
     }
 
     // 布局预算 (固定): 屏幕矩形最大外接尺寸 + LED 与矩形边缘的间隙
-    private const double MaxScreenW = 460, MaxScreenH = 220, LedGap = 14;
+    private const double MaxScreenW = 460, MaxScreenH = 220, LedGap = 8;
 
     public LedRingView()
     {
