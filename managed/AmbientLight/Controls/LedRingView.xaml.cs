@@ -130,7 +130,9 @@ public partial class LedRingView : UserControl
     public static RingStartCorner StartCornerOf(int direction)
         => direction == 0 ? RingStartCorner.BottomRight : RingStartCorner.BottomLeft;
 
-    /// <summary>绕向箭头要不要水平镜像 —— 顺时针就是逆时针关于竖直中轴的镜像 (纯函数)。</summary>
+    /// <summary>顺时针 = 逆时针关于竖直中轴的镜像 (纯函数) —— 用来选"镜像那一套"的几何
+    /// (断口在左下 / 箭头朝左)。注意这里只是**选择变体**, 不靠 RenderTransform 去翻 ——
+    /// RenderTransform 按元素自身原点解释, 拿它做"关于画布中心镜像"会把元素平移跑偏。</summary>
     public static bool MirrorGuide(int direction) => direction != 0;
 
     /// <summary>安装示意的配色 —— **纯函数**: 环线与箭头用中灰, 它在深面 `#101016` 与浅面 `#F5F5F5`
@@ -169,8 +171,13 @@ public partial class LedRingView : UserControl
         const double inset = 16, r = 12;                 // 环线内缩: 与矩形边留出呼吸
         double x = x0 + inset, y = y0 + inset, w = sw - 2 * inset, h = sh - 2 * inset;
 
-        // ① 起点徽标: 贴住起点那个**角** (右下 / 左下), 骑在环线的断口上 —— 先量出来,
-        //    环线的断口大小与箭头的位置都要看它。
+        // 起点在右下(逆时针)还是左下(顺时针) —— 下面三个元素都按它取坐标, **不用 RenderTransform**。
+        // ⚠️ 教训: 曾经想用"整层关于画布中心镜像"来省事, 但 RenderTransform 是按**元素自身原点**
+        // (局部坐标)解释的 → ScaleTransform(-1,1,画布中心,0) 会把元素整体平移到画布右侧 (顺时针那侧箭头跑飞)。
+        // 所以这里老老实实按方向算坐标/出两条路径。
+        bool right = StartCornerOf(_direction) == RingStartCorner.BottomRight;
+
+        // ① 起点徽标: 骑在起点那个角上, 坐进环线的断口
         var badge = new Border
         {
             CornerRadius = new CornerRadius(10),
@@ -180,46 +187,49 @@ public partial class LedRingView : UserControl
         };
         badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var size = badge.DesiredSize;
-        bool right = StartCornerOf(_direction) == RingStartCorner.BottomRight;
-        // 徽标"骑"在角上: 按右下角算好坐标, 顺时针那次由整层镜像搬过去
-        double badgeLeft = x + w - size.Width + 2;
-        Canvas.SetLeft(badge, right ? badgeLeft : x - 2);
+        Canvas.SetLeft(badge, right ? x + w - size.Width + 2 : x - 2);
         Canvas.SetTop(badge, y + h - size.Height / 2);
         Add(badge);
 
-        // ② 环线: 一圈**在起点处断开**的圆角矩形 (用户设计稿: 断口正好让"起点"徽标坐进去,
-        //    像灯带在这里起头/收尾)。断口横竖各切 g, 两端留圆头。
+        // ② 环线: 一圈**在起点处断开**的圆角矩形 —— 断口正好让"起点"徽标坐进去
+        // (像灯带在这里起头/收尾)。断口横竖各切 g, 两端留圆头。两条路径分别是"断口在右下"与
+        // "断口在左下"(= 关于竖直中轴的镜像), 都是 M → 三个圆角 → 停在断口另一侧。
         double g = size.Width + 6;
+        // 两条路径 = 互为镜像的两个变体, 由 MirrorGuide 选 (顺时针 = 逆时针的镜像)
+        string d = !MirrorGuide(_direction)
+            ? $"M {F(x + w - g)},{F(y + h)} L {F(x + r)},{F(y + h)} " +
+              $"A {r},{r} 0 0 1 {F(x)},{F(y + h - r)} L {F(x)},{F(y + r)} " +
+              $"A {r},{r} 0 0 1 {F(x + r)},{F(y)} L {F(x + w - r)},{F(y)} " +
+              $"A {r},{r} 0 0 1 {F(x + w)},{F(y + r)} L {F(x + w)},{F(y + h - g)}"
+            // ⚠️ 顺时针这条是反向绕行, 三个圆角的 **sweep 必须是 0**(逆时针) —— 写 1 会让圆角
+            // 朝外鼓成"外凸肩", 而包围盒只大一点点 (第一版就是这么错的: 位置/包围盒都像对的, 形状是错的)。
+            : $"M {F(x + g)},{F(y + h)} L {F(x + w - r)},{F(y + h)} " +
+              $"A {r},{r} 0 0 0 {F(x + w)},{F(y + h - r)} L {F(x + w)},{F(y + r)} " +
+              $"A {r},{r} 0 0 0 {F(x + w - r)},{F(y)} L {F(x + r)},{F(y)} " +
+              $"A {r},{r} 0 0 0 {F(x)},{F(y + r)} L {F(x)},{F(y + h - g)}";
+        // PathGeometry (而非 Geometry.Parse 的 StreamGeometry): 几何可内省, 探针要读 Figure.IsClosed
         var loop = new Path
         {
-            // 用 PathGeometry (而不是 Geometry.Parse 的 StreamGeometry): 几何**可内省** ——
-            // 探针要读 Figure.IsClosed 来验"环线真的是开口的", StreamGeometry 读不到。
-            Data = PathGeometry.CreateFromGeometry(Geometry.Parse(
-                $"M {F(x + w - g)},{F(y + h)} L {F(x + r)},{F(y + h)} " +
-                $"A {r},{r} 0 0 1 {F(x)},{F(y + h - r)} " +          // 左下角
-                $"L {F(x)},{F(y + r)} A {r},{r} 0 0 1 {F(x + r)},{F(y)} " +   // 左上角
-                $"L {F(x + w - r)},{F(y)} A {r},{r} 0 0 1 {F(x + w)},{F(y + r)} " +  // 右上角
-                $"L {F(x + w)},{F(y + h - g)}")),                      // 右下角: 留断口
+            Data = PathGeometry.CreateFromGeometry(Geometry.Parse(d)),
             Stroke = Frozen(gc.Line),
             StrokeThickness = 2,
+            StrokeLineJoin = PenLineJoin.Round,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
         };
         Add(loop);
 
-        // ③ 箭头: 底边上、断口外侧, 指向行进方向 (逆时针 = 向右, 朝断口而去 = "回到起点")
-        var head = new Path { Data = Geometry.Parse("M0,0 L0,10 L13,5 Z"), Fill = Frozen(gc.Head) };
-        Canvas.SetLeft(head, x + w - g - 6 - 13);
+        // ③ 箭头: 断口外侧、指向断口 ("绕回起点")。逆时针朝右、顺时针朝左 —— 两个方向的
+        //    三角朝向不同, 所以是两条路径 (不是把同一个镜像一下, 见上面的教训)。
+        var head = new Path
+        {
+            Data = Geometry.Parse(right ? "M0,0 L0,10 L13,5 Z" : "M13,0 L13,10 L0,5 Z"),
+            Fill = Frozen(gc.Head),
+        };
+        Canvas.SetLeft(head, right ? x + w - g - 6 - 13 : x + g + 6);
         Canvas.SetTop(head, y + h - 5);
         Add(head);
 
-        // 🔁 顺时针 = 整层关于竖直中轴的镜像 (环线断口与箭头一起搬过去; 徽标只换坐标, 文字不能被镜像)
-        if (MirrorGuide(_direction))
-        {
-            var flip = new ScaleTransform(-1, 1, RingCanvas.Width / 2, 0);
-            loop.RenderTransform = flip;
-            head.RenderTransform = flip;
-        }
     }
 
     /// <summary>重建布局 (签名相同则跳过)。screenW/H = 目标显示器实际物理分辨率

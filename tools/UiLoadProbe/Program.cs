@@ -31,7 +31,7 @@ Console.OutputEncoding = Encoding.UTF8;
 // 无头宿主里 RenderTargetBitmap 可用 (只要先 Measure/Arrange) —— 这样改视觉之前能先看一眼。
 if (args.Length >= 2 && args[0] == "--dump-ring")
 {
-    var td = new Thread(() => DumpRing(args[1]));
+    var td = new Thread(() => DumpRing(args[1], args.Length >= 3 && int.TryParse(args[2], out var od) ? od : -1));
     td.SetApartmentState(ApartmentState.STA);
     td.Start();
     td.Join();
@@ -45,7 +45,7 @@ return;
 
 /// <summary>把"校准窗的安装示意"渲染成一张 PNG: 逆时针 / 顺时针 并排, 便于肉眼评审。
 /// 纯设计工具 —— 不参与断言 (断言在 Run 里)。</summary>
-static void DumpRing(string path)
+static void DumpRing(string path, int onlyDir)
 {
     var app = new AmbientLight.App();
     app.InitializeComponent();
@@ -54,8 +54,11 @@ static void DumpRing(string path)
         ?.SetValue(null, app);
     // 与校准窗一致: 恒深面 + 标准图 (象限色)
     var panel = new StackPanel { Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x18)) };
-    foreach (var (dir, cap) in new[] { (0, "direction 0 · 逆时针 (起点在右下)"),
-                                       (1, "direction 1 · 顺时针 (起点在左下)") })
+    // 只给一个方向时就放大 3 倍 (便于看局部: 断口/箭头/徽标的位置关系)
+    var wanted = onlyDir >= 0
+        ? new[] { (onlyDir, $"direction {onlyDir} · {(onlyDir == 0 ? "逆时针 (起点在右下)" : "顺时针 (起点在左下)")}") }
+        : new[] { (0, "direction 0 · 逆时针 (起点在右下)"), (1, "direction 1 · 顺时针 (起点在左下)") };
+    foreach (var (dir, cap) in wanted)
     {
         panel.Children.Add(new TextBlock
         {
@@ -76,7 +79,7 @@ static void DumpRing(string path)
     // 2 倍渲染: 徽标里的字很小, 放大后才看得出底/字色与位置关系。
     // 放大走**提高 DPI**(RenderTargetBitmap 按 DPI 缩放视觉), 不是 LayoutTransform ——
     // 后者不改排布尺寸, 渲染出来会被裁成原来那么大 (第一版就是这么被裁掉右半边的)。
-    const double zoom = 2;
+    double zoom = onlyDir >= 0 ? 3 : 2;
     panel.Measure(new Size(520, double.PositiveInfinity));
     panel.Arrange(new Rect(0, 0, 520, panel.DesiredSize.Height));
     panel.UpdateLayout();
@@ -707,8 +710,44 @@ static void Run()
     var badgeDir1 = guideCanvas?.Children.OfType<System.Windows.Controls.Border>()
                               .FirstOrDefault(b => (b.Child as TextBlock)?.Text == "起点");
     double badgeLeftDir1 = badgeDir1 is null ? 0 : System.Windows.Controls.Canvas.GetLeft(badgeDir1);
-    Console.WriteLine((badgeLeftDir1 < badgeLeftDir0 ? "OK   " : "FAIL ") +
-                      $"★ 徽标位置真的跟着绕向换侧 (逆时针 x={badgeLeftDir0:F0} → 顺时针 x={badgeLeftDir1:F0})");
+    // 两个方向的几何都要"对称且形状正确":
+    //   ① 环线包围盒 ≈ 指定内缩后的矩形 (圆角不外鼓 → 包围盒正好等于矩形);
+    //      —— 这条能抓住"sweep 写反 → 圆角朝外鼓"这类**位置对、形状错**的 bug
+    //      (第一版顺时针那条就是这么错的: 包围盒只大一点点, 只有渲染成图才看出来);
+    //   ② 箭头/徽标左右对称 (镜像关系)。
+    double? loopW = null, loopH = null, loopX = null;
+    var arrowX = new(double X, int Dir)[2];
+    var badgeX = new double[2];
+    foreach (var d in new[] { 0, 1 })
+    {
+        guideRing.SetOrientation(true, d);
+        var lo = guideCanvas?.Children.OfType<System.Windows.Shapes.Path>()
+                             .FirstOrDefault(x => x.Stroke is not null);
+        var he = guideCanvas?.Children.OfType<System.Windows.Shapes.Path>()
+                             .FirstOrDefault(x => x.Fill is not null);
+        var bd = guideCanvas?.Children.OfType<System.Windows.Controls.Border>()
+                             .FirstOrDefault(b => (b.Child as TextBlock)?.Text == "起点");
+        var b = lo?.Data.Bounds ?? default;
+        if (d == 1)   // dir 1 的期望值拿来跟 dir 0 比 (两者应完全相同)
+        {
+            bool same = loopW is { } lw && Math.Abs(b.Width - lw) < 0.5
+                        && loopH is { } lh && Math.Abs(b.Height - lh) < 0.5
+                        && loopX is { } lx && Math.Abs(b.X - lx) < 0.5;
+            Console.WriteLine((same ? "OK   " : "FAIL ") +
+                              $"两个方向的环线几何一致 (顺时针那条的圆角没朝外鼓) = {same} · " +
+                              $"{b.X:F1},{b.Y:F1} {b.Width:F1}x{b.Height:F1}");
+        }
+        else { loopW = b.Width; loopH = b.Height; loopX = b.X; }
+        arrowX[d] = (System.Windows.Controls.Canvas.GetLeft(he), d);
+        badgeX[d] = System.Windows.Controls.Canvas.GetLeft(bd);
+    }
+    // 对称: 徽标在右侧时的箭头 x + 徽标在左侧时的箭头 x ≈ 环线左右边界之和 - 箭头宽 - 间距差
+    // 这里只做"顺时针的箭头比逆时针的更靠左"这个弱断言 (强断言需要环线边界, 用上面那条兜)
+    bool arrowMirrored = arrowX[1].X < arrowX[0].X;
+    bool badgeMirrored = badgeX[1] < badgeX[0];
+    Console.WriteLine((arrowMirrored && badgeMirrored ? "OK   " : "FAIL ") +
+                      $"箭头与徽标都跟着绕向换侧 (箭头 x {arrowX[0].X:F0}→{arrowX[1].X:F0} · " +
+                      $"徽标 x {badgeX[0]:F0}→{badgeX[1]:F0})");
     var badgeBg = (badgeDir1?.Background as SolidColorBrush)?.Color;
     var badgeFg = (badgeDir1?.Child as TextBlock)?.Foreground is SolidColorBrush fgB ? fgB.Color : (Color?)null;
     var headFill = (headPath?.Fill as SolidColorBrush)?.Color;
