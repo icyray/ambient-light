@@ -96,6 +96,29 @@ struct Envelope
     }
 };
 
+/// 交叉淡化: from → to 逐字节线性混合, 逐帧写出 (SmoothStep 两端缓)。
+/// 用在"进 WAIT_DISP"—— 末帧内容 → policy 帧 (policy=保持时两者相同, 直接跳过)。
+inline bool CrossFade(serial::SerialPort& sp, const std::vector<uint8_t>& from,
+                      const std::vector<uint8_t>& to, std::vector<uint8_t>& scratch, double ms)
+{
+    if (!sp.IsOpen() || from.size() != to.size() || from.size() <= 3) return false;
+    if (from == to) return true;                     // 目标 = 现状 → 不用过渡
+    double t0f = Millis();
+    while (true) {
+        double s = (Millis() - t0f) / ms;
+        if (s >= 1.0) break;
+        if (s < 0.0) s = 0.0;
+        double e = s * s * (3.0 - 2.0 * s);
+        scratch.resize(from.size());
+        for (size_t i = 0; i < 3; i++) scratch[i] = to[i];          // 头部(帧类型)以后者为准
+        for (size_t i = 3; i < scratch.size(); i++)
+            scratch[i] = (uint8_t)(from[i] * (1.0 - e) + to[i] * e + 0.5);
+        if (!sp.Write(scratch.data(), (DWORD)scratch.size())) return false;
+        Sleep(16);
+    }
+    return true;
+}
+
 /// 一段淡出: 把 lastOut (最后一份"可淡"字节) 按 1→0 逐帧写出。
 /// 只缩放**第 3 字节之后**的部分 —— 这样线帧("Ada"+RGB)、纯色帧("Adl")、
 /// 拾音帧("Adz"+音量×3) 三种都自然覆盖; MCU 的 3 字节命令不在这里(它没有亮度通道)。
@@ -527,6 +550,44 @@ void CoreLoopInner(Sess* g)
         memcpy(g->st.ledRgb, f.data() + 3, (size_t)n);
     };
 
+    // ==== 输出包络 + 亮度限幅 (S1/S2; 见 docs/FADE_PLAN.md §2) ====
+    // 只缩放"写出去的字节", **绝不写回配置** —— 配置里的 brightness 永远是用户意图。
+    Envelope env;
+    env.Snap(0.0);                                    // 会话起步 = 全黑, 握手成功后淡入
+    std::vector<uint8_t> lastOut, scratch, pol;       // 最后一份"可淡"字节 / 缩放缓冲 / policy 帧
+    double slewB = applied.brightness;                // 被限幅的亮度 (输出用, 不写配置)
+    double slewT = Millis();
+
+    /// 亮度限幅的"比值"乘子: 颜色链(追光/纯色)与拾音都已乘过 applied.brightness,
+    /// 所以乘 (slew/该值) 等价于"把最后那次乘法换成平滑版" —— 拖动仍然跟手,
+    /// 而"30%→90% 一帧到位"这种跳变会被抹平。MCU 模式不走这条(它不用 brightness)。
+    auto SlewRatio = [&]() -> double {
+        double b = applied.brightness;
+        if (b <= 0.0001) return 1.0;
+        return slewB / b;
+    };
+    /// 按"包络 × 亮度比值"缩放后写出 (≈1 时零拷贝; 只动第 3 字节之后的负载)
+    auto WriteEnv = [&](const uint8_t* d, size_t len) -> bool {
+        double m = env.value * SlewRatio();
+        if (m >= 0.999 || len <= 3) return sp.Write(d, (DWORD)len);
+        scratch.assign(d, d + len);
+        for (size_t i = 3; i < scratch.size(); i++)
+            scratch[i] = (uint8_t)(scratch[i] * m + 0.5);
+        return sp.Write(scratch.data(), (DWORD)scratch.size());
+    };
+    /// 内容帧: 先记下**原始字节**(供淡出复用, 不累乘以免量化误差), 再按包络写出
+    auto PushFrame = [&](const uint8_t* d, size_t len) -> bool {
+        if (len > 3) lastOut.assign(d, d + len);
+        return WriteEnv(d, len);
+    };
+    /// 退出 WAIT_DISP (内容恢复/唤醒): 从全黑淡入 —— 与"进"时的淡出对称
+    auto ExitWaitDisp = [&](const char* why) {
+        waitDisp = false;
+        env.Snap(0.0);
+        env.StartTo(1.0, kWaitDispFadeMs);
+        ACLOGI("%s (fade in %.0fms)", why, kWaitDispFadeMs);
+    };
+
     auto SendOff = [&]() {
         if (!sp.IsOpen()) return;
         std::vector<uint8_t> z;
@@ -550,6 +611,18 @@ void CoreLoopInner(Sess* g)
         if (!waitDisp) {
             waitDisp = true;
             ACLOGI("enter WAIT_DISP (%s), policy=%d", why, applied.waitDispPolicy);
+            // S2: 把"屏幕上的最后一份内容"交叉淡化到 policy 帧。
+            // policy=保持(0) 时目标就是它自己 → CrossFade 直接跳过; 熄灭(2)/最暗(1) 则平滑过渡 ✓
+            EnsureFrame();
+            pol.assign(frame.begin(), frame.end());
+            if (applied.waitDispPolicy == 2) {
+                std::fill(pol.begin() + 3, pol.end(), (uint8_t)0);
+            } else if (applied.waitDispPolicy == 1) {
+                std::fill(pol.begin() + 3, pol.end(),
+                          (uint8_t)std::clamp(applied.minBrightness, 0, 255));
+            }
+            CrossFade(sp, lastOut, pol, scratch, kWaitDispFadeMs);
+            lastOut = pol;                        // 屏幕上现在是 policy 内容 → 供后续淡出复用
             SendPolicyFrame(applied);
             lastPolicyResend = steady_clock::now();
         }
@@ -630,31 +703,25 @@ void CoreLoopInner(Sess* g)
         return false;
     };
 
-    // ---- 输出包络: 开灯淡入 / 关灯淡出 (见 docs/FADE_PLAN.md §2) ----
-    // 只缩放"写出去的字节", **绝不写回配置** —— 配置里的 brightness 永远是用户意图。
-    Envelope env;
-    env.Snap(0.0);                                   // 会话起步 = 全黑, 握手成功后淡入
-    std::vector<uint8_t> lastOut, scratch;            // 最后一份"可淡"字节 / 缩放用的临时缓冲
-
-    /// 按当前包络缩放后写出 (m≈1 时零拷贝; 只动第 3 字节之后的负载, 头部 "Ada" 不碰)
-    auto WriteEnv = [&](const uint8_t* d, size_t len) -> bool {
-        double m = env.value;
-        if (m >= 0.999 || len <= 3) return sp.Write(d, (DWORD)len);
-        scratch.assign(d, d + len);
-        for (size_t i = 3; i < scratch.size(); i++)
-            scratch[i] = (uint8_t)(scratch[i] * m + 0.5);
-        return sp.Write(scratch.data(), (DWORD)scratch.size());
-    };
-    /// 内容帧: 先记下**原始字节**(供淡出复用, 不累乘以免量化误差), 再按包络写出
-    auto PushFrame = [&](const uint8_t* d, size_t len) -> bool {
-        if (len > 3) lastOut.assign(d, d + len);
-        return WriteEnv(d, len);
-    };
-
     SetPhase(g, phase);
     for (;;) {
         if (WaitStop(g, 0)) break;                   // 停止请求 → 走退出清理
         env.Step();                                  // 包络按**时间**推进 (与帧率/模式无关)
+
+        // 亮度限幅 (S2): 每帧最多走 dt/kBrightSlewMs → 全程约 kBrightSlewMs 走完。
+        // 拖动滑条时逐帧变化都小于限幅 → 不介入(保持跟手); 预设/托盘/系统亮度的跳变 → 被抹平。
+        {
+            double nowS = Millis();
+            double dtS = nowS - slewT;
+            slewT = nowS;
+            if (dtS > 0.0) {
+                double maxStep = dtS / kBrightSlewMs;
+                double dS = applied.brightness - slewB;
+                if (dS > maxStep) dS = maxStep;
+                else if (dS < -maxStep) dS = -maxStep;
+                slewB += dS;
+            }
+        }
 
         // ============ 1. 挂起 / 恢复 ============
         if (C->resumeEvt.exchange(0)) {
@@ -733,10 +800,7 @@ void CoreLoopInner(Sess* g)
                 cap.Destroy();
                 capValid = false;
             }
-            if (waitDisp) {                     // 拾音不受熄屏/锁屏策略影响
-                waitDisp = false;
-                ACLOGI("audio mode -> exit WAIT_DISP");
-            }
+            if (waitDisp) ExitWaitDisp("audio mode resumed");   // 拾音不受熄屏/锁屏策略影响
         } else {
             audioCleared = false;
             if (audioOn) {
@@ -776,6 +840,8 @@ void CoreLoopInner(Sess* g)
                 SetPhase(g, phase);
                 env.Snap(0.0);                       // 新会话/重连: 从全黑起
                 env.StartTo(1.0, kFadeInMs);         // 淡入 (追光/拾音/纯色 都吃这一份)
+                slewB = applied.brightness;          // 限幅器归位到当前配置值 (别从陈旧值爬)
+                slewT = Millis();
             } else {
                 if (phase != AC_STATE_DEV_LOST) {
                     // 手动指定了端口时把话说清 (轮 34 补 6): 原来统一报
@@ -833,10 +899,7 @@ void CoreLoopInner(Sess* g)
                 capValid = true;
                 monitorFallback = fb;
                 cols.resize((size_t)EffLeds(applied) + 4);
-                if (waitDisp) {
-                    waitDisp = false;
-                    ACLOGI("capture built -> exit WAIT_DISP");
-                }
+                if (waitDisp) ExitWaitDisp("capture built");
                 if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
                 ACLOGI("capture built: monitor %d%s (%dx%d hdr=%d)", applied.monitorIndex,
                        fb ? " (fallback->primary)" : "", cap.Width(), cap.Height(), 0);
@@ -879,7 +942,7 @@ void CoreLoopInner(Sess* g)
             if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
             frameCounter++;
             fpsWindow++;
-            if (waitDisp) { waitDisp = false; ACLOGI("content resumed -> exit WAIT_DISP"); }
+            if (waitDisp) ExitWaitDisp("content resumed");
             if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
             if (applied.fpsCap > 0) {
                 double need = 1000.0 / applied.fpsCap;
@@ -931,7 +994,7 @@ void CoreLoopInner(Sess* g)
                 lastMcuCmd = now1;
                 frameCounter++;
                 fpsWindow++;
-                if (waitDisp) { waitDisp = false; ACLOGI("MCU mode -> exit WAIT_DISP"); }
+                if (waitDisp) ExitWaitDisp("MCU mode");
                 if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
             }
             uint8_t sb;
@@ -966,7 +1029,7 @@ void CoreLoopInner(Sess* g)
                 if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
                 frameCounter++;
                 fpsWindow++;
-                if (waitDisp) { waitDisp = false; ACLOGI("desktop resumed -> RUNNING"); }
+                if (waitDisp) ExitWaitDisp("desktop resumed");
                 if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
                 if (applied.fpsCap > 0) {       // 帧率上限 (timeBeginPeriod(1) 已开)
                     double need = 1000.0 / applied.fpsCap;
