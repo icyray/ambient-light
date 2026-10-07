@@ -1178,6 +1178,48 @@ static void Run()
         AmbientLight.Services.ThemeService.Parse(AmbientLight.Services.ConfigStore.App.Theme));
 
     Console.WriteLine();
+    Console.WriteLine("---- LedRingView 灯珠描边 (灯与背景同色时留一道缝) ----");
+    // 用户反馈: 灯珠颜色与背景接近时糊在一起。描边色**必须随底色**(25% 黑在深底上看不见, 反之亦然),
+    // 所以控件有个 Backdrop: Theme(主页, 跟主题) / AlwaysDark(校准窗那个恒深面板)。
+    var lightBackdropEdge = AmbientLight.Controls.LedRingView.LedOutline(darkBackdrop: false);
+    var darkBackdropEdge = AmbientLight.Controls.LedRingView.LedOutline(darkBackdrop: true);
+    bool edgeOrder = AmbientLight.Services.ThemePalette.RelativeLuminance(darkBackdropEdge)
+                     > AmbientLight.Services.ThemePalette.RelativeLuminance(lightBackdropEdge);
+    Console.WriteLine((edgeOrder ? "OK   " : "FAIL ") +
+                      $"描边方向: 深底给亮描边 / 浅底给暗描边 = {edgeOrder} " +
+                      $"(深底 {darkBackdropEdge} / 浅底 {lightBackdropEdge})");
+    // 两种底上都要"有可感差异" (即描边真的看得出来): 浅底按白卡片, 深底按校准窗面板 #141418
+    var overWhite = AmbientLight.Services.ThemePalette.Blend(lightBackdropEdge, Color.FromRgb(0xFF, 0xFF, 0xFF));
+    var overPanel = AmbientLight.Services.ThemePalette.Blend(darkBackdropEdge, Color.FromRgb(0x14, 0x14, 0x18));
+    double dLightBg = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(overWhite) - 0.9999);
+    double dDarkBg = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(overPanel)
+                              - AmbientLight.Services.ThemePalette.RelativeLuminance(Color.FromRgb(0x14, 0x14, 0x18)));
+    Console.WriteLine((dLightBg >= 0.05 ? "OK   " : "FAIL ") +
+                      $"浅底(白卡)上可见 (|ΔL| {dLightBg:F3} ≥ 0.05)");
+    Console.WriteLine((dDarkBg >= 0.05 ? "OK   " : "FAIL ") +
+                      $"深底(校准窗面板)上可见 (|ΔL| {dDarkBg:F3} ≥ 0.05)");
+
+    // ★ 接线: 真的建一圈灯, 断言每颗都有描边, 且描边色跟着 Backdrop 走
+    var ringProbe = new AmbientLight.Controls.LedRingView();
+    ringProbe.Configure(60, 4, direction: 0);
+    var canvas = ringProbe.FindName("RingCanvas") as System.Windows.Controls.Canvas;
+    var dots = canvas?.Children.OfType<System.Windows.Shapes.Ellipse>().ToArray() ?? [];
+    int noStroke = dots.Count(e => e.Stroke is not System.Windows.Media.SolidColorBrush
+                                  || e.StrokeThickness <= 0);
+    Console.WriteLine((dots.Length == 60 && noStroke == 0 ? "OK   " : "FAIL ") +
+                      $"60 颗灯珠全部带描边 = {dots.Length == 60 && noStroke == 0} " +
+                      $"(共 {dots.Length} 颗, 缺描边 {noStroke})");
+
+    ringProbe.Backdrop = AmbientLight.Controls.LedRingView.RingBackdrop.AlwaysDark;
+    bool forcedDark = dots.All(e => (e.Stroke as System.Windows.Media.SolidColorBrush)?.Color == darkBackdropEdge);
+    ringProbe.Backdrop = AmbientLight.Controls.LedRingView.RingBackdrop.Theme;
+    var expectTheme = AmbientLight.Controls.LedRingView.LedOutline(
+        AmbientLight.Services.ThemeService.IsDark);
+    bool themeFollow = dots.All(e => (e.Stroke as System.Windows.Media.SolidColorBrush)?.Color == expectTheme);
+    Console.WriteLine((forcedDark && themeFollow ? "OK   " : "FAIL ") +
+                      $"描边色真的跟 Backdrop 走 (AlwaysDark={forcedDark} / Theme={themeFollow})");
+
+    Console.WriteLine();
     Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");
     // 用户的调参入口有两处: XAML 的 BannerStreak<色系>Brush(Light) 与代码里的 ModeGlowColor(mode, dark)。
     // 这里断三件事: ① 键的约定 (浅色版 = 深色版 + "Light"); ② **资源真能解析**(解析失败是静默的);

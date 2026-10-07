@@ -15,10 +15,60 @@ public partial class LedRingView : UserControl
     private long _signature = -1;
     private double _aspect = 16.0 / 9.0;
 
+    /// <summary>控件被放在**什么底色**上 —— 决定"用来跟底色拉开对比"的那几笔（目前 = 灯珠描边）。
+    ///   · `Theme`（默认，主页）: 跟着主题走 —— 浅色主题下卡片是浅的 → 描边用深色；
+    ///   · `AlwaysDark`（校准窗）: 那个面板恒深（与主题无关），所以描边必须恒浅。
+    /// 为什么不能只用一个中性色: 25% 黑在深底上看不见、25% 白在浅底上看不见 ——
+    /// 与 banner 辉光同一个道理，"跟底色对比"这件事**必须知道底色**。</summary>
+    public enum RingBackdrop { Theme, AlwaysDark }
+
+    private RingBackdrop _backdrop = RingBackdrop.Theme;
+    public RingBackdrop Backdrop
+    {
+        get => _backdrop;
+        set { _backdrop = value; ApplyOutline(); }
+    }
+
+    /// <summary>灯珠描边色 —— **纯函数** (探针打真值表): 深底给亮描边、浅底给暗描边。
+    /// 目的是"两颗颜色接近的圆之间留一道缝", 不是加一圈边框 —— 所以只给到 20~30%:
+    /// 深底那侧给得更足一些 (30%), 因为最糊的场景正是校准窗: 未点亮的灯珠 #1E1E22 与
+    /// 恒深面板 #141418 的亮度差本来就只有 0.007, 全靠这道缝把它们分开。</summary>
+    public static Color LedOutline(bool darkBackdrop) => darkBackdrop
+        ? Color.FromArgb(0x4D, 0xFF, 0xFF, 0xFF)
+        : Color.FromArgb(0x33, 0x00, 0x00, 0x00);
+
+    /// <summary>当前该用的描边刷 (冻结复用, 不共享可变实例给多个元素)。</summary>
+    private SolidColorBrush OutlineBrush()
+    {
+        bool dark = _backdrop == RingBackdrop.AlwaysDark || Services.ThemeService.IsDark;
+        var b = new SolidColorBrush(LedOutline(dark));
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>按当前底色重画所有灯珠的描边 (Backdrop 变化 / 换主题时调用)。</summary>
+    private void ApplyOutline()
+    {
+        var stroke = OutlineBrush();
+        foreach (var strip in new[] { _top, _bottom, _left, _right })
+            foreach (var e in strip) e.Stroke = stroke;
+    }
+
     // 布局预算 (固定): 屏幕矩形最大外接尺寸 + LED 与矩形边缘的间隙
     private const double MaxScreenW = 460, MaxScreenH = 220, LedGap = 14;
 
-    public LedRingView() => InitializeComponent();
+    public LedRingView()
+    {
+        InitializeComponent();
+        // Backdrop=Theme 时要跟着主题变 (校准窗是 AlwaysDark, 与主题无关, 不必跟)
+        Loaded += (_, _) => Services.ThemeService.AppearanceChanged += OnAppearanceChanged;
+        Unloaded += (_, _) => Services.ThemeService.AppearanceChanged -= OnAppearanceChanged;
+    }
+
+    private void OnAppearanceChanged()
+    {
+        if (_backdrop == RingBackdrop.Theme) ApplyOutline();
+    }
 
     /// <summary>中心区提示副标题 (如 "MCU 特效由固件渲染" / 主页的静态几何参数)。
     /// **空串要把整行收起** —— 否则底衬里会多留一行高度 (校准窗只显示标题时就看得出来)。
@@ -156,7 +206,13 @@ public partial class LedRingView : UserControl
             double off = LedGap + cell / 2;
             double cx = pad + u * sw + (u == 0 ? -off : u == 1 ? off : 0);
             double cy = pad + v * sh + (v == 0 ? -off : v == 1 ? off : 0);
-            var e = new Ellipse { Width = cell, Height = cell, Fill = Frozen(30, 30, 34), Tag = idx };
+            // 描边: 灯与背景同色时靠它留出一道缝 (颜色随"控件所在底色", 见 Backdrop/LedOutline)
+            var e = new Ellipse
+            {
+                Width = cell, Height = cell, Fill = Frozen(30, 30, 34), Tag = idx,
+                StrokeThickness = 1,
+            };
+            e.Stroke = OutlineBrush();
             Canvas.SetLeft(e, cx - cell / 2);
             Canvas.SetTop(e, cy - cell / 2);
             RingCanvas.Children.Add(e);
@@ -170,6 +226,7 @@ public partial class LedRingView : UserControl
         _bottom.Sort((a, b) => Canvas.GetLeft(a).CompareTo(Canvas.GetLeft(b)));
         _left.Sort((a, b) => Canvas.GetTop(a).CompareTo(Canvas.GetTop(b)));
         _right.Sort((a, b) => Canvas.GetTop(a).CompareTo(Canvas.GetTop(b)));
+        ApplyOutline();                       // 底色可能刚变过 (Backdrop/主题), 统一刷一遍
     }
 
     /// <summary>当前布局下各物理边的 LED 序号范围 (灯数核对用), 如 "顶 0-19 · 右 20-29 …"。
