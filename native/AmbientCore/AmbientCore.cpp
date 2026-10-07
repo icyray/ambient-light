@@ -51,6 +51,72 @@ static const PROPERTYKEY kPKEY_Name = { { 0xa45c254e, 0xdf1c, 0x4efd,
 
 constexpr uint32_t kVersion = (1u << 16) | (5u << 8) | 0u;   // 1.5.0 (ACMonitorInfo.adapter 32→64, 显卡名不再截断)
 
+// ================= 淡入淡出 / 平滑参数 (要微调就改这一块) =================
+// 观感含义: 淡入 = 灯"亮起来"的过程, 淡出 = 灯"灭下去"的过程。调大 = 更慢更柔, 调小 = 更干脆。
+// 详见 docs/FADE_PLAN.md §4 (含"调大调小会怎样"的对照表)。
+constexpr double kFadeInMs        = 400.0;   // 开灯: 0 → 目标亮度
+constexpr double kFadeOutMs       = 300.0;   // 关灯/挂起: 当前 → 0 (会计入 Stop 的等待时间)
+constexpr double kModeFadeMs      = 120.0;   // 切模式(追光/拾音/纯色 之间): 出/入各一段  [S3]
+constexpr double kMcuFadeMs       = 150.0;   // 进 MCU 前淡出 / 出 MCU 后淡入            [S3]
+constexpr double kWaitDispFadeMs  = 250.0;   // 进/出 WAIT_DISP (目标 = policy 目标值)   [S2]
+constexpr double kBrightSlewMs    = 250.0;   // 亮度限幅: 任意值走到任意值的最短时间      [S2]
+constexpr double kChaseSmoothTauMs =  80.0;  // 追光「时域柔和」指数平均时间常数          [S4]
+constexpr double kChaseFlashGuard  = 0.12;   // 追光「抑制闪光」单帧亮度突变上限比例      [S4]
+// =========================================================================
+
+/// 毫秒时钟 (steady_clock 起点的偏移) —— 淡入淡出/限幅都用它算时间。
+inline double Millis()
+{
+    return duration_cast<duration<double, std::milli>>(steady_clock::now().time_since_epoch()).count();
+}
+
+/// **输出包络**: 一个 0..1 的乘子, 只作用在"写出去的字节"上, **绝不写回配置**
+/// (配置里的 brightness 永远是用户意图; 淡出只是"此刻输出多少")。
+/// 曲线 SmoothStep 两端缓, 观感像"灯慢慢亮起来"。曲线形状刻意不做成配置。
+struct Envelope
+{
+    double value = 1.0;                      // 当前乘子
+    double from = 1.0, to = 1.0;
+    double t0 = 0.0, dur = 0.0;              // 毫秒
+    bool running = false;
+
+    void Snap(double v) { value = from = to = v; running = false; }
+    void StartTo(double target, double ms)
+    {
+        if (ms <= 0.0) { Snap(target); return; }
+        from = value; to = target; dur = ms; t0 = Millis(); running = true;
+    }
+    void Step()
+    {
+        if (!running) return;
+        double s = (Millis() - t0) / dur;
+        if (s >= 1.0) { value = to; running = false; return; }
+        if (s < 0.0) s = 0.0;
+        value = from + (to - from) * (s * s * (3.0 - 2.0 * s));
+    }
+};
+
+/// 一段淡出: 把 lastOut (最后一份"可淡"字节) 按 1→0 逐帧写出。
+/// 只缩放**第 3 字节之后**的部分 —— 这样线帧("Ada"+RGB)、纯色帧("Adl")、
+/// 拾音帧("Adz"+音量×3) 三种都自然覆盖; MCU 的 3 字节命令不在这里(它没有亮度通道)。
+inline void FadeOutToBlack(serial::SerialPort& sp, const std::vector<uint8_t>& lastOut,
+                           std::vector<uint8_t>& scratch, double ms)
+{
+    if (!sp.IsOpen() || lastOut.size() <= 3) return;
+    double t0f = Millis();
+    while (true) {
+        double s = (Millis() - t0f) / ms;
+        if (s >= 1.0) break;
+        if (s < 0.0) s = 0.0;
+        double e = 1.0 - s * s * (3.0 - 2.0 * s);
+        scratch.assign(lastOut.begin(), lastOut.end());
+        for (size_t i = 3; i < scratch.size(); i++)
+            scratch[i] = (uint8_t)(scratch[i] * e + 0.5);
+        if (!sp.Write(scratch.data(), (DWORD)scratch.size())) break;
+        Sleep(16);
+    }
+}
+
 ACConfig DefaultConfig()
 {
     ACConfig c{};
@@ -564,9 +630,31 @@ void CoreLoopInner(Sess* g)
         return false;
     };
 
+    // ---- 输出包络: 开灯淡入 / 关灯淡出 (见 docs/FADE_PLAN.md §2) ----
+    // 只缩放"写出去的字节", **绝不写回配置** —— 配置里的 brightness 永远是用户意图。
+    Envelope env;
+    env.Snap(0.0);                                   // 会话起步 = 全黑, 握手成功后淡入
+    std::vector<uint8_t> lastOut, scratch;            // 最后一份"可淡"字节 / 缩放用的临时缓冲
+
+    /// 按当前包络缩放后写出 (m≈1 时零拷贝; 只动第 3 字节之后的负载, 头部 "Ada" 不碰)
+    auto WriteEnv = [&](const uint8_t* d, size_t len) -> bool {
+        double m = env.value;
+        if (m >= 0.999 || len <= 3) return sp.Write(d, (DWORD)len);
+        scratch.assign(d, d + len);
+        for (size_t i = 3; i < scratch.size(); i++)
+            scratch[i] = (uint8_t)(scratch[i] * m + 0.5);
+        return sp.Write(scratch.data(), (DWORD)scratch.size());
+    };
+    /// 内容帧: 先记下**原始字节**(供淡出复用, 不累乘以免量化误差), 再按包络写出
+    auto PushFrame = [&](const uint8_t* d, size_t len) -> bool {
+        if (len > 3) lastOut.assign(d, d + len);
+        return WriteEnv(d, len);
+    };
+
     SetPhase(g, phase);
     for (;;) {
         if (WaitStop(g, 0)) break;                   // 停止请求 → 走退出清理
+        env.Step();                                  // 包络按**时间**推进 (与帧率/模式无关)
 
         // ============ 1. 挂起 / 恢复 ============
         if (C->resumeEvt.exchange(0)) {
@@ -580,7 +668,8 @@ void CoreLoopInner(Sess* g)
             SetPhase(g, phase);
         }
         if (C->suspendEvt.exchange(0)) {
-            ACLOGI("suspend: sending off-frame, stopping stream");
+            ACLOGI("suspend: fading out, then off-frame");
+            FadeOutToBlack(sp, lastOut, scratch, kFadeOutMs);   // 熄屏/挂起也平滑灭 (用户要求)
             SendOff();                          // 防半帧/端口消失中途写
             if (audioOn) { audioOn = false; MeterRelease(); }   // 挂起期间停止音源重建循环
             cap.Destroy(); capValid = false;
@@ -685,6 +774,8 @@ void CoreLoopInner(Sess* g)
                 lastMcuMode = -1;           // 重连后固件特效已清, 强制重发 MCU 命令
                 phase = (capValid || applied.modeIndex != 0) ? AC_STATE_RUNNING : AC_STATE_STARTING;
                 SetPhase(g, phase);
+                env.Snap(0.0);                       // 新会话/重连: 从全黑起
+                env.StartTo(1.0, kFadeInMs);         // 淡入 (追光/拾音/纯色 都吃这一份)
             } else {
                 if (phase != AC_STATE_DEV_LOST) {
                     // 手动指定了端口时把话说清 (轮 34 补 6): 原来统一报
@@ -721,7 +812,7 @@ void CoreLoopInner(Sess* g)
                 }
             }
             SnapshotFrame(frame, applied);
-            if (!sp.Write(frame.data(), (DWORD)frame.size())) { WireFail("write failed"); continue; }
+            if (!PushFrame(frame.data(), frame.size())) { WireFail("write failed"); continue; }
             uint8_t sb;
             if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
             frameCounter++;
@@ -781,7 +872,7 @@ void CoreLoopInner(Sess* g)
             }
             SnapshotFrame(frame, applied);
             auto tw = steady_clock::now();
-            if (!sp.Write(frame.data(), (DWORD)frame.size())) { WireFail("write failed"); continue; }
+            if (!PushFrame(frame.data(), frame.size())) { WireFail("write failed"); continue; }
             wireEma = wireEma == 0 ? duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count()
                                    : wireEma * 0.9 + duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count() * 0.1;
             uint8_t sb;
@@ -808,7 +899,7 @@ void CoreLoopInner(Sess* g)
             uint8_t b = (uint8_t)std::clamp((int)(v + 0.5), 0, 255);
             const uint8_t f6[6] = { 'A', 'd', 'z', b, b, b };
             auto tw = steady_clock::now();
-            if (!sp.Write(f6, 6)) { WireFail("write failed"); continue; }
+            if (!PushFrame(f6, sizeof(f6))) { WireFail("write failed"); continue; }
             double wireMs = duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count();
             wireEma = wireEma == 0 ? wireMs : wireEma * 0.9 + wireMs * 0.1;
             uint8_t sb;
@@ -866,7 +957,7 @@ void CoreLoopInner(Sess* g)
                 allBlackRun = (cap.LastFrameAllBlack() && cap.LastFrameHadUpdate()) ? allBlackRun + 1 : 0;
 
                 auto tw = steady_clock::now();
-                bool ok = sp.Write(frame.data(), (DWORD)frame.size());
+                bool ok = PushFrame(frame.data(), frame.size());
                 lastFrameSend = tw;
                 double wireMs = duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count();
                 wireEma = wireEma == 0 ? wireMs : wireEma * 0.9 + wireMs * 0.1;
@@ -950,7 +1041,9 @@ void CoreLoopInner(Sess* g)
         }
     }
 
-    // ---- 退出: 关灯帧 + 清理
+    // ---- 退出: 先淡出, 再关灯帧 + 清理
+    // (MCU 模式下 lastOut 为空 —— 那 3 字节命令没有亮度通道, 无可淡, 与"MCU↔MCU 不能淡"同理)
+    FadeOutToBlack(sp, lastOut, scratch, kFadeOutMs);
     if (audioOn) { audioOn = false; MeterRelease(); }
     SendOff();
     sp.Close();
