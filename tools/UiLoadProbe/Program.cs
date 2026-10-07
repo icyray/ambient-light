@@ -17,19 +17,79 @@
 //   2) 导出 SettingRow 可视树, 方便肉眼核对模板渲染。
 // 注意: 只 new App() 不 Run() —— OnStartup (单例守卫/托盘/主窗/核心) 不会触发。
 // WPF 控件必须在 STA 线程创建 → 全部工作放 STA 线程执行。
+using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using AmbientLight.Interop;
 
 Console.OutputEncoding = Encoding.UTF8;
+// `--dump-ring <输出.png>`: 只把 LedRingView 渲染成图片 (设计评审用), 不跑断言。
+// 无头宿主里 RenderTargetBitmap 可用 (只要先 Measure/Arrange) —— 这样改视觉之前能先看一眼。
+if (args.Length >= 2 && args[0] == "--dump-ring")
+{
+    var td = new Thread(() => DumpRing(args[1]));
+    td.SetApartmentState(ApartmentState.STA);
+    td.Start();
+    td.Join();
+    return;
+}
 var t = new Thread(Run);
 t.SetApartmentState(ApartmentState.STA);
 t.Start();
 t.Join();
 return;
+
+/// <summary>把"校准窗的安装示意"渲染成一张 PNG: 逆时针 / 顺时针 并排, 便于肉眼评审。
+/// 纯设计工具 —— 不参与断言 (断言在 Run 里)。</summary>
+static void DumpRing(string path)
+{
+    var app = new AmbientLight.App();
+    app.InitializeComponent();
+    typeof(AmbientLight.App)
+        .GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+        ?.SetValue(null, app);
+    // 与校准窗一致: 恒深面 + 标准图 (象限色)
+    var panel = new StackPanel { Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x18)) };
+    foreach (var (dir, cap) in new[] { (0, "direction 0 · 逆时针 (起点在右下)"),
+                                       (1, "direction 1 · 顺时针 (起点在左下)") })
+    {
+        panel.Children.Add(new TextBlock
+        {
+            Text = cap, Foreground = new SolidColorBrush(Color.FromRgb(0xC5, 0xC5, 0xC5)),
+            FontSize = 12, Margin = new Thickness(16, 14, 16, 2),
+        });
+        var ring = new AmbientLight.Controls.LedRingView
+        {
+            Surface = AmbientLight.Controls.LedRingView.RingSurface.AlwaysDark,
+            Width = 460, Height = 300,
+        };
+        ring.Configure(60, 4, dir, 0, 1920, 1080);
+        ring.ShowQuadrantMap([Color.FromRgb(0x56, 0xB0, 0xF0), Color.FromRgb(0x46, 0xD4, 0xC5),
+                              Color.FromRgb(0xC3, 0x8F, 0xF1), Color.FromRgb(0xE4, 0xEB, 0xF2)]);
+        ring.SetOrientation(true, dir);
+        panel.Children.Add(ring);
+    }
+    // 2 倍渲染: 徽标里的字很小, 放大后才看得出底/字色与位置关系。
+    // 放大走**提高 DPI**(RenderTargetBitmap 按 DPI 缩放视觉), 不是 LayoutTransform ——
+    // 后者不改排布尺寸, 渲染出来会被裁成原来那么大 (第一版就是这么被裁掉右半边的)。
+    const double zoom = 2;
+    panel.Measure(new Size(520, double.PositiveInfinity));
+    panel.Arrange(new Rect(0, 0, 520, panel.DesiredSize.Height));
+    panel.UpdateLayout();
+    var bmp = new RenderTargetBitmap((int)(520 * zoom),
+                                     (int)Math.Ceiling(panel.DesiredSize.Height * zoom),
+                                     96 * zoom, 96 * zoom, PixelFormats.Pbgra32);
+    bmp.Render(panel);
+    var enc = new PngBitmapEncoder();
+    enc.Frames.Add(BitmapFrame.Create(bmp));
+    using var fs = File.Create(path);
+    enc.Save(fs);
+    Console.WriteLine($"dumped -> {path} ({bmp.PixelWidth}x{bmp.PixelHeight})");
+}
 
 static void Run()
 {
@@ -605,21 +665,72 @@ static void Run()
                       "布局预览 Header 摘要元素存在 (收起时显示 「N 灯 · M 边」)");
     Console.WriteLine((home.FindName("Ring") is not null ? "OK   " : "FAIL ") +
                       "几何环仍在 LayoutCard 内 (M4 的真实比例几何原样保留)");
-    // 校准向导中心区 (轮 26): 行为断言 —— 打开时可见且两段文字都填了并带上传入的序号, 关闭时收起。
-    // 不断言文案措辞与箭头字形 (那是设计值)。
+    // 校准向导的"安装示意" (2026-10-08 用户设计稿替换了旧的"起点 0 号 + ↺ 逆时针"一行小字):
+    // 环线 + 箭头表示绕向, "起点"徽标贴在 0 号灯那个**角**上。这里断三件事:
+    //   ① 起点角/镜像规则 (纯函数, 与核心段序同构); ② 示意的可见性 (线/箭头 vs 屏幕底、徽标字 vs 徽标底);
+    //   ③ ★接线: 真的画一遍, 断言"徽标的位置真的跟着绕向跑到另一侧"。
+    Console.WriteLine();
+    Console.WriteLine("---- 校准向导安装示意 (环线 + 箭头 + 起点徽标) ----");
     var calRing = new AmbientLight.Controls.LedRingView();
-    var calRow = calRing.FindName("OrientationRow") as FrameworkElement;
-    var calBadge = calRing.FindName("StartBadge") as TextBlock;
-    var calArrow = calRing.FindName("DirArrow") as TextBlock;
-    calRing.SetOrientation(true, 2, clockwise: true);
-    bool calShown = calRow?.Visibility == Visibility.Visible
-                    && !string.IsNullOrWhiteSpace(calBadge?.Text) && calBadge!.Text.Contains('2')
-                    && !string.IsNullOrWhiteSpace(calArrow?.Text);
-    calRing.SetOrientation(false, 0, clockwise: false);
-    bool calHidden = calRow?.Visibility == Visibility.Collapsed;
-    Console.WriteLine((calShown && calHidden ? "OK   " : "FAIL ") +
-                      $"校准向导中心区: SetOrientation(true, 2, cw) 可见且文本含序号 2 = {calShown}; " +
-                      $"SetOrientation(false) 收起 = {calHidden}");
+    bool calRingFindOk = calRing.FindName("OrientationRow") is null;   // 旧那行文字应已从 XAML 移除
+    Console.WriteLine((calRingFindOk ? "OK   " : "FAIL ") +
+                      $"旧的那行文字已移除 (OrientationRow 不存在) = {calRingFindOk}");
+    bool cornerRule = AmbientLight.Controls.LedRingView.StartCornerOf(0)
+                          == AmbientLight.Controls.LedRingView.RingStartCorner.BottomRight
+                      && AmbientLight.Controls.LedRingView.StartCornerOf(1)
+                          == AmbientLight.Controls.LedRingView.RingStartCorner.BottomLeft
+                      && !AmbientLight.Controls.LedRingView.MirrorGuide(0)
+                      && AmbientLight.Controls.LedRingView.MirrorGuide(1);
+    Console.WriteLine((cornerRule ? "OK   " : "FAIL ") +
+                      $"起点角规则 (逆时针=右下 / 顺时针=左下) 与镜像规则 = {cornerRule}");
+    var guideRing = new AmbientLight.Controls.LedRingView
+    {
+        Surface = AmbientLight.Controls.LedRingView.RingSurface.AlwaysDark,
+    };
+    guideRing.Configure(60, 4, direction: 0);
+    guideRing.SetOrientation(true, direction: 0);          // 先打开示意 (主页默认是关的)
+    var guideCanvas = guideRing.FindName("RingCanvas") as System.Windows.Controls.Canvas;
+    var guideShapes = guideCanvas?.Children.OfType<System.Windows.Shapes.Path>().ToArray() ?? [];
+    var guideBadge = guideCanvas?.Children.OfType<System.Windows.Controls.Border>()
+                              .FirstOrDefault(b => (b.Child as TextBlock)?.Text == "起点");
+    bool guideDrawn = guideShapes.Length == 1 && guideBadge is not null;
+    double badgeLeftDir0 = guideBadge is null ? 0 : System.Windows.Controls.Canvas.GetLeft(guideBadge);
+    Console.WriteLine((guideDrawn ? "OK   " : "FAIL ") +
+                      $"SetOrientation(true) 后画布上有箭头与「起点」徽标 = {guideDrawn}");
+    guideRing.SetOrientation(true, direction: 1);            // 换成顺时针: 徽标应跑到另一侧
+    var badgeDir1 = guideCanvas?.Children.OfType<System.Windows.Controls.Border>()
+                              .FirstOrDefault(b => (b.Child as TextBlock)?.Text == "起点");
+    double badgeLeftDir1 = badgeDir1 is null ? 0 : System.Windows.Controls.Canvas.GetLeft(badgeDir1);
+    Console.WriteLine((badgeLeftDir1 < badgeLeftDir0 ? "OK   " : "FAIL ") +
+                      $"★ 徽标位置真的跟着绕向换侧 (逆时针 x={badgeLeftDir0:F0} → 顺时针 x={badgeLeftDir1:F0})");
+    var badgeBg = (badgeDir1?.Background as SolidColorBrush)?.Color;
+    var badgeFg = (badgeDir1?.Child as TextBlock)?.Foreground is SolidColorBrush fgB ? fgB.Color : (Color?)null;
+    var headFill = guideShapes.Length > 0 ? (guideShapes[0].Fill as SolidColorBrush)?.Color : null;
+    var wantGc = AmbientLight.Controls.LedRingView.GuideColors(true);
+    Console.WriteLine($"INFO 徽标实测 bg={badgeBg} fg={badgeFg} · 箭头 fill={headFill} · " +
+                      $"期望(深面) bg={wantGc.BadgeBg} fg={wantGc.BadgeFg}");
+    guideRing.SetOrientation(false, 0);
+    bool guideGone = (guideCanvas?.Children.OfType<System.Windows.Shapes.Path>().Count() ?? 1) == 0
+                     && !(guideCanvas?.Children.OfType<System.Windows.Controls.Border>()
+                                       .Any(b => (b.Child as TextBlock)?.Text == "起点") ?? true);
+    Console.WriteLine((guideGone ? "OK   " : "FAIL ") + $"SetOrientation(false) 后示意全部撤掉 = {guideGone}");
+    foreach (var dark in new[] { true, false })
+    {
+        var gcp = AmbientLight.Controls.LedRingView.GuideColors(dark);
+        var screenFill = Color.FromRgb(dark ? (byte)0x10 : (byte)0xF5,
+                                       dark ? (byte)0x10 : (byte)0xF5,
+                                       dark ? (byte)0x16 : (byte)0xF5);
+        double lineD = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(
+                                    AmbientLight.Services.ThemePalette.Blend(gcp.Line, screenFill))
+                                - AmbientLight.Services.ThemePalette.RelativeLuminance(screenFill));
+        // 徽标底是**半透明**的 → 必须先把"底"合成到屏幕底上, 再拿字去比 (否则 RGB 相同的两个色 → 1.00)
+        var badgeOnScreen = AmbientLight.Services.ThemePalette.Blend(gcp.BadgeBg, screenFill);
+        double badgeCr = AmbientLight.Services.ThemePalette.ContrastRatio(
+            AmbientLight.Services.ThemePalette.Blend(gcp.BadgeFg, badgeOnScreen), badgeOnScreen);
+        Console.WriteLine((lineD >= 0.05 && badgeCr >= 4.5 ? "OK   " : "FAIL ") +
+                          $"{(dark ? "深面" : "浅面")}: 环线在屏幕底上可见 (|ΔL| {lineD:F3} ≥ 0.05) · " +
+                          $"徽标字对比度 {badgeCr:F2} (≥ 4.5)");
+    }
 
     Console.WriteLine();
     Console.WriteLine("---- 轮 27~29 反馈项 (只验规则, 不验数值/文案) ----");

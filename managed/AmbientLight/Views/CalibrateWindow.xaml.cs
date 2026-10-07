@@ -194,9 +194,10 @@ public partial class CalibrateWindow : Window
         // 预览 = 固定标准图 (不随偏移): 每格 = 该序号 LED 在 rotate=0 时的位置与象限色
         Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, 0, mw, mh);
         Ring.ShowQuadrantMap([Palette[s[0]], Palette[s[1]], Palette[s[2]], Palette[s[3]]]);
-        // 中心区: 0 号灯起点徽标 + 绕向箭头 (M5.1 §7 —— 这两个信息只在"对照参照图排错"时有用,
-        // 所以放在校准向导里而不是主页)。direction 0 = 逆时针 (与核心段序一致)。
-        Ring.SetOrientation(true, 0, clockwise: dev.Direction != 0);
+        // 中心区: 在屏幕矩形里画"灯带怎么绕"—— 环线 + 箭头表示绕向, "起点"徽标贴在 0 号灯那个角
+        // (2026-10-08 用户设计稿替换了原来那行小字: "0 号"没信息量, 且文字说不清绕法)。
+        // direction 0 = 逆时针 → 起点在右下角 (与核心段序一致)。
+        Ring.SetOrientation(true, dev.Direction);
         IndexText.Text = "LED 序号: " + Ring.DescribeIndices();
     }
 

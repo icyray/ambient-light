@@ -34,7 +34,7 @@ public partial class LedRingView : UserControl
     /// <summary>整套外观的调色板 —— **纯函数**（探针用它算对比度）。
     /// 主题色作为入参传进来（纯函数读不到资源字典）。
     ///   · 深面: 屏幕 `#101016`（比卡片更暗 → 读作"熄灭的屏")+ 深灰描边 `#2E2E38`；
-    ///   · 浅面: 屏幕**纯白** + 浅灰描边 `#D5DDE3` —— 浅色主题下卡片本身接近白,
+    ///   · 浅面: 屏幕 `#F5F5F5` + 浅灰描边 `#D5DDE3` —— 浅色主题下卡片本身接近白,
     ///     光靠填充色差（ΔL 0.0006）看不出"这是一块屏幕", 所以边框必须撑住识别度
     ///     （探针有一条断言守着"矩形边框在矩形底上可见"）。
     /// 灯珠描边: 深面 30% 白 / 浅面 20% 黑 —— 目的是"两颗颜色接近的圆之间留一道缝",
@@ -112,13 +112,97 @@ public partial class LedRingView : UserControl
     /// <summary>校准向导中心区 (M5.1 §7): 0 号灯起点徽标 + 绕向箭头。
     /// 主页不显示 —— 那里的中心只放静态几何参数 (展开"布局预览"的人要的是几何事实)。
     /// 绕向与核心 capture.cpp / 本控件的段序一致: direction 0 = 逆时针。</summary>
-    public void SetOrientation(bool visible, int startLed, bool clockwise)
+    // ================= 校准向导的"安装示意"(起点角 + 绕向) =================
+    // 用户 2026-10-08 设计稿: 旧版那一行小字("起点 0 号" + "↺ 逆时针")两个信息都有问题 ——
+    //   ① "0 号"没有信息量: 起点恒为 0 号灯; ② 文字说不清"灯带怎么绕"。
+    // 改成: 在**屏幕矩形内**画一圈环线 + 一个箭头表示绕向, 并把"起点"徽标贴在 0 号灯那个**角**上。
+
+    /// <summary>起点 (0 号灯) 所在的角 —— **纯函数**, 与核心的段序同构 (探针打真值表)。
+    /// `direction 0`(逆时针) 的段序是「右边缘自下而上 → 顶边右→左 → 左边缘自上而下 → 底边左→右」,
+    /// 所以 0 号灯落在**右下角**; `direction 1`(顺时针) 是它关于竖直中轴的镜像 → **左下角**。
+    /// (rotate 恒为 0: 两处 Configure 都传 0 —— 校准窗刻意显示"标准图", 灯序偏移只在下方的文字里体现。
+    ///  若将来把偏移接进预览, 起点的角要跟着 shift 一起算。)</summary>
+    public enum RingStartCorner { BottomLeft, BottomRight }
+
+    public static RingStartCorner StartCornerOf(int direction)
+        => direction == 0 ? RingStartCorner.BottomRight : RingStartCorner.BottomLeft;
+
+    /// <summary>绕向箭头要不要水平镜像 —— 顺时针就是逆时针关于竖直中轴的镜像 (纯函数)。</summary>
+    public static bool MirrorGuide(int direction) => direction != 0;
+
+    /// <summary>安装示意的配色 —— **纯函数**: 环线与箭头用中灰, 它在深面 `#101016` 与浅面 `#F5F5F5`
+    /// 上都看得见, 所以不必分主题; 只有徽标的底/字要分面 (深面浅底白字 / 浅面浅灰底深字)。</summary>
+    public static (Color Line, Color Head, Color BadgeBg, Color BadgeFg) GuideColors(bool dark)
+        => (Color.FromRgb(0x7A, 0x7A, 0x85), Color.FromRgb(0x9A, 0x9A, 0xA6),
+            dark ? Color.FromArgb(0x3D, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x18, 0x00, 0x00, 0x00),
+            dark ? Colors.White : Color.FromRgb(0x33, 0x33, 0x33));
+
+    private bool _showGuide;
+    private int _direction;
+    private readonly List<UIElement> _guide = [];
+
+    /// <summary>校准向导的安装示意: `visible` 控制显隐, `direction` = 绕向 (0 逆时针 / 1 顺时针)。
+    /// 主页不显示 (那儿的中心只放静态几何参数) —— 由校准窗 `SetOrientation(true, dev.Direction)` 打开。</summary>
+    public void SetOrientation(bool visible, int direction)
     {
-        OrientationRow.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        if (!visible) return;
-        StartBadge.Text = $"起点 {startLed} 号";
-        DirArrow.Text = clockwise ? "↻" : "↺";
-        DirText.Text = clockwise ? "顺时针" : "逆时针";
+        _showGuide = visible;
+        _direction = direction;
+        RebuildGuide();
+    }
+
+    /// <summary>画/擦安装示意。几何全部从 `_screen` 推出来 (它就是那块屏幕圆角矩形),
+    /// 所以"重建布局 / 换主题 / 改绕向"都只需再调一次。画在**灯环画布**里 → 与灯珠同坐标、随 Viewbox 缩放。</summary>
+    private void RebuildGuide()
+    {
+        foreach (var el in _guide) RingCanvas.Children.Remove(el);
+        _guide.Clear();
+        if (!_showGuide || _screen is null) return;      // 没 Configure 过 / 主页不显示
+
+        void Add(UIElement el) { _guide.Add(el); RingCanvas.Children.Add(el); }
+
+        var gc = GuideColors(IsDarkSurface);
+        double x0 = Canvas.GetLeft(_screen), y0 = Canvas.GetTop(_screen);
+        double sw = _screen.Width, sh = _screen.Height;
+        const double inset = 16, r = 12;                 // 环线内缩: 与矩形边留出呼吸
+        double x = x0 + inset, y = y0 + inset, w = sw - 2 * inset, h = sh - 2 * inset;
+
+        // ① 环线 = 灯带绕屏幕一圈的示意
+        var loop = new Rectangle
+        {
+            Width = w, Height = h, RadiusX = r, RadiusY = r,
+            Stroke = Frozen(gc.Line), StrokeThickness = 2,
+        };
+        Canvas.SetLeft(loop, x);
+        Canvas.SetTop(loop, y);
+        Add(loop);
+
+        // ② 起点徽标: 贴住起点那个**角** (右下 / 左下), 半压在环线上 —— 先量出来, 箭头要给它让位
+        var badge = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(8, 2, 8, 2),
+            Background = Frozen(gc.BadgeBg),
+            Child = new TextBlock { Text = "起点", FontSize = 11, Foreground = Frozen(gc.BadgeFg) },
+        };
+        badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var size = badge.DesiredSize;
+        bool right = StartCornerOf(_direction) == RingStartCorner.BottomRight;
+        // 左边缘再往外挪 2, 免得正好压在环线的竖边上 (观感: 徽标"骑"在角上)
+        double badgeLeft = right ? x + w - size.Width + 2 : x - 2;
+        Canvas.SetLeft(badge, badgeLeft);
+        Canvas.SetTop(badge, y + h - size.Height / 2);
+        Add(badge);
+
+        // ③ 箭头: 底边上、**紧靠徽标外侧** (所以要等徽标量完再定位), 指向行进方向
+        //   (逆时针 = 向右; 顺时针镜像成向左)。⚠️ 它和徽标都挤在起点角附近, 留 10 的间距才不打架
+        //   —— 第一版就是因为它俩重叠, 箭头完全被徽标盖住 (渲染成图才看出来)。
+        var head = new Path { Data = Geometry.Parse("M0,0 L0,10 L13,5 Z"), Fill = Frozen(gc.Head) };
+        double gap = 10;
+        double headLeft = right ? badgeLeft - gap - 13 : badgeLeft + size.Width + gap;
+        Canvas.SetLeft(head, headLeft);
+        Canvas.SetTop(head, y + h - 5);
+        if (MirrorGuide(_direction)) head.RenderTransform = new ScaleTransform(-1, 1, 6.5, 0);
+        Add(head);
     }
 
     /// <summary>重建布局 (签名相同则跳过)。screenW/H = 目标显示器实际物理分辨率
@@ -168,6 +252,7 @@ public partial class LedRingView : UserControl
         double cw = sw + 2 * pad, ch = sh + 2 * pad;
 
         _top = []; _bottom = []; _left = []; _right = [];
+        _guide.Clear();                        // Children.Clear 会把它们一起摘掉, 引用要同步作废
         RingCanvas.Children.Clear();
         RingCanvas.Width = cw;
         RingCanvas.Height = ch;
@@ -254,6 +339,7 @@ public partial class LedRingView : UserControl
         _left.Sort((a, b) => Canvas.GetTop(a).CompareTo(Canvas.GetTop(b)));
         _right.Sort((a, b) => Canvas.GetTop(a).CompareTo(Canvas.GetTop(b)));
         ApplySurface();                       // 面/主题可能刚变过, 统一刷一遍 (矩形+文字+描边一次到位)
+        RebuildGuide();                       // 安装示意 (校准窗才有) 依赖 _screen 与面的深浅, 放最后
     }
 
     /// <summary>当前布局下各物理边的 LED 序号范围 (灯数核对用), 如 "顶 0-19 · 右 20-29 …"。
