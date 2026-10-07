@@ -168,7 +168,7 @@ public partial class LedRingView : UserControl
         var gc = GuideColors(IsDarkSurface);
         double x0 = Canvas.GetLeft(_screen), y0 = Canvas.GetTop(_screen);
         double sw = _screen.Width, sh = _screen.Height;
-        const double inset = 16, r = 12;                 // 环线内缩: 与矩形边留出呼吸
+        const double inset = 24, r = 10;                 // 环线内缩: 与矩形边留出呼吸
         double x = x0 + inset, y = y0 + inset, w = sw - 2 * inset, h = sh - 2 * inset;
 
         // 起点在右下(逆时针)还是左下(顺时针) —— 下面三个元素都按它取坐标, **不用 RenderTransform**。
@@ -183,11 +183,11 @@ public partial class LedRingView : UserControl
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(8, 2, 8, 2),
             Background = Frozen(gc.BadgeBg),
-            Child = new TextBlock { Text = "起点", FontSize = 11, Foreground = Frozen(gc.BadgeFg) },
+            Child = new TextBlock { Text = "起点", FontSize = 12, Foreground = Frozen(gc.BadgeFg) },
         };
         badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var size = badge.DesiredSize;
-        Canvas.SetLeft(badge, right ? x + w - size.Width + 2 : x - 2);
+        Canvas.SetLeft(badge, right ? x + w - size.Width + 12 : x - 12);
         Canvas.SetTop(badge, y + h - size.Height / 2);
         Add(badge);
 
@@ -226,7 +226,7 @@ public partial class LedRingView : UserControl
             Data = Geometry.Parse(right ? "M0,0 L0,10 L13,5 Z" : "M13,0 L13,10 L0,5 Z"),
             Fill = Frozen(gc.Head),
         };
-        Canvas.SetLeft(head, right ? x + w - g - 6 - 13 : x + g + 6);
+        Canvas.SetLeft(head, right ? x + w - g - 6 : x + g + 6 - 13);
         Canvas.SetTop(head, y + h - 5);
         Add(head);
 
