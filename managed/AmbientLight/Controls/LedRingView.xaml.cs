@@ -75,6 +75,9 @@ public partial class LedRingView : UserControl
     private static Color ThemeBrushColor(string key, Color fallback)
         => Application.Current?.TryFindResource(key) is SolidColorBrush b ? b.Color : fallback;
 
+    /// <summary>几何字符串里的坐标格式化 (定点 1 位, 用 InvariantCulture 免得被本地小数点坑)。</summary>
+    private static string F(double v) => v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+
     private static SolidColorBrush Frozen(Color c)
     {
         var b = new SolidColorBrush(c);
@@ -166,17 +169,8 @@ public partial class LedRingView : UserControl
         const double inset = 16, r = 12;                 // 环线内缩: 与矩形边留出呼吸
         double x = x0 + inset, y = y0 + inset, w = sw - 2 * inset, h = sh - 2 * inset;
 
-        // ① 环线 = 灯带绕屏幕一圈的示意
-        var loop = new Rectangle
-        {
-            Width = w, Height = h, RadiusX = r, RadiusY = r,
-            Stroke = Frozen(gc.Line), StrokeThickness = 2,
-        };
-        Canvas.SetLeft(loop, x);
-        Canvas.SetTop(loop, y);
-        Add(loop);
-
-        // ② 起点徽标: 贴住起点那个**角** (右下 / 左下), 半压在环线上 —— 先量出来, 箭头要给它让位
+        // ① 起点徽标: 贴住起点那个**角** (右下 / 左下), 骑在环线的断口上 —— 先量出来,
+        //    环线的断口大小与箭头的位置都要看它。
         var badge = new Border
         {
             CornerRadius = new CornerRadius(10),
@@ -187,22 +181,45 @@ public partial class LedRingView : UserControl
         badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var size = badge.DesiredSize;
         bool right = StartCornerOf(_direction) == RingStartCorner.BottomRight;
-        // 左边缘再往外挪 2, 免得正好压在环线的竖边上 (观感: 徽标"骑"在角上)
-        double badgeLeft = right ? x + w - size.Width + 2 : x - 2;
-        Canvas.SetLeft(badge, badgeLeft);
+        // 徽标"骑"在角上: 按右下角算好坐标, 顺时针那次由整层镜像搬过去
+        double badgeLeft = x + w - size.Width + 2;
+        Canvas.SetLeft(badge, right ? badgeLeft : x - 2);
         Canvas.SetTop(badge, y + h - size.Height / 2);
         Add(badge);
 
-        // ③ 箭头: 底边上、**紧靠徽标外侧** (所以要等徽标量完再定位), 指向行进方向
-        //   (逆时针 = 向右; 顺时针镜像成向左)。⚠️ 它和徽标都挤在起点角附近, 留 10 的间距才不打架
-        //   —— 第一版就是因为它俩重叠, 箭头完全被徽标盖住 (渲染成图才看出来)。
+        // ② 环线: 一圈**在起点处断开**的圆角矩形 (用户设计稿: 断口正好让"起点"徽标坐进去,
+        //    像灯带在这里起头/收尾)。断口横竖各切 g, 两端留圆头。
+        double g = size.Width + 6;
+        var loop = new Path
+        {
+            // 用 PathGeometry (而不是 Geometry.Parse 的 StreamGeometry): 几何**可内省** ——
+            // 探针要读 Figure.IsClosed 来验"环线真的是开口的", StreamGeometry 读不到。
+            Data = PathGeometry.CreateFromGeometry(Geometry.Parse(
+                $"M {F(x + w - g)},{F(y + h)} L {F(x + r)},{F(y + h)} " +
+                $"A {r},{r} 0 0 1 {F(x)},{F(y + h - r)} " +          // 左下角
+                $"L {F(x)},{F(y + r)} A {r},{r} 0 0 1 {F(x + r)},{F(y)} " +   // 左上角
+                $"L {F(x + w - r)},{F(y)} A {r},{r} 0 0 1 {F(x + w)},{F(y + r)} " +  // 右上角
+                $"L {F(x + w)},{F(y + h - g)}")),                      // 右下角: 留断口
+            Stroke = Frozen(gc.Line),
+            StrokeThickness = 2,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+        };
+        Add(loop);
+
+        // ③ 箭头: 底边上、断口外侧, 指向行进方向 (逆时针 = 向右, 朝断口而去 = "回到起点")
         var head = new Path { Data = Geometry.Parse("M0,0 L0,10 L13,5 Z"), Fill = Frozen(gc.Head) };
-        double gap = 10;
-        double headLeft = right ? badgeLeft - gap - 13 : badgeLeft + size.Width + gap;
-        Canvas.SetLeft(head, headLeft);
+        Canvas.SetLeft(head, x + w - g - 6 - 13);
         Canvas.SetTop(head, y + h - 5);
-        if (MirrorGuide(_direction)) head.RenderTransform = new ScaleTransform(-1, 1, 6.5, 0);
         Add(head);
+
+        // 🔁 顺时针 = 整层关于竖直中轴的镜像 (环线断口与箭头一起搬过去; 徽标只换坐标, 文字不能被镜像)
+        if (MirrorGuide(_direction))
+        {
+            var flip = new ScaleTransform(-1, 1, RingCanvas.Width / 2, 0);
+            loop.RenderTransform = flip;
+            head.RenderTransform = flip;
+        }
     }
 
     /// <summary>重建布局 (签名相同则跳过)。screenW/H = 目标显示器实际物理分辨率

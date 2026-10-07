@@ -693,10 +693,16 @@ static void Run()
     var guideShapes = guideCanvas?.Children.OfType<System.Windows.Shapes.Path>().ToArray() ?? [];
     var guideBadge = guideCanvas?.Children.OfType<System.Windows.Controls.Border>()
                               .FirstOrDefault(b => (b.Child as TextBlock)?.Text == "起点");
-    bool guideDrawn = guideShapes.Length == 1 && guideBadge is not null;
-    double badgeLeftDir0 = guideBadge is null ? 0 : System.Windows.Controls.Canvas.GetLeft(guideBadge);
+    // 两个 Path: 环线(描边) 与 箭头(填充)。★ 环线必须是**开口**路径 —— 用户设计稿要求
+    // "绕向线在起点徽标处断开" (像灯带在这里起头/收尾), 所以断口不能靠遮罩糊, 得真是开口。
+    var loopPath = guideShapes.FirstOrDefault(p => p.Stroke is not null);
+    var headPath = guideShapes.FirstOrDefault(p => p.Fill is not null);
+    bool loopOpen = (loopPath?.Data as PathGeometry)?.Figures.FirstOrDefault()?.IsClosed == false;
+    bool guideDrawn = loopOpen && headPath is not null && guideBadge is not null;
     Console.WriteLine((guideDrawn ? "OK   " : "FAIL ") +
-                      $"SetOrientation(true) 后画布上有箭头与「起点」徽标 = {guideDrawn}");
+                      $"画布上: 环线是开口路径(在起点处断开={loopOpen}) + 箭头 + 「起点」徽标 = {guideDrawn}");
+    double badgeLeftDir0 = guideBadge is null ? 0 : System.Windows.Controls.Canvas.GetLeft(guideBadge);
+
     guideRing.SetOrientation(true, direction: 1);            // 换成顺时针: 徽标应跑到另一侧
     var badgeDir1 = guideCanvas?.Children.OfType<System.Windows.Controls.Border>()
                               .FirstOrDefault(b => (b.Child as TextBlock)?.Text == "起点");
@@ -705,7 +711,7 @@ static void Run()
                       $"★ 徽标位置真的跟着绕向换侧 (逆时针 x={badgeLeftDir0:F0} → 顺时针 x={badgeLeftDir1:F0})");
     var badgeBg = (badgeDir1?.Background as SolidColorBrush)?.Color;
     var badgeFg = (badgeDir1?.Child as TextBlock)?.Foreground is SolidColorBrush fgB ? fgB.Color : (Color?)null;
-    var headFill = guideShapes.Length > 0 ? (guideShapes[0].Fill as SolidColorBrush)?.Color : null;
+    var headFill = (headPath?.Fill as SolidColorBrush)?.Color;
     var wantGc = AmbientLight.Controls.LedRingView.GuideColors(true);
     Console.WriteLine($"INFO 徽标实测 bg={badgeBg} fg={badgeFg} · 箭头 fill={headFill} · " +
                       $"期望(深面) bg={wantGc.BadgeBg} fg={wantGc.BadgeFg}");
