@@ -46,10 +46,11 @@
                 <TextBlock x:Name="IndexText" Text="" Opacity="0.75" Margin="0,4,0,0" />
                 <TextBlock x:Name="StatusText" Text="" Opacity="0.5" Margin="0,4,0,0" />
 
-                <!-- Backdrop=AlwaysDark: 这个面板是**恒深**的 (与主题无关, 校色时不能被主题影响),
-                     所以灯珠描边必须恒浅 —— 否则浅色主题下"未点亮的灯珠"跟深面板糊在一起。 -->
+                <!-- Surface=AlwaysDark: 这个面板是**恒深**的 (校色时不能被主题影响),
+                     所以整套外观恒深 —— 屏幕矩形/中心文字/灯珠描边都不随主题变。
+                     (主页那边用默认的 Theme: 浅色主题下矩形/文字也变浅。) -->
                 <controls:LedRingView x:Name="Ring" MinHeight="150" Margin="0,12,0,0"
-                                      Backdrop="AlwaysDark" />
+                                      Surface="AlwaysDark" />
 
                 <UniformGrid Columns="4" Margin="0,12,0,0">
                     <ui:Button x:Name="RotLeftBtn" Content="← 左移" Margin="0,0,6,0" Click="OnRotLeft" />

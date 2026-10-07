@@ -1178,46 +1178,96 @@ static void Run()
         AmbientLight.Services.ThemeService.Parse(AmbientLight.Services.ConfigStore.App.Theme));
 
     Console.WriteLine();
-    Console.WriteLine("---- LedRingView 灯珠描边 (灯与背景同色时留一道缝) ----");
-    // 用户反馈: 灯珠颜色与背景接近时糊在一起。描边色**必须随底色**(25% 黑在深底上看不见, 反之亦然),
-    // 所以控件有个 Backdrop: Theme(主页, 跟主题) / AlwaysDark(校准窗那个恒深面板)。
-    var lightBackdropEdge = AmbientLight.Controls.LedRingView.LedOutline(darkBackdrop: false);
-    var darkBackdropEdge = AmbientLight.Controls.LedRingView.LedOutline(darkBackdrop: true);
-    bool edgeOrder = AmbientLight.Services.ThemePalette.RelativeLuminance(darkBackdropEdge)
-                     > AmbientLight.Services.ThemePalette.RelativeLuminance(lightBackdropEdge);
-    Console.WriteLine((edgeOrder ? "OK   " : "FAIL ") +
-                      $"描边方向: 深底给亮描边 / 浅底给暗描边 = {edgeOrder} " +
-                      $"(深底 {darkBackdropEdge} / 浅底 {lightBackdropEdge})");
-    // 两种底上都要"有可感差异" (即描边真的看得出来): 浅底按白卡片, 深底按校准窗面板 #141418
-    var overWhite = AmbientLight.Services.ThemePalette.Blend(lightBackdropEdge, Color.FromRgb(0xFF, 0xFF, 0xFF));
-    var overPanel = AmbientLight.Services.ThemePalette.Blend(darkBackdropEdge, Color.FromRgb(0x14, 0x14, 0x18));
-    double dLightBg = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(overWhite) - 0.9999);
-    double dDarkBg = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(overPanel)
-                              - AmbientLight.Services.ThemePalette.RelativeLuminance(Color.FromRgb(0x14, 0x14, 0x18)));
-    Console.WriteLine((dLightBg >= 0.05 ? "OK   " : "FAIL ") +
-                      $"浅底(白卡)上可见 (|ΔL| {dLightBg:F3} ≥ 0.05)");
-    Console.WriteLine((dDarkBg >= 0.05 ? "OK   " : "FAIL ") +
-                      $"深底(校准窗面板)上可见 (|ΔL| {dDarkBg:F3} ≥ 0.05)");
+    Console.WriteLine("---- LedRingView 外观: 一个 Surface 开关驱动矩形/文字/描边 ----");
+    // 2026-10-07 方案 2: 控件同时用在"跟随主题的主页卡片"与"恒深的校准窗面板"上,
+    // 所以整支外观由 Surface 一个开关 + 一份调色板 SurfaceColors(dark) 决定。
+    foreach (var (ch, dark, desc) in new[]
+             {
+                 (AmbientLight.Services.ThemeChoice.Dark, true, "深面"),
+                 (AmbientLight.Services.ThemeChoice.Light, false, "浅面"),
+             })
+    {
+        // ⚠️ 必须**真的切主题**: "浅面"的文字色取自该主题的资源 (拿深色主题的白字去算浅面 = 白压白)。
+        // 教训与 D1-B 那段一样: 判主题/取主题色的东西, 光改变量没用。
+        AmbientLight.Services.ThemeService.Apply(ch);
+        var tp = Application.Current.TryFindResource("TextFillColorPrimaryBrush") is SolidColorBrush pri
+            ? pri.Color : Colors.Black;
+        var ts = Application.Current.TryFindResource("TextFillColorSecondaryBrush") is SolidColorBrush sec
+            ? sec.Color : Colors.Gray;
+        var sc = AmbientLight.Controls.LedRingView.SurfaceColors(dark, tp, ts);
+        _ = desc;
+        double titleCr = AmbientLight.Services.ThemePalette.ContrastRatio(
+            AmbientLight.Services.ThemePalette.Blend(sc.Title, sc.RectFill), sc.RectFill);
+        double hintCr = AmbientLight.Services.ThemePalette.ContrastRatio(
+            AmbientLight.Services.ThemePalette.Blend(sc.Hint, sc.RectFill), sc.RectFill);
+        Console.WriteLine((titleCr >= 4.5 && hintCr >= 4.5 ? "OK   " : "FAIL ") +
+                          $"{(dark ? "深面" : "浅面")}: 文字 vs 屏幕矩形 标题 {titleCr:F2} / 说明 {hintCr:F2} (≥ 4.5)");
+        // 阈值 0.02 是**量出来的下限**: 深面边框 #2E2E38 / 底 #101016 是 M5.1 定稿的含蓄描边 (0.023),
+        // 浅面则是 0.286 (浅色主题下卡片本来就接近白, 全靠这道边框把"屏幕"认出来)。
+        double edge = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(sc.RectStroke)
+                               - AmbientLight.Services.ThemePalette.RelativeLuminance(sc.RectFill));
+        Console.WriteLine((edge >= 0.02 ? "OK   " : "FAIL ") +
+                          $"{(dark ? "深面" : "浅面")}: 矩形边框在矩形底上可见 (|ΔL| {edge:F3} ≥ 0.02)");
+        // 灯珠描边: 与"灯珠所在的那块底"(主页卡片 / 校准窗面板) 比, 而不是与矩形比
+        var bg = dark ? Color.FromRgb(0x14, 0x14, 0x18) : Color.FromRgb(0xFF, 0xFF, 0xFF);
+        double od = Math.Abs(AmbientLight.Services.ThemePalette.RelativeLuminance(
+                                AmbientLight.Services.ThemePalette.Blend(sc.Outline, bg))
+                             - AmbientLight.Services.ThemePalette.RelativeLuminance(bg));
+        Console.WriteLine((od >= 0.05 ? "OK   " : "FAIL ") +
+                          $"{(dark ? "深面" : "浅面")}: 灯珠描边在其底色上可见 (|ΔL| {od:F3} ≥ 0.05)");
+    }
+    AmbientLight.Services.ThemeService.Apply(
+        AmbientLight.Services.ThemeService.Parse(AmbientLight.Services.ConfigStore.App.Theme));
+    var themePrimary = Application.Current.TryFindResource("TextFillColorPrimaryBrush") is SolidColorBrush pri2
+        ? pri2.Color : Colors.Black;
+    var themeSecondary = Application.Current.TryFindResource("TextFillColorSecondaryBrush") is SolidColorBrush sec2
+        ? sec2.Color : Colors.Gray;
+    bool outlineOrder = AmbientLight.Services.ThemePalette.RelativeLuminance(
+                            AmbientLight.Controls.LedRingView.SurfaceColors(true, themePrimary, themeSecondary).Outline)
+                        > AmbientLight.Services.ThemePalette.RelativeLuminance(
+                            AmbientLight.Controls.LedRingView.SurfaceColors(false, themePrimary, themeSecondary).Outline);
+    Console.WriteLine((outlineOrder ? "OK   " : "FAIL ") + $"描边方向: 深面给亮描边 / 浅面给暗描边 = {outlineOrder}");
 
-    // ★ 接线: 真的建一圈灯, 断言每颗都有描边, 且描边色跟着 Backdrop 走
+    // ★ 接线: 建一圈灯, 断言"一个开关真的驱动三样东西"
     var ringProbe = new AmbientLight.Controls.LedRingView();
     ringProbe.Configure(60, 4, direction: 0);
     var canvas = ringProbe.FindName("RingCanvas") as System.Windows.Controls.Canvas;
     var dots = canvas?.Children.OfType<System.Windows.Shapes.Ellipse>().ToArray() ?? [];
-    int noStroke = dots.Count(e => e.Stroke is not System.Windows.Media.SolidColorBrush
-                                  || e.StrokeThickness <= 0);
+    var rectProbe = canvas?.Children.OfType<System.Windows.Shapes.Rectangle>().FirstOrDefault();
+    int noStroke = dots.Count(e => e.Stroke is not System.Windows.Media.SolidColorBrush || e.StrokeThickness <= 0);
     Console.WriteLine((dots.Length == 60 && noStroke == 0 ? "OK   " : "FAIL ") +
-                      $"60 颗灯珠全部带描边 = {dots.Length == 60 && noStroke == 0} " +
-                      $"(共 {dots.Length} 颗, 缺描边 {noStroke})");
+                      $"60 颗灯珠全部带描边 = {dots.Length == 60 && noStroke == 0} (共 {dots.Length} 颗)");
+    var blockProbe = ringProbe.FindName("HintBlock") as System.Windows.Controls.StackPanel;
+    Console.WriteLine((blockProbe?.MaxWidth == 300 ? "OK   " : "FAIL ") +
+                      $"中心文字固定 MaxWidth=300 (不随 Viewbox 缩放) = {blockProbe?.MaxWidth}");
+    bool chipGone = true;
+    for (DependencyObject? up = blockProbe; up is not null
+         && up is not AmbientLight.Controls.LedRingView; up = System.Windows.Media.VisualTreeHelper.GetParent(up))
+        if (up is System.Windows.Controls.Border b && b.Background is System.Windows.Media.SolidColorBrush bb
+            && bb.Color.A != 0)
+            chipGone = false;
+    Console.WriteLine((chipGone ? "OK   " : "FAIL ") +
+                      $"底衬已移除 (文字到控件根之间没有带底色的 Border) = {chipGone}");
 
-    ringProbe.Backdrop = AmbientLight.Controls.LedRingView.RingBackdrop.AlwaysDark;
-    bool forcedDark = dots.All(e => (e.Stroke as System.Windows.Media.SolidColorBrush)?.Color == darkBackdropEdge);
-    ringProbe.Backdrop = AmbientLight.Controls.LedRingView.RingBackdrop.Theme;
-    var expectTheme = AmbientLight.Controls.LedRingView.LedOutline(
-        AmbientLight.Services.ThemeService.IsDark);
-    bool themeFollow = dots.All(e => (e.Stroke as System.Windows.Media.SolidColorBrush)?.Color == expectTheme);
-    Console.WriteLine((forcedDark && themeFollow ? "OK   " : "FAIL ") +
-                      $"描边色真的跟 Backdrop 走 (AlwaysDark={forcedDark} / Theme={themeFollow})");
+    ringProbe.Surface = AmbientLight.Controls.LedRingView.RingSurface.AlwaysDark;
+    var dk = AmbientLight.Controls.LedRingView.SurfaceColors(true, themePrimary, themeSecondary);
+    bool darkSwitch = (rectProbe?.Fill as System.Windows.Media.SolidColorBrush)?.Color == dk.RectFill
+                      && (rectProbe?.Stroke as System.Windows.Media.SolidColorBrush)?.Color == dk.RectStroke
+                      && (ringProbe.FindName("HintTitle") as System.Windows.Controls.TextBlock)?.Foreground
+                             is System.Windows.Media.SolidColorBrush tf && tf.Color == dk.Title
+                      && dots.All(e => (e.Stroke as System.Windows.Media.SolidColorBrush)?.Color == dk.Outline);
+    Console.WriteLine((darkSwitch ? "OK   " : "FAIL ") +
+                      $"Surface=AlwaysDark 一次驱动矩形/文字/描边 = {darkSwitch}");
+
+    ringProbe.Surface = AmbientLight.Controls.LedRingView.RingSurface.Theme;
+    var tm = AmbientLight.Controls.LedRingView.SurfaceColors(
+        AmbientLight.Services.ThemeService.IsDark, themePrimary, themeSecondary);
+    bool themeSwitch = (rectProbe?.Fill as System.Windows.Media.SolidColorBrush)?.Color == tm.RectFill
+                       && (ringProbe.FindName("HintTitle") as System.Windows.Controls.TextBlock)?.Foreground
+                              is System.Windows.Media.SolidColorBrush tf2 && tf2.Color == tm.Title;
+    Console.WriteLine((themeSwitch ? "OK   " : "FAIL ") +
+                      $"Surface=Theme 时跟随当前主题 (IsDark={AmbientLight.Services.ThemeService.IsDark}) = {themeSwitch}");
+
 
     Console.WriteLine();
     Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");
