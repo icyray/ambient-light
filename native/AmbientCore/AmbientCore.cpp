@@ -867,8 +867,32 @@ void CoreLoopInner(Sess* g)
             if (capValid && layoutChanged) cap.UpdateLayout(MakeCaptureParams(nc));
             // cols 必须与新灯数同步, 否则 Step 的 memcpy 越界写堆 (曾致 CLR 堆损坏)
             cols.resize((size_t)std::min(nc.ledCount, serial::kMaxLedCount) + 4);
-            if (nc.modeIndex != applied.modeIndex)
+            if (nc.modeIndex != applied.modeIndex) {
                 ACLOGI("config: mode %d -> %d", applied.modeIndex, nc.modeIndex);
+                // ---- S3: 切模式淡入淡出 (docs/FADE_PLAN.md §3.3 / §3.4) ----
+                // 内容模式 = 追光(0) / 拾音(1) / 纯色(11) —— 亮度语义连续, 只是内容变;
+                // MCU 特效的帧由固件渲染, 我们只能"进出"两端淡 (淡的是**我们自己**的颜色帧) ✓
+                // ⚠️ 同模式内改参数 (采样深度/边数/灯数…) **不淡** —— 用户正在看"改了会怎样",
+                //    加延迟反而干扰判断 ✓
+                auto isContent = [](int m) { return m == 0 || m == 1 || m == 11; };
+                bool oldC = isContent(applied.modeIndex), newC = isContent(nc.modeIndex);
+                bool oldMcu = IsMcuMode(applied, applied.modeIndex);
+                bool newMcu = IsMcuMode(nc, nc.modeIndex);
+                if (oldC && newC) {
+                    // 内容 ↔ 内容: 淡出旧内容 → (下面 applied = nc) → 淡入新内容
+                    FadeOutToBlack(sp, lastOut, scratch, kModeFadeMs);
+                    env.Snap(0.0);
+                    env.StartTo(1.0, kModeFadeMs);
+                } else if (oldC && newMcu) {
+                    // **进 MCU**: 命令下发之前先淡出 (此刻我们还在写颜色帧 ✓ 之后就没得淡了)
+                    FadeOutToBlack(sp, lastOut, scratch, kMcuFadeMs);
+                } else if (oldMcu && newC) {
+                    // **出 MCU**: 我们重新开始写颜色帧 → 从全黑淡入
+                    env.Snap(0.0);
+                    env.StartTo(1.0, kMcuFadeMs);
+                }
+                // MCU ↔ MCU: 两边都由固件渲染, 无从淡起 (也没必要) → 什么都不做 ✓
+            }
             applied = nc;
             appliedSerial = s;
             if (phase == AC_STATE_ERROR) {      // 配置变化给予重试机会
