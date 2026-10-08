@@ -38,7 +38,24 @@ public partial class SettingsPageCapture : Page
         FpsCapCombo.SelectedIndex = fps < 0 ? 0 : fps;
         BlackBarsToggle.IsChecked = dev.BlackBars;
         BlackBarLevelSlider.Value = Math.Clamp(dev.BlackBarLevel, 0, 20);
+        ChaseFlashGuardToggle.IsChecked = dev.ChaseFlashGuard != 0;
+        ChaseTemporalSmoothToggle.IsChecked = dev.ChaseTemporalSmooth != 0;
         RefreshMonitors(select: dev.MonitorIndex);
+    }
+
+    // v1.6 追光时域平滑 (每设备): 两个开关都只写配置, 由核心在**写帧前**作用于字节
+    private void OnChaseFlashGuardChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        ConfigStore.Device.ChaseFlashGuard = ChaseFlashGuardToggle.IsChecked == true ? 1 : 0;
+        App.Instance.ApplyConfigDebounced();
+    }
+
+    private void OnChaseTemporalSmoothChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        ConfigStore.Device.ChaseTemporalSmooth = ChaseTemporalSmoothToggle.IsChecked == true ? 1 : 0;
+        App.Instance.ApplyConfigDebounced();
     }
 
     private void RefreshMonitors(int select)

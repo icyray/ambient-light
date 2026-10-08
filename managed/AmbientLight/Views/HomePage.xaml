@@ -308,7 +308,8 @@
                     IsOpen="False" IsClosable="False" />
 
         <!-- 亮度 (常用功能 → 紧贴 banner)。§3: 这一行同时就是纯色拾色器的 V (明度) —— 不再另设第三根滑块 -->
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BrightnessHigh24}" Title="亮度"
+        <controls:SettingRow x:Name="BrightnessRow" Margin="0,0,0,4"
+                             Icon="{ui:SymbolIcon BrightnessHigh24}" Title="亮度"
                              Description="追光/纯色直接调光; 拾音律动作为最高亮度上限">
             <StackPanel Orientation="Horizontal">
                 <!-- 轨道点击/拖动由 SliderJump 附加行为接管; ValueChanged 不能在 XAML

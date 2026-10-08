@@ -4,6 +4,7 @@
 //     (v1.1 增补: ACConfig.colorfix/sfloor; v1.2 增补: ACStatus.ledRgb;
 //      v1.3 增补: ACConfig.audio* 7 字段, ACStatus.audioLevel/audioOk/audioDev;
 //      v1.4 增补: ACConfig.ledRotate;
+//      v1.6 增补: ACConfig.chaseFlashGuard / chaseTemporalSmooth (追光时域平滑, 默认关)
 //      v1.5 加宽: ACMonitorInfo.adapter 32→64 字节 —— 32 字节会把
 //      "NVIDIA GeForce RTX 4060 Laptop GPU" 截成 "…Laptop", 界面上看着像显卡名少了半截)
 //   - 字符串一律 UTF-8, 缓冲由调用方分配, DLL 不跨边界分配/释放
@@ -111,6 +112,12 @@ typedef struct ACConfig {
     int32_t  ledRotate;         // 灯序偏移: LED i 显示段 (i+rotate) mod N 的取色区
                                 //   (校正灯带物理起点与协议起点不一致的少量错位);
                                 //   钳到 ±N*12/100 (N<10 → 0, 同厂商 LedRotate), 默认 0
+
+    // v1.6 增补 (追光时域平滑 — 每设备, 默认关; 都是"输出层的柔化", 不动颜色链)
+    int32_t  chaseFlashGuard;       // 0=关(默认) 1=画面突变时抑制闪光: 整帧平均亮度**突变限幅**
+                                    //   (每帧最多走 kChaseFlashGuard 的比例) → 治闪白/黑场切换
+    int32_t  chaseTemporalSmooth;   // 0=关(默认) 1=时域柔和: 逐灯逐通道指数平均 (τ = kChaseSmoothTauMs)
+                                    //   → 治局部颜色跳变, 代价是轻微拖影 (游戏用户建议关)
 
     uint32_t reserved[8];       // 必须置 0
 } ACConfig;

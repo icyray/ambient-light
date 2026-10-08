@@ -1426,6 +1426,36 @@ static void Run()
 
 
     Console.WriteLine();
+    Console.WriteLine("---- v1.6: MCU 模式下禁用亮度 + 追光两开关的配置往返 ----");
+    // ① 亮度可用性 (纯函数): MCU 特效由固件渲染, 亮度无落点 → UI 必须禁用滑块
+    bool brightTable = AmbientLight.Views.HomePage.BrightnessEnabled(0)      // 追光 ✓
+                       && AmbientLight.Views.HomePage.BrightnessEnabled(1)   // 拾音 ✓ (它是最高亮度上限)
+                       && AmbientLight.Views.HomePage.BrightnessEnabled(11)  // 纯色 ✓
+                       && !new[] { 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13 }     // MCU 全系 ✗
+                              .Any(m => AmbientLight.Views.HomePage.BrightnessEnabled(m));
+    Console.WriteLine((brightTable ? "OK   " : "FAIL ") +
+                      $"亮度可用性真值表 (追光/拾音/纯色 可用 · MCU 全系禁用) = {brightTable}");
+
+    // ② 追光两开关的配置往返 (DeviceSettings ↔ ACConfig): 少一处赋值就是"UI 改了没用"
+    var devProbe = new AmbientLight.Services.DeviceSettings
+    {
+        ChaseFlashGuard = 1, ChaseTemporalSmooth = 1,
+    };
+    var cfgProbe = devProbe.ToCoreConfig();
+    bool toCore = cfgProbe.chaseFlashGuard == 1 && cfgProbe.chaseTemporalSmooth == 1;
+    var back = new AmbientLight.Services.DeviceSettings();
+    back.FromCoreConfig(cfgProbe);
+    bool fromCore = back.ChaseFlashGuard == 1 && back.ChaseTemporalSmooth == 1;
+    Console.WriteLine((toCore && fromCore ? "OK   " : "FAIL ") +
+                      $"追光两开关配置往返 (ToCoreConfig={toCore} / FromCoreConfig={fromCore})");
+    // 默认值必须是"关" (用户口径: 默认保持原来的高刷跟屏感)
+    bool defOff = new AmbientLight.Services.DeviceSettings().ChaseFlashGuard == 0
+                  && new AmbientLight.Services.DeviceSettings().ChaseTemporalSmooth == 0
+                  && AmbientLight.Interop.ACConfig.CreateDefault().chaseFlashGuard == 0
+                  && AmbientLight.Interop.ACConfig.CreateDefault().chaseTemporalSmooth == 0;
+    Console.WriteLine((defOff ? "OK   " : "FAIL ") + $"两开关默认都是关 = {defOff}");
+
+    Console.WriteLine();
     Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");
     // 用户的调参入口有两处: XAML 的 BannerStreak<色系>Brush(Light) 与代码里的 ModeGlowColor(mode, dark)。
     // 这里断三件事: ① 键的约定 (浅色版 = 深色版 + "Light"); ② **资源真能解析**(解析失败是静默的);

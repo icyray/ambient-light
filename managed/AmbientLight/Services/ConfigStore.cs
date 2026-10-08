@@ -31,6 +31,8 @@ public sealed class DeviceSettings
     public int Sides { get; set; } = 4;
     public int Direction { get; set; } = 0;
     public int LedRotate { get; set; } = 0;      // 灯序偏移 (M4 校准, 核心钳 ±灯数12%)
+    public int ChaseFlashGuard { get; set; } = 0;     // v1.6: 追光 抑制闪光 (默认关)
+    public int ChaseTemporalSmooth { get; set; } = 0; // v1.6: 追光 时域柔和 (默认关, 有拖影)
     public int CaptureRange { get; set; } = 15;
     public int DepthOverride { get; set; } = 0;
     public int Taps { get; set; } = 8;
@@ -76,6 +78,8 @@ public sealed class DeviceSettings
         c.sides = Sides;
         c.direction = Direction;
         c.ledRotate = LedRotate;
+        c.chaseFlashGuard = ChaseFlashGuard;
+        c.chaseTemporalSmooth = ChaseTemporalSmooth;
         c.captureRange = CaptureRange;
         c.depthOverride = DepthOverride;
         c.taps = Taps;
@@ -123,6 +127,8 @@ public sealed class DeviceSettings
         Sides = c.sides;
         Direction = c.direction;
         LedRotate = c.ledRotate;
+        ChaseFlashGuard = c.chaseFlashGuard;
+        ChaseTemporalSmooth = c.chaseTemporalSmooth;
         CaptureRange = c.captureRange;
         DepthOverride = c.depthOverride;
         Taps = c.taps;

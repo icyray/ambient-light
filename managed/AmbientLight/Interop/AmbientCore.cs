@@ -12,7 +12,7 @@ public static unsafe partial class AmbientCore
     /// <summary>本托管代码编译时对齐的 native ABI 版本 (major, minor)。
     /// **v1.5 起 `ACMonitorInfo.adapter` 从 32 加宽到 64** —— 这是布局变更, 用旧 DLL 会读到
     /// 错位的分辨率/适配器(静默出错, 不抛异常)。探针用 `AC_Version()` 核对, 防止旁边躺着一个旧 DLL。</summary>
-    public static readonly (int Major, int Minor) RequiredAbi = (1, 5);
+    public static readonly (int Major, int Minor) RequiredAbi = (1, 6);   // v1.6: ACConfig 增补 chase*
 
     // ---- 常量 (与 AmbientCore.h 对齐) ----
     public const int MaxMonitors = 8;
@@ -258,6 +258,8 @@ public unsafe struct ACConfig
     public fixed byte audioDevId[64];           // 麦克风源目标输入端点, 空=跟随默认
     public fixed byte audioOutDevId[64];        // 回环源目标输出端点, 空=跟随默认
     public int ledRotate;                       // v1.4: 灯序偏移 (核心再钳 ±灯数12%), 默认 0
+    public int chaseFlashGuard;                 // v1.6: 1=画面突变时抑制闪光 (整帧亮度突变限幅), 默认 0
+    public int chaseTemporalSmooth;             // v1.6: 1=时域柔和 (逐灯逐通道指数平均), 默认 0
     public fixed uint reserved[8];
 
     public string ComPort
@@ -364,6 +366,8 @@ public unsafe struct ACConfig
         audioFollowVolume = 0,
         audioSoft = 0.5,
         ledRotate = 0,
+        chaseFlashGuard = 0,
+        chaseTemporalSmooth = 0,
     };
 }
 

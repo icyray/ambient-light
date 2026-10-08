@@ -49,7 +49,7 @@ namespace {
 static const PROPERTYKEY kPKEY_Name = { { 0xa45c254e, 0xdf1c, 0x4efd,
                                           { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 14 };
 
-constexpr uint32_t kVersion = (1u << 16) | (5u << 8) | 0u;   // 1.5.0 (ACMonitorInfo.adapter 32→64, 显卡名不再截断)
+constexpr uint32_t kVersion = (1u << 16) | (6u << 8) | 0u;   // 1.6.0 (ACConfig 增补 chaseFlashGuard/chaseTemporalSmooth)
 
 // ================= 淡入淡出 / 平滑参数 (要微调就改这一块) =================
 // 观感含义: 淡入 = 灯"亮起来"的过程, 淡出 = 灯"灭下去"的过程。调大 = 更慢更柔, 调小 = 更干脆。
@@ -177,6 +177,8 @@ ACConfig DefaultConfig()
     c.audioAgc = 1;
     c.audioFollowVolume = 0;
     c.audioSoft = 0.5;
+    c.chaseFlashGuard = 0;      // v1.6: 追光时域平滑默认**关** (保持原样的高刷跟屏感)
+    c.chaseTemporalSmooth = 0;
     return c;
 }
 
@@ -602,6 +604,14 @@ void CoreLoopInner(Sess* g)
         if (waitDisp) return true;                  // policy 期间由 SendPolicyFrame 独占输出
         return WriteEnv(d, len);
     };
+    // ---- S4: 追光时域平滑的状态 (两个开关都是每设备配置) ----
+    std::vector<float> chaseBuf;                      // 逐灯逐通道的指数平均缓冲 (3*leds)
+    bool chaseInit = false;                           // false = 下一帧直接"吸附"(不做插值)
+    double chaseMean = -1.0;                          // 上一帧写出的整帧平均亮度 (-1 = 无)
+    double chasePrevAt = 0.0;                         // 上一帧时刻 (算 dt)
+    /// 状态重置: 重连 / 改灯数 / 切模式 / 熄屏进出 / 开关翻转 —— 都要调, 否则拿旧帧插值出怪色
+    auto InvalidateChaseSmooth = [&]() { chaseInit = false; chaseMean = -1.0; chasePrevAt = 0.0; };
+
     /// 退出 WAIT_DISP (内容恢复/唤醒): 从全黑淡入 —— 与"进"时的淡出对称。
     /// ⚠️ **只要屏幕被明确报告为熄灭 (`monitorPower == 0`), 一律不许退出** —— 所有理由都挡:
     ///   · 帧驱动 ("content/desktop resumed"): 屏幕熄灭过程中采集侧还会送来**最后一帧**,
@@ -620,6 +630,7 @@ void CoreLoopInner(Sess* g)
         blockedLog = false;
         waitDisp = false;
         wakeGraceUntil = Millis() + 1500.0;          // 醒来后的拓扑抖动宽限 (见 EnterWaitDisp)
+        InvalidateChaseSmooth();                     // 熄屏进出: 内容会跳, 别拿旧帧插值
         env.Snap(0.0);
         env.StartTo(1.0, kWaitDispFadeMs);
         ACLOGI("%s (fade in %.0fms)", why, kWaitDispFadeMs);
@@ -656,6 +667,7 @@ void CoreLoopInner(Sess* g)
         if (!waitDisp) {
             waitDisp = true;
             ACLOGI("enter WAIT_DISP (%s), policy=%d", why, applied.waitDispPolicy);
+            InvalidateChaseSmooth();                 // 进 WAIT_DISP: 同上
             // S2: 把"屏幕上的最后一份内容"交叉淡化到 policy 帧。
             // policy=保持(0) 时目标就是它自己 → CrossFade 直接跳过; 熄灭(2)/最暗(1) 则平滑过渡 ✓
             EnsureFrame();
@@ -865,10 +877,14 @@ void CoreLoopInner(Sess* g)
                 nc.blackBarLevel != applied.blackBarLevel ||
                 nc.ledRotate != applied.ledRotate;   // 灯序偏移也走取色区重建 (校准窗实时生效)
             if (capValid && layoutChanged) cap.UpdateLayout(MakeCaptureParams(nc));
+            // 灯数/边数变了 → 平滑缓冲长度不再对应; 两个开关翻转也要重新吸附
+            if (layoutChanged || nc.chaseTemporalSmooth != applied.chaseTemporalSmooth ||
+                nc.chaseFlashGuard != applied.chaseFlashGuard) InvalidateChaseSmooth();
             // cols 必须与新灯数同步, 否则 Step 的 memcpy 越界写堆 (曾致 CLR 堆损坏)
             cols.resize((size_t)std::min(nc.ledCount, serial::kMaxLedCount) + 4);
             if (nc.modeIndex != applied.modeIndex) {
                 ACLOGI("config: mode %d -> %d", applied.modeIndex, nc.modeIndex);
+                InvalidateChaseSmooth();             // 切模式: 内容完全不同了, 平滑状态清零
                 // ---- S3: 切模式淡入淡出 (docs/FADE_PLAN.md §3.3 / §3.4) ----
                 // 内容模式 = 追光(0) / 拾音(1) / 纯色(11) —— 亮度语义连续, 只是内容变;
                 // MCU 特效的帧由固件渲染, 我们只能"进出"两端淡 (淡的是**我们自己**的颜色帧) ✓
@@ -956,6 +972,7 @@ void CoreLoopInner(Sess* g)
                 phase = (capValid || applied.modeIndex != 0) ? AC_STATE_RUNNING : AC_STATE_STARTING;
                 SetPhase(g, phase);
                 reconnLogDone = false;               // 连上了 → 下次断连重新记一条 WARN
+                InvalidateChaseSmooth();             // 新会话: 平滑状态清零
                 env.Snap(0.0);                       // 新会话/重连: 从全黑起
                 env.StartTo(1.0, kFadeInMs);         // 淡入 (追光/拾音/纯色 都吃这一份)
                 slewB = applied.brightness;          // 限幅器归位到当前配置值 (别从陈旧值爬)
@@ -1135,6 +1152,53 @@ void CoreLoopInner(Sess* g)
                     frame[3 + i * 3 + 1] = px[1];
                     frame[3 + i * 3 + 2] = px[2];
                 }
+
+                // ---- S4: 追光时域平滑 (两个每设备开关; 都只作用于"写出去的字节", 不动颜色链) ----
+                size_t chN = (size_t)EffLeds(applied) * 3;
+                double chNow = Millis();
+                if (applied.chaseTemporalSmooth && chN > 0) {
+                    // ① 时域柔和: 逐灯逐通道一阶低通 (τ = kChaseSmoothTauMs)。治"局部颜色跳变",
+                    //    代价是轻微拖影 + 一点延迟 → 游戏用户建议关 (UI 文案也这么写)。
+                    if (chaseBuf.size() < chN) { chaseBuf.assign(chN, 0.0f); chaseInit = false; }
+                    if (!chaseInit) {
+                        for (size_t i = 0; i < chN; i++) chaseBuf[i] = (float)frame[3 + i];
+                        chaseInit = true;
+                    } else {
+                        double dt = chasePrevAt > 0 ? std::clamp(chNow - chasePrevAt, 1.0, 250.0) : 16.0;
+                        double k = std::clamp(dt / kChaseSmoothTauMs, 0.0, 1.0);
+                        for (size_t i = 0; i < chN; i++) {
+                            double cur = chaseBuf[i];
+                            cur += ((double)frame[3 + i] - cur) * k;
+                            chaseBuf[i] = (float)cur;
+                            frame[3 + i] = (uint8_t)std::clamp(cur + 0.5, 0.0, 255.0);
+                        }
+                    }
+                }
+                if (applied.chaseFlashGuard && chN > 0) {
+                    // ② 抑制闪光: 整帧**平均亮度**的突变限幅 (每帧最多走 kChaseFlashGuard × 255)。
+                    //    专治镜头切换/闪白: 颜色跟随仍然即时, 只有"整体亮度"被抹平 ✓
+                    double sum = 0;
+                    for (size_t i = 0; i < chN; i++) sum += frame[3 + i];
+                    double actual = sum / (double)chN;
+                    if (chaseMean >= 0.0) {
+                        double step = kChaseFlashGuard * 255.0;
+                        double target = std::clamp(actual, chaseMean - step, chaseMean + step);
+                        if (std::abs(target - actual) > 0.5) {
+                            double k = target / actual;                     // actual > 0 时才需要
+                            if (k >= 0.0 && k < 1.0e6)
+                                for (size_t i = 0; i < chN; i++)
+                                    frame[3 + i] = (uint8_t)std::clamp((double)frame[3 + i] * k + 0.5,
+                                                                       0.0, 255.0);
+                        }
+                    }
+                    double s2 = 0;                                          // 记"实际写出的均值"
+                    for (size_t i = 0; i < chN; i++) s2 += frame[3 + i];
+                    chaseMean = s2 / (double)chN;
+                } else {
+                    chaseMean = -1.0;                                       // 关掉时不留状态
+                }
+                chasePrevAt = chNow;
+
                 SnapshotFrame(frame, applied);
                 allBlackRun = (cap.LastFrameAllBlack() && cap.LastFrameHadUpdate()) ? allBlackRun + 1 : 0;
 

@@ -26,6 +26,8 @@ namespace AmbientLight.Views;
 public partial class HomePage : Page
 {
     private bool _loaded;                       // 初值阶段忽略一切配置下发
+    private const string BrightnessDesc = "追光/纯色直接调光; 拾音律动作为最高亮度上限";
+    private const string McuBrightnessHint = "固件特效由灯带自己渲染, 亮度不可调";
     private int _lastPolledState = -1;
     private int _lastHeroMode = -1;             // banner 大字/说明只在模式变化时改写
     private long _lastBannerLook = long.MinValue;   // (state|mode) 组合, 变则刷新 banner 视觉
@@ -711,6 +713,15 @@ public partial class HomePage : Page
         }
 
         int mode = ConfigStore.Device.ModeIndex;
+
+        // v1.6: MCU 特效下禁用亮度滑块 + 改说明 (只在该变时动, 免得 4Hz 轮询里反复赋值)
+        bool brightOk = BrightnessEnabled(mode);
+        if (BrightnessRow.IsEnabled != brightOk)
+        {
+            BrightnessRow.IsEnabled = brightOk;
+            BrightnessRow.Description = brightOk ? BrightnessDesc : McuBrightnessHint;
+        }
+
         if (mode != _lastHeroMode)
         {
             _lastHeroMode = mode;
@@ -969,6 +980,12 @@ public partial class HomePage : Page
     }
 
     // ---- §5 运行指标 (轮 27 用户定稿: 双层 —— 标签在上 / 数值在下) ----
+    /// <summary>亮度参数对这个模式有意义吗 —— **纯函数** (探针打真值表)。
+    /// MCU 特效的帧由**固件**渲染, 主机只发命令 → 亮度对我们没有落点 → UI 要禁用亮度滑块
+    /// (用户 2026-10-08 提的: 免得用户以为那能调)。追光/拾音/纯色都可用
+    /// (拾音时它是"最高亮度上限", 乘在音量包络上)。</summary>
+    public static bool BrightnessEnabled(int mode) => !AmbientCore.IsMcuMode(mode);
+
     /// <summary>指标集随模式换。**纯函数** —— 探针用它打真值表: 这类"写错不报错、只会静默显示错指标"
     /// 的规则最该被回归网住。running=false → 空集 (显示一行灰字)。
     /// **不含 CPU**: `ACStatus.cpuPercent` 从 M1 起就标着"预留", native 侧从来没赋过值 (恒 0.0%);

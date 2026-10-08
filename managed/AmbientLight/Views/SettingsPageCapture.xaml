@@ -142,5 +142,19 @@
             </StackPanel>
         </ui:CardExpander>
 
+        <!-- 追光平滑 (v1.6): 默认**都关** = 保持原来的高刷跟屏感; 需要的人自己开 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="追光平滑 (观影可开, 游戏建议关)"
+                   Margin="0,10,0,0" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
+                             Title="画面突变时抑制闪光"
+                             Description="整帧亮度的突变限幅 —— 治镜头切换/闪白; 颜色跟随仍然即时">
+            <ui:ToggleSwitch x:Name="ChaseFlashGuardToggle" Click="OnChaseFlashGuardChanged" />
+        </controls:SettingRow>
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowMinimize24}"
+                             Title="时域柔和"
+                             Description="逐灯颜色平滑 —— 更柔, 但会有一点拖影 (延迟感)">
+            <ui:ToggleSwitch x:Name="ChaseTemporalSmoothToggle" Click="OnChaseTemporalSmoothChanged" />
+        </controls:SettingRow>
+
     </StackPanel>
 </Page>
