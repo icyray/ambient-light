@@ -55,7 +55,9 @@ constexpr uint32_t kVersion = (1u << 16) | (5u << 8) | 0u;   // 1.5.0 (ACMonitor
 // 观感含义: 淡入 = 灯"亮起来"的过程, 淡出 = 灯"灭下去"的过程。调大 = 更慢更柔, 调小 = 更干脆。
 // 详见 docs/FADE_PLAN.md §4 (含"调大调小会怎样"的对照表)。
 constexpr double kFadeInMs        = 400.0;   // 开灯: 0 → 目标亮度
-constexpr double kFadeOutMs       = 300.0;   // 关灯/挂起: 当前 → 0 (会计入 Stop 的等待时间)
+constexpr double kFadeOutMs       = 300.0;   // 关灯: 当前 → 0 (会计入 Stop 的等待时间)
+constexpr double kSuspendFadeMs   = 150.0;   // 系统睡眠/待机前: 更短! 进程随时可能被冻结,
+                                             //   太长的淡出会被"冻在半亮" (实测 S0 低电量待机)
 constexpr double kModeFadeMs      = 120.0;   // 切模式(追光/拾音/纯色 之间): 出/入各一段  [S3]
 constexpr double kMcuFadeMs       = 150.0;   // 进 MCU 前淡出 / 出 MCU 后淡入            [S3]
 constexpr double kWaitDispFadeMs  = 250.0;   // 进/出 WAIT_DISP (目标 = policy 目标值)   [S2]
@@ -225,7 +227,7 @@ struct Core {
     std::atomic<int> monitorPower{ -1 };        // 1=亮 0=熄 -1=未知 (DPMS)
     std::atomic<int> testPattern{ 0 };          // 测试图: 施加于所有活动会话
 
-    HPOWERNOTIFY hSuspend = nullptr, hMonPower = nullptr;
+    HPOWERNOTIFY hSuspend = nullptr, hMonPower = nullptr, hMonPower2 = nullptr;
 
     Sess slots[AC_MAX_DEVICES];
 
@@ -307,8 +309,14 @@ std::shared_ptr<const ACConfig> SnapCfg(Sess* g)
 
 void SetPhase(Sess* g, int state)
 {
-    std::unique_lock lk(g->stMx);
-    g->st.state = state;
+    int prev;
+    {
+        std::unique_lock lk(g->stMx);
+        prev = g->st.state;
+        g->st.state = state;
+    }
+    // 相位时间线 (诊断锁屏/熄屏时序要看它); 放在锁外 —— 别在状态锁里做文件 I/O
+    if (prev != state) ACLOGI("phase %d -> %d", prev, state);
 }
 
 // 记录最近诊断文本 (UI 经 AC_GetLastDiagEx 读取) 并落日志
@@ -383,14 +391,22 @@ ULONG CALLBACK PowerCallback(PVOID /*ctx*/, ULONG type, PVOID setting)
 {
     if (!g) return 0;
     if (type == PBT_APMSUSPEND) {
+        ACLOGI("power: PBT_APMSUSPEND");
         g->suspendEvt = 1;
     } else if (type == PBT_APMRESUMEAUTOMATIC || type == PBT_APMRESUMESUSPEND) {
+        ACLOGI("power: PBT_APMRESUME%s", type == PBT_APMRESUMEAUTOMATIC ? "AUTOMATIC" : "SUSPEND");
         g->resumeEvt = 1;
     } else if (type == PBT_POWERSETTINGCHANGE) {
         auto* s = static_cast<POWERBROADCAST_SETTING*>(setting);
-        if (s->PowerSetting == GUID_MONITOR_POWER_ON && s->DataLength >= sizeof(DWORD)) {
-            DWORD v = *reinterpret_cast<const DWORD*>(s->Data);
+        if (s->DataLength < sizeof(DWORD)) return 0;
+        DWORD v = *reinterpret_cast<const DWORD*>(s->Data);
+        if (s->PowerSetting == GUID_MONITOR_POWER_ON) {          // 旧 GUID (Win8 起已废弃, 保留兜底)
+            ACLOGI("power: GUID_MONITOR_POWER_ON = %lu", v);
             g->monitorPower = (int)v;
+        } else if (s->PowerSetting == GUID_CONSOLE_DISPLAY_STATE) {   // Win8+ 的正主
+            // 0 = 熄灭 / 1 = 点亮 / 2 = 变暗 (变暗仍发光, 按"亮"处理)
+            ACLOGI("power: GUID_CONSOLE_DISPLAY_STATE = %lu", v);
+            g->monitorPower = (v == 0) ? 0 : 1;
         }
     }
     return 0;
@@ -557,18 +573,21 @@ void CoreLoopInner(Sess* g)
     std::vector<uint8_t> lastOut, scratch, pol;       // 最后一份"可淡"字节 / 缩放缓冲 / policy 帧
     double slewB = applied.brightness;                // 被限幅的亮度 (输出用, 不写配置)
     double slewT = Millis();
+    double lastFrameAt = 0.0, lastStatusLog = 0.0;    // 诊断: 末帧时刻 / 上次状态行时刻
 
-    /// 亮度限幅的"比值"乘子: 颜色链(追光/纯色)与拾音都已乘过 applied.brightness,
-    /// 所以乘 (slew/该值) 等价于"把最后那次乘法换成平滑版" —— 拖动仍然跟手,
-    /// 而"30%→90% 一帧到位"这种跳变会被抹平。MCU 模式不走这条(它不用 brightness)。
-    auto SlewRatio = [&]() -> double {
-        double b = applied.brightness;
-        if (b <= 0.0001) return 1.0;
-        return slewB / b;
+    /// 把限幅后的亮度**喂进颜色链**: 返回一份 brightness 被替换成 slewB 的配置副本。
+    /// ⚠️ 曾经的做法是"发帧前乘 slew/applied.brightness 比值", 那是错的 ——
+    /// 从**亮到暗**时比值 > 1, 而负载已被颜色链按目标亮度量化过(100%→10% 只剩 25/255),
+    /// 乘回去只能放大量化误差、且写帧的零拷贝快路径(m≥0.999)会把它当成"不用缩放"直接发出去
+    /// → 实测现象就是"从亮到暗仍然跳变"。喂进颜色链才是精确的。
+    auto Slewed = [&](const ACConfig& c) {
+        ACConfig x = c;
+        x.brightness = slewB;
+        return x;
     };
-    /// 按"包络 × 亮度比值"缩放后写出 (≈1 时零拷贝; 只动第 3 字节之后的负载)
+    /// 按包络缩放后写出 (≈1 时零拷贝; 只动第 3 字节之后的负载)
     auto WriteEnv = [&](const uint8_t* d, size_t len) -> bool {
-        double m = env.value * SlewRatio();
+        double m = env.value;
         if (m >= 0.999 || len <= 3) return sp.Write(d, (DWORD)len);
         scratch.assign(d, d + len);
         for (size_t i = 3; i < scratch.size(); i++)
@@ -736,7 +755,8 @@ void CoreLoopInner(Sess* g)
         }
         if (C->suspendEvt.exchange(0)) {
             ACLOGI("suspend: fading out, then off-frame");
-            FadeOutToBlack(sp, lastOut, scratch, kFadeOutMs);   // 熄屏/挂起也平滑灭 (用户要求)
+            // 用**更短**的淡出: 系统睡眠时进程随时被冻结, 300ms 会被冻在半亮 (实测 S0 待机)
+            FadeOutToBlack(sp, lastOut, scratch, kSuspendFadeMs);
             SendOff();                          // 防半帧/端口消失中途写
             if (audioOn) { audioOn = false; MeterRelease(); }   // 挂起期间停止音源重建循环
             cap.Destroy(); capValid = false;
@@ -744,7 +764,21 @@ void CoreLoopInner(Sess* g)
             waitDisp = false;
             phase = AC_STATE_STOPPED;
             SetPhase(g, phase);
-            while (!WaitStop(g, 200) && !C->resumeEvt.load()) {}
+            // 等唤醒: 正常走 resume 通知; **兜底**用"墙钟跳变" —— S0 低电量待机下通知
+            //   可能收不到 (用户实测: 唤醒后停在"已停止"、不自动回连), 而 GetTickCount64
+            //   是含睡眠时间的, 睡醒后必然出现一段跳变 → 据此自愈重建。
+            ULONGLONG tickLast = GetTickCount64();
+            while (!WaitStop(g, 200)) {
+                if (C->resumeEvt.load()) break;
+                ULONGLONG tickNow = GetTickCount64();
+                if (tickNow - tickLast > 2000) {          // 这段"时间"里我们被冻结过 → 已醒
+                    ACLOGW("suspend: wall-clock jumped %llu ms -> self-heal resume",
+                           tickNow - tickLast);
+                    C->resumeEvt = 1;
+                    break;
+                }
+                tickLast = tickNow;
+            }
             continue;
         }
 
@@ -925,7 +959,7 @@ void CoreLoopInner(Sess* g)
             EnsureFrame();
             frame[2] = 'l';
             uint8_t rgb[3];
-            color::AdjustLedColors(MakeColorParams(applied),
+            color::AdjustLedColors(MakeColorParams(Slewed(applied)),      // 亮度走限幅值
                                    applied.solidRgb[0] / 255.0, applied.solidRgb[1] / 255.0,
                                    applied.solidRgb[2] / 255.0, rgb);
             for (int i = 0; i < EffLeds(applied); i++) {
@@ -956,7 +990,7 @@ void CoreLoopInner(Sess* g)
             uint8_t env = 0;
             float master = 1.0f;
             MeterRead(&env, &master);
-            double cap = std::clamp(applied.brightness, 0.0, 1.0);
+            double cap = std::clamp(slewB, 0.0, 1.0);          // 亮度走限幅值
             double v = (double)env * applied.audioGain * cap *
                        (applied.audioFollowVolume ? master : 1.0f);
             uint8_t b = (uint8_t)std::clamp((int)(v + 0.5), 0, 255);
@@ -1007,8 +1041,9 @@ void CoreLoopInner(Sess* g)
             if (stp == capture::CaptureSession::STEP_FRAME) {
                 double procMs = duration_cast<duration<double, std::milli>>(steady_clock::now() - t0).count();
                 procEma = procEma == 0 ? procMs : procEma * 0.9 + procMs * 0.1;
+                lastFrameAt = Millis();          // 诊断: 末帧(有更新)时刻
                 EnsureFrame();                   // 线帧缓冲 ("Ada" + 543B, 尾部补零)
-                color::Params cp = MakeColorParams(applied);
+                color::Params cp = MakeColorParams(Slewed(applied));   // 亮度走限幅值
                 for (int i = 0; i < EffLeds(applied); i++) {
                     uint8_t px[3];
                     color::AdjustLedColors(cp, cols[i].x, cols[i].y, cols[i].z, px);
@@ -1031,6 +1066,26 @@ void CoreLoopInner(Sess* g)
                 fpsWindow++;
                 if (waitDisp) ExitWaitDisp("desktop resumed");
                 if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
+                // 诊断状态线 (60s/行, 只在追光模式): 用于定位"显示器灭了但灯还亮着" ——
+                // 关键看 monitorPower 有没有跟着变、帧还在不在来、allBlack 有没有涨。
+                {
+                    double nowL = Millis();
+                    if (nowL - lastStatusLog >= 60000.0) {
+                        lastStatusLog = nowL;
+                        int mpNow = C->monitorPower.load();
+                        float fpsNow; unsigned long long fcNow; uint32_t abNow;
+                        {
+                            std::unique_lock lk(g->stMx);
+                            fpsNow = g->st.fps;
+                            fcNow = g->st.frameCounter;
+                            abNow = g->st.allBlackFrames;
+                        }
+                        ACLOGI("status(trace): phase=%d monitorPower=%d fps=%.1f frames=%llu "
+                               "allBlack=%u lastFrameAgo=%.0fms",
+                               phase, mpNow, fpsNow, fcNow, abNow,
+                               lastFrameAt > 0 ? nowL - lastFrameAt : -1.0);
+                    }
+                }
                 if (applied.fpsCap > 0) {       // 帧率上限 (timeBeginPeriod(1) 已开)
                     double need = 1000.0 / applied.fpsCap;
                     double el = duration_cast<duration<double, std::milli>>(steady_clock::now() - t0).count();
@@ -1161,6 +1216,11 @@ int32_t StartSlotLocked(uint32_t slot, const ACConfig* cfgIn)
         if (!g->hMonPower)
             PowerSettingRegisterNotification(&GUID_MONITOR_POWER_ON, DEVICE_NOTIFY_CALLBACK,
                                              &g_powerParams, &g->hMonPower);
+            // ⚠️ GUID_MONITOR_POWER_ON 自 Win8 起已废弃 (现代 Windows 根本不发它) →
+            // 必须**同时**注册 GUID_CONSOLE_DISPLAY_STATE, 否则"显示器灭了但灯还亮着"
+            // (只能靠采集侧的 access-lost 兜底, 会滞后甚至不发生)。用户实测现象即此。
+            PowerSettingRegisterNotification(&GUID_CONSOLE_DISPLAY_STATE, DEVICE_NOTIFY_CALLBACK,
+                                             &g_powerParams, &g->hMonPower2);
         timeBeginPeriod(1);                        // Sleep 精度 15.6ms -> 1ms
         if (!g->evStopMon) g->evStopMon = CreateEventW(nullptr, TRUE, FALSE, nullptr);
         else ResetEvent(g->evStopMon);
@@ -1191,6 +1251,7 @@ void StopSlotLocked(uint32_t slot)
         timeEndPeriod(1);
         if (g->hSuspend) { PowerUnregisterSuspendResumeNotification(g->hSuspend); g->hSuspend = nullptr; }
         if (g->hMonPower) { PowerUnregisterSuspendResumeNotification(g->hMonPower); g->hMonPower = nullptr; }
+        if (g->hMonPower2) { PowerUnregisterSuspendResumeNotification(g->hMonPower2); g->hMonPower2 = nullptr; }
         if (g->evStopMon) SetEvent(g->evStopMon);
         if (g->monitorThread.joinable()) g->monitorThread.join();
     }
