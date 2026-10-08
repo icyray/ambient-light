@@ -40,6 +40,7 @@ public partial class SettingsPageCapture : Page
         BlackBarLevelSlider.Value = Math.Clamp(dev.BlackBarLevel, 0, 20);
         ChaseFlashGuardToggle.IsChecked = dev.ChaseFlashGuard != 0;
         ChaseTemporalSmoothToggle.IsChecked = dev.ChaseTemporalSmooth != 0;
+        RefreshChaseSummary();
         RefreshMonitors(select: dev.MonitorIndex);
     }
 
@@ -48,6 +49,7 @@ public partial class SettingsPageCapture : Page
     {
         if (_loading) return;
         ConfigStore.Device.ChaseFlashGuard = ChaseFlashGuardToggle.IsChecked == true ? 1 : 0;
+        RefreshChaseSummary();
         App.Instance.ApplyConfigDebounced();
     }
 
@@ -55,7 +57,22 @@ public partial class SettingsPageCapture : Page
     {
         if (_loading) return;
         ConfigStore.Device.ChaseTemporalSmooth = ChaseTemporalSmoothToggle.IsChecked == true ? 1 : 0;
+        RefreshChaseSummary();
         App.Instance.ApplyConfigDebounced();
+    }
+
+    /// <summary>折叠组的摘要: 关 / 抑制闪光 / 时域柔和 / 两者都开 (两项**不互斥** —— 治不同病灶)</summary>
+    private void RefreshChaseSummary()
+    {
+        bool guard = ChaseFlashGuardToggle.IsChecked == true;
+        bool smooth = ChaseTemporalSmoothToggle.IsChecked == true;
+        ChaseSummary.Text = (guard, smooth) switch
+        {
+            (true, true) => "两项都开",
+            (true, false) => "抑制闪光",
+            (false, true) => "时域柔和",
+            _ => "关",
+        };
     }
 
     private void RefreshMonitors(int select)

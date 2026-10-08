@@ -715,11 +715,15 @@ public partial class HomePage : Page
         int mode = ConfigStore.Device.ModeIndex;
 
         // v1.6: MCU 特效下禁用亮度滑块 + 改说明 (只在该变时动, 免得 4Hz 轮询里反复赋值)
+        // ⚠️ 禁用态**必须自己压暗**: WPF-UI 4.3.0 的 Slider 模板里**没有 IsEnabled=False 的 Trigger**
+        //    (只有 TickPlacement / IsMouseOver) → 光设 IsEnabled 视觉上和可用的滑块一模一样 ✗
+        //    (用户实测反馈)。这里用整行 Opacity 表达禁用 —— 滑块 + 数值 + 文案一起变灰 ✓
         bool brightOk = BrightnessEnabled(mode);
         if (BrightnessRow.IsEnabled != brightOk)
         {
             BrightnessRow.IsEnabled = brightOk;
             BrightnessRow.Description = brightOk ? BrightnessDesc : McuBrightnessHint;
+            BrightnessRow.Opacity = brightOk ? 1.0 : 0.5;
         }
 
         if (mode != _lastHeroMode)
