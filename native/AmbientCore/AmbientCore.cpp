@@ -593,12 +593,14 @@ void CoreLoopInner(Sess* g)
         return WriteEnv(d, len);
     };
     /// 退出 WAIT_DISP (内容恢复/唤醒): 从全黑淡入 —— 与"进"时的淡出对称。
-    /// `requireDisplayOn`: 这条退出理由只在"屏幕没有被明确报告为熄灭"时才算数 ——
-    /// ⚠️ 实测: 屏幕熄灭的过程中, 采集侧还会送来**最后一帧**, 于是进 WAIT_DISP 后 63ms 就
-    /// 弹回 RUNNING → 灯一直亮着 (用户实测"显示器灭了灯还亮着"就是这个)。
-    /// 而 "capture built"(采集重建成功) 说明屏幕真的回来了 → 不必挡, 所以它传 false。
-    auto ExitWaitDisp = [&](const char* why, bool requireDisplayOn = false) {
-        if (requireDisplayOn && C->monitorPower.load() == 0) {
+    /// ⚠️ **只要屏幕被明确报告为熄灭 (`monitorPower == 0`), 一律不许退出** —— 所有理由都挡:
+    ///   · 帧驱动 ("content/desktop resumed"): 屏幕熄灭过程中采集侧还会送来**最后一帧**,
+    ///     实测进 WAIT_DISP 后 63ms 就被它弹回 RUNNING → 灯一直亮着;
+    ///   · "capture built": DDA **在显示器关着时也能重建成功** (输出还在, 只是面板灭了) ——
+    ///     实测 17:03 出现 1~3 秒一轮的 进出循环 = 用户看到的"灭了又马上亮、闪一下" ✗
+    /// 退出只能靠屏幕状态通知恢复 (日志实测会来 `GUID_CONSOLE_DISPLAY_STATE = 1`) ✓
+    auto ExitWaitDisp = [&](const char* why) {
+        if (C->monitorPower.load() == 0) {
             if (!blockedLog) {
                 blockedLog = true;
                 ACLOGI("WAIT_DISP: 忽略 \"%s\" (屏幕仍被报告为熄灭)", why);
@@ -769,6 +771,11 @@ void CoreLoopInner(Sess* g)
 
         // ============ 1. 挂起 / 恢复 ============
         if (C->resumeEvt.exchange(0)) {
+            // ⚠️ 醒来优先: 把还挂着的 suspendEvt 一起清掉 —— 睡眠里"先挂起后恢复"的两个标志会同时挂着,
+            //    否则同一次循环轮次里: resume 重建完 → 紧接着 suspend 分支立刻把它关掉 (实测 S0:
+            //    14:30:58 "resume: full rebuild" 之后 1ms 就是 "suspend: fading out" + phase 1 -> 0,
+            //    然后就卡在 STOPPED 等一个永远不会再来的 resume ✗)
+            C->suspendEvt = 0;
             ACLOGI("resume: full rebuild (adapter -> output -> D3D -> DDA -> serial)");
             cap.Destroy(); capValid = false;
             sp.Close(); serialOpen = false;
@@ -778,7 +785,7 @@ void CoreLoopInner(Sess* g)
             phase = AC_STATE_STARTING;
             SetPhase(g, phase);
         }
-        if (C->suspendEvt.exchange(0)) {
+        else if (C->suspendEvt.exchange(0)) {
             ACLOGI("suspend: fading out, then off-frame");
             // 用**更短**的淡出: 系统睡眠时进程随时被冻结, 300ms 会被冻在半亮 (实测 S0 待机)
             FadeOutToBlack(sp, lastOut, scratch, kSuspendFadeMs);
@@ -793,12 +800,18 @@ void CoreLoopInner(Sess* g)
             //   可能收不到 (用户实测: 唤醒后停在"已停止"、不自动回连), 而 GetTickCount64
             //   是含睡眠时间的, 睡醒后必然出现一段跳变 → 据此自愈重建。
             ULONGLONG tickLast = GetTickCount64();
+            ULONGLONG waitStart = tickLast;
             while (!WaitStop(g, 200)) {
                 if (C->resumeEvt.load()) break;
                 ULONGLONG tickNow = GetTickCount64();
                 if (tickNow - tickLast > 2000) {          // 这段"时间"里我们被冻结过 → 已醒
                     ACLOGW("suspend: wall-clock jumped %llu ms -> self-heal resume",
                            tickNow - tickLast);
+                    C->resumeEvt = 1;
+                    break;
+                }
+                if (tickNow - waitStart > 30000) {        // 兜底: 醒着但 resume 通知丢了, 别卡死
+                    ACLOGW("suspend: no resume in 30s -> forcing rebuild");
                     C->resumeEvt = 1;
                     break;
                 }
@@ -959,7 +972,7 @@ void CoreLoopInner(Sess* g)
                 monitorFallback = fb;
                 cols.resize((size_t)EffLeds(applied) + 4);
                 if (waitDisp) ExitWaitDisp("capture built");
-                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
+                if (!waitDisp && phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
                 ACLOGI("capture built: monitor %d%s (%dx%d hdr=%d)", applied.monitorIndex,
                        fb ? " (fallback->primary)" : "", cap.Width(), cap.Height(), 0);
             } else if (res == capture::CaptureSession::BUILD_TRANSIENT ||
@@ -1001,8 +1014,8 @@ void CoreLoopInner(Sess* g)
             if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
             frameCounter++;
             fpsWindow++;
-            if (waitDisp) ExitWaitDisp("content resumed", /*requireDisplayOn*/ true);
-            if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
+            if (waitDisp) ExitWaitDisp("content resumed");
+            if (!waitDisp && phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
             if (applied.fpsCap > 0) {
                 double need = 1000.0 / applied.fpsCap;
                 WaitStop(g, (DWORD)std::max(0.0, need - 33.0));
@@ -1032,7 +1045,7 @@ void CoreLoopInner(Sess* g)
             }
             frameCounter++;
             fpsWindow++;
-            if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
+            if (!waitDisp && phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
             WaitStop(g, 5);                     // timeBeginPeriod(1) 已开 → ~170-200Hz
         } else if (IsMcuMode(applied, applied.modeIndex)) {
             // ---- MCU 特效透传: 3B 命令 Ad+(0x61+mode), 模式切换立即发, 之后 1Hz
@@ -1054,7 +1067,7 @@ void CoreLoopInner(Sess* g)
                 frameCounter++;
                 fpsWindow++;
                 if (waitDisp) ExitWaitDisp("MCU mode");
-                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
+                if (!waitDisp && phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
             }
             uint8_t sb;
             if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
@@ -1089,8 +1102,8 @@ void CoreLoopInner(Sess* g)
                 if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
                 frameCounter++;
                 fpsWindow++;
-                if (waitDisp) ExitWaitDisp("desktop resumed", /*requireDisplayOn*/ true);
-                if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
+                if (waitDisp) ExitWaitDisp("desktop resumed");
+                if (!waitDisp && phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
                 // 诊断状态线 (60s/行, 只在追光模式): 用于定位"显示器灭了但灯还亮着" ——
                 // 关键看 monitorPower 有没有跟着变、帧还在不在来、allBlack 有没有涨。
                 {
