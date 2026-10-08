@@ -60,7 +60,8 @@ constexpr double kSuspendFadeMs   = 150.0;   // 系统睡眠/待机前: 更短! 
                                              //   太长的淡出会被"冻在半亮" (实测 S0 低电量待机)
 constexpr double kModeFadeMs      = 120.0;   // 切模式(追光/拾音/纯色 之间): 出/入各一段  [S3]
 constexpr double kMcuFadeMs       = 150.0;   // 进 MCU 前淡出 / 出 MCU 后淡入            [S3]
-constexpr double kWaitDispFadeMs  = 250.0;   // 进/出 WAIT_DISP (目标 = policy 目标值)   [S2]
+constexpr double kWaitDispFadeMs  = 150.0;   // 进/出 WAIT_DISP: 调短的唯一理由是**睡眠风险** ——
+                                             //   屏幕灭之后系统可能很快冻结进程, 250ms 会被冻在半亮
 constexpr double kBrightSlewMs    = 250.0;   // 亮度限幅: 任意值走到任意值的最短时间      [S2]
 constexpr double kChaseSmoothTauMs =  80.0;  // 追光「时域柔和」指数平均时间常数          [S4]
 constexpr double kChaseFlashGuard  = 0.12;   // 追光「抑制闪光」单帧亮度突变上限比例      [S4]
@@ -536,9 +537,9 @@ void CoreLoopInner(Sess* g)
         p.barlevel = c.blackBarLevel;
         return p;
     };
-    auto MakeColorParams = [](const ACConfig& c) {
+    auto MakeColorParams = [](const ACConfig& c, double brightness) {
         color::Params p;
-        p.brightness = c.brightness;
+        p.brightness = brightness;
         p.vibrance = c.vibrance;
         p.hueMul = c.hueMul;
         p.gamma = c.gamma;
@@ -574,17 +575,9 @@ void CoreLoopInner(Sess* g)
     double slewB = applied.brightness;                // 被限幅的亮度 (输出用, 不写配置)
     double slewT = Millis();
     double lastFrameAt = 0.0, lastStatusLog = 0.0;    // 诊断: 末帧时刻 / 上次状态行时刻
+    bool blockedLog = false;                          // 诊断: "屏幕仍熄灭"只记一次
+    ULONGLONG tickLoop = GetTickCount64();            // S0 唤醒自愈用 (含睡眠时间的墙钟)
 
-    /// 把限幅后的亮度**喂进颜色链**: 返回一份 brightness 被替换成 slewB 的配置副本。
-    /// ⚠️ 曾经的做法是"发帧前乘 slew/applied.brightness 比值", 那是错的 ——
-    /// 从**亮到暗**时比值 > 1, 而负载已被颜色链按目标亮度量化过(100%→10% 只剩 25/255),
-    /// 乘回去只能放大量化误差、且写帧的零拷贝快路径(m≥0.999)会把它当成"不用缩放"直接发出去
-    /// → 实测现象就是"从亮到暗仍然跳变"。喂进颜色链才是精确的。
-    auto Slewed = [&](const ACConfig& c) {
-        ACConfig x = c;
-        x.brightness = slewB;
-        return x;
-    };
     /// 按包络缩放后写出 (≈1 时零拷贝; 只动第 3 字节之后的负载)
     auto WriteEnv = [&](const uint8_t* d, size_t len) -> bool {
         double m = env.value;
@@ -599,8 +592,20 @@ void CoreLoopInner(Sess* g)
         if (len > 3) lastOut.assign(d, d + len);
         return WriteEnv(d, len);
     };
-    /// 退出 WAIT_DISP (内容恢复/唤醒): 从全黑淡入 —— 与"进"时的淡出对称
-    auto ExitWaitDisp = [&](const char* why) {
+    /// 退出 WAIT_DISP (内容恢复/唤醒): 从全黑淡入 —— 与"进"时的淡出对称。
+    /// `requireDisplayOn`: 这条退出理由只在"屏幕没有被明确报告为熄灭"时才算数 ——
+    /// ⚠️ 实测: 屏幕熄灭的过程中, 采集侧还会送来**最后一帧**, 于是进 WAIT_DISP 后 63ms 就
+    /// 弹回 RUNNING → 灯一直亮着 (用户实测"显示器灭了灯还亮着"就是这个)。
+    /// 而 "capture built"(采集重建成功) 说明屏幕真的回来了 → 不必挡, 所以它传 false。
+    auto ExitWaitDisp = [&](const char* why, bool requireDisplayOn = false) {
+        if (requireDisplayOn && C->monitorPower.load() == 0) {
+            if (!blockedLog) {
+                blockedLog = true;
+                ACLOGI("WAIT_DISP: 忽略 \"%s\" (屏幕仍被报告为熄灭)", why);
+            }
+            return;
+        }
+        blockedLog = false;
         waitDisp = false;
         env.Snap(0.0);
         env.StartTo(1.0, kWaitDispFadeMs);
@@ -725,6 +730,26 @@ void CoreLoopInner(Sess* g)
     SetPhase(g, phase);
     for (;;) {
         if (WaitStop(g, 0)) break;                   // 停止请求 → 走退出清理
+        // S0 低电量待机的兜底自愈: 实测这份日志里 PBT_APMSUSPEND **整份只出现过 1 次** ——
+        // 系统根本不通知我们, 于是"唤醒后卡住/不重建"没有任何事件可依。改用**墙钟跳变**:
+        // GetTickCount64() 含睡眠时间, 主循环每轮比一次, 跳过 > 8s 就说明刚被冻过
+        // (阈值 8s > 我们自己最长的等待 5s, 不会误触发) → 强制整段重建。
+        {
+            ULONGLONG tickNow = GetTickCount64();
+            if (tickNow - tickLoop > 8000) {
+                ACLOGW("wake detected (wall-clock jumped %llu ms) -> full rebuild",
+                       tickNow - tickLoop);
+                cap.Destroy(); capValid = false;
+                sp.Close(); serialOpen = false;
+                waitDisp = false;
+                fastLeft = 5;                                  // 唤醒后快速期优先
+                hardGraceUntil = steady_clock::now() + seconds(3);
+                phase = AC_STATE_STARTING;
+                SetPhase(g, phase);
+            }
+            tickLoop = tickNow;
+        }
+
         env.Step();                                  // 包络按**时间**推进 (与帧率/模式无关)
 
         // 亮度限幅 (S2): 每帧最多走 dt/kBrightSlewMs → 全程约 kBrightSlewMs 走完。
@@ -959,7 +984,7 @@ void CoreLoopInner(Sess* g)
             EnsureFrame();
             frame[2] = 'l';
             uint8_t rgb[3];
-            color::AdjustLedColors(MakeColorParams(Slewed(applied)),      // 亮度走限幅值
+            color::AdjustLedColors(MakeColorParams(applied, slewB),       // 亮度走限幅值
                                    applied.solidRgb[0] / 255.0, applied.solidRgb[1] / 255.0,
                                    applied.solidRgb[2] / 255.0, rgb);
             for (int i = 0; i < EffLeds(applied); i++) {
@@ -976,7 +1001,7 @@ void CoreLoopInner(Sess* g)
             if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
             frameCounter++;
             fpsWindow++;
-            if (waitDisp) ExitWaitDisp("content resumed");
+            if (waitDisp) ExitWaitDisp("content resumed", /*requireDisplayOn*/ true);
             if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
             if (applied.fpsCap > 0) {
                 double need = 1000.0 / applied.fpsCap;
@@ -1043,7 +1068,7 @@ void CoreLoopInner(Sess* g)
                 procEma = procEma == 0 ? procMs : procEma * 0.9 + procMs * 0.1;
                 lastFrameAt = Millis();          // 诊断: 末帧(有更新)时刻
                 EnsureFrame();                   // 线帧缓冲 ("Ada" + 543B, 尾部补零)
-                color::Params cp = MakeColorParams(Slewed(applied));   // 亮度走限幅值
+                color::Params cp = MakeColorParams(applied, slewB);    // 亮度走限幅值
                 for (int i = 0; i < EffLeds(applied); i++) {
                     uint8_t px[3];
                     color::AdjustLedColors(cp, cols[i].x, cols[i].y, cols[i].z, px);
@@ -1064,7 +1089,7 @@ void CoreLoopInner(Sess* g)
                 if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
                 frameCounter++;
                 fpsWindow++;
-                if (waitDisp) ExitWaitDisp("desktop resumed");
+                if (waitDisp) ExitWaitDisp("desktop resumed", /*requireDisplayOn*/ true);
                 if (phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
                 // 诊断状态线 (60s/行, 只在追光模式): 用于定位"显示器灭了但灯还亮着" ——
                 // 关键看 monitorPower 有没有跟着变、帧还在不在来、allBlack 有没有涨。
