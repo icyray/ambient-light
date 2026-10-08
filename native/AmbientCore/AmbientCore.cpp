@@ -576,6 +576,8 @@ void CoreLoopInner(Sess* g)
     double slewT = Millis();
     double lastFrameAt = 0.0, lastStatusLog = 0.0;    // 诊断: 末帧时刻 / 上次状态行时刻
     bool blockedLog = false;                          // 诊断: "屏幕仍熄灭"只记一次
+    bool graceLog = false;                            // 诊断: "唤醒宽限期内忽略"只记一次
+    double wakeGraceUntil = 0.0;                      // 刚醒的拓扑抖动宽限截止 (毫秒)
     ULONGLONG tickLoop = GetTickCount64();            // S0 唤醒自愈用 (含睡眠时间的墙钟)
 
     /// 按包络缩放后写出 (≈1 时零拷贝; 只动第 3 字节之后的负载)
@@ -587,9 +589,16 @@ void CoreLoopInner(Sess* g)
             scratch[i] = (uint8_t)(scratch[i] * m + 0.5);
         return sp.Write(scratch.data(), (DWORD)scratch.size());
     };
-    /// 内容帧: 先记下**原始字节**(供淡出复用, 不累乘以免量化误差), 再按包络写出
+    /// 内容帧: 先记下**原始字节**(供淡出复用, 不累乘以免量化误差), 再按包络写出。
+    /// ⚠️ **WAIT_DISP 期间一律不写内容帧** —— 屏幕上该显示的是 policy 帧 (熄灭/最暗/保持),
+    /// 由 `SendPolicyFrame` 负责 (进入时 + 每 2s 重发)。
+    /// 为什么必须挡: 进 WAIT_DISP 时只把**字节**交叉淡化到了 policy 内容, **没有归零包络** ——
+    /// 而某些显示器 (实测: 笔记本外接屏 / 独显那条输出) 在熄灭后 DDA **仍继续送帧** ✗ →
+    /// 这些内容帧会按 env=1.0 原样写出去 = 灯又亮了 (用户实测"淡出熄灭后又马上亮起")。
+    /// 内屏熄灭后不再送帧, 所以以前看不出这个问题 ✗ (多屏才有 = 用户定位的规律 ✓)。
     auto PushFrame = [&](const uint8_t* d, size_t len) -> bool {
         if (len > 3) lastOut.assign(d, d + len);
+        if (waitDisp) return true;                  // policy 期间由 SendPolicyFrame 独占输出
         return WriteEnv(d, len);
     };
     /// 退出 WAIT_DISP (内容恢复/唤醒): 从全黑淡入 —— 与"进"时的淡出对称。
@@ -609,6 +618,7 @@ void CoreLoopInner(Sess* g)
         }
         blockedLog = false;
         waitDisp = false;
+        wakeGraceUntil = Millis() + 1500.0;          // 醒来后的拓扑抖动宽限 (见 EnterWaitDisp)
         env.Snap(0.0);
         env.StartTo(1.0, kWaitDispFadeMs);
         ACLOGI("%s (fade in %.0fms)", why, kWaitDispFadeMs);
@@ -633,7 +643,15 @@ void CoreLoopInner(Sess* g)
         sp.Write(frame.data(), (DWORD)frame.size());
     };
 
-    auto EnterWaitDisp = [&](const char* why) {
+    /// WAIT_DISP 进入。`graceOnWake`: 采集侧报的拓扑/访问抖动 —— 唤醒后 1.5s 内忽略,
+    /// 因为"显示器刚亮"那一下 DDA 常会报一次 access lost (实测外接屏: 亮起 0.32s 后又报 access lost
+    /// → 淡出 → 用户看到"闪一下")。**屏幕明确熄灭 (monitor power off) 那条不走宽限** ✓
+    auto EnterWaitDisp = [&](const char* why, bool graceOnWake = false) {
+        if (graceOnWake && Millis() < wakeGraceUntil) {
+            if (!graceLog) { graceLog = true; ACLOGI("WAIT_DISP: 忽略 \"%s\" (唤醒宽限期内)", why); }
+            return;
+        }
+        graceLog = false;
         if (!waitDisp) {
             waitDisp = true;
             ACLOGI("enter WAIT_DISP (%s), policy=%d", why, applied.waitDispPolicy);
@@ -979,7 +997,7 @@ void CoreLoopInner(Sess* g)
                        steady_clock::now() < hardGraceUntil) {
                 EnterWaitDisp(res == capture::CaptureSession::BUILD_TRANSIENT
                                   ? "capture unavailable"
-                                  : "capture not ready (device warm-up)");
+                                  : "capture not ready (device warm-up)", /*graceOnWake*/ true);
                 WaitStop(g, 500);               // 锁屏/无输出/驱动未就绪: 500ms 重试
                 continue;
             } else {
@@ -1146,7 +1164,8 @@ void CoreLoopInner(Sess* g)
                 capValid = false;
                 EnterWaitDisp(stp == capture::CaptureSession::STEP_ACCESS_DENIED ? "access denied (lock screen)"
                               : stp == capture::CaptureSession::STEP_ACCESS_LOST ? "access lost (topology)"
-                                                                                 : "capture error");
+                                                                                 : "capture error",
+                              /*graceOnWake*/ true);
                 WaitStop(g, 200);               // 拓扑切换抖动抑制
             }
         } else {
