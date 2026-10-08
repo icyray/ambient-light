@@ -3,6 +3,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cwchar>
+#include <cwctype>
 
 namespace alog {
 
@@ -19,6 +20,18 @@ static void EnsurePath()
     _snwprintf_s(g_path, _TRUNCATE, L"%s\\log", exe);
     CreateDirectoryW(g_path, nullptr);
     wcscat_s(g_path, L"\\ambientcore.log");
+}
+
+bool DebugEnabled()
+{
+    static const bool on = [] {
+        wchar_t buf[32] = L"";
+        DWORD n = GetEnvironmentVariableW(L"AL_LOG_LEVEL", buf, 32);
+        if (n == 0 || n >= 32) return false;
+        for (DWORD i = 0; i < n; i++) buf[i] = (wchar_t)towlower(buf[i]);
+        return wcsstr(buf, L"debug") != nullptr || wcsstr(buf, L"verbose") != nullptr;
+    }();
+    return on;
 }
 
 void Write(const char* lvl, const char* fmt, ...)

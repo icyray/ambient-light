@@ -317,7 +317,7 @@ void SetPhase(Sess* g, int state)
         g->st.state = state;
     }
     // 相位时间线 (诊断锁屏/熄屏时序要看它); 放在锁外 —— 别在状态锁里做文件 I/O
-    if (prev != state) ACLOGI("phase %d -> %d", prev, state);
+    if (prev != state) ACLOGD("phase %d -> %d", prev, state);
 }
 
 // 记录最近诊断文本 (UI 经 AC_GetLastDiagEx 读取) 并落日志
@@ -392,21 +392,21 @@ ULONG CALLBACK PowerCallback(PVOID /*ctx*/, ULONG type, PVOID setting)
 {
     if (!g) return 0;
     if (type == PBT_APMSUSPEND) {
-        ACLOGI("power: PBT_APMSUSPEND");
+        ACLOGD("power: PBT_APMSUSPEND");
         g->suspendEvt = 1;
     } else if (type == PBT_APMRESUMEAUTOMATIC || type == PBT_APMRESUMESUSPEND) {
-        ACLOGI("power: PBT_APMRESUME%s", type == PBT_APMRESUMEAUTOMATIC ? "AUTOMATIC" : "SUSPEND");
+        ACLOGD("power: PBT_APMRESUME%s", type == PBT_APMRESUMEAUTOMATIC ? "AUTOMATIC" : "SUSPEND");
         g->resumeEvt = 1;
     } else if (type == PBT_POWERSETTINGCHANGE) {
         auto* s = static_cast<POWERBROADCAST_SETTING*>(setting);
         if (s->DataLength < sizeof(DWORD)) return 0;
         DWORD v = *reinterpret_cast<const DWORD*>(s->Data);
         if (s->PowerSetting == GUID_MONITOR_POWER_ON) {          // 旧 GUID (Win8 起已废弃, 保留兜底)
-            ACLOGI("power: GUID_MONITOR_POWER_ON = %lu", v);
+            ACLOGD("power: GUID_MONITOR_POWER_ON = %lu", v);
             g->monitorPower = (int)v;
         } else if (s->PowerSetting == GUID_CONSOLE_DISPLAY_STATE) {   // Win8+ 的正主
             // 0 = 熄灭 / 1 = 点亮 / 2 = 变暗 (变暗仍发光, 按"亮"处理)
-            ACLOGI("power: GUID_CONSOLE_DISPLAY_STATE = %lu", v);
+            ACLOGD("power: GUID_CONSOLE_DISPLAY_STATE = %lu", v);
             g->monitorPower = (v == 0) ? 0 : 1;
         }
     }
@@ -445,7 +445,7 @@ void MonitorLoopInner()
                            (m.primary ? L"|P" : L""));
         if (!firstTopo && topo != lastTopo) {
             g->topologyVer++;
-            ACLOGI("monitor topology changed (%zu -> %zu outputs)", lastTopo.size(), topo.size());
+            ACLOGD("monitor topology changed (%zu -> %zu outputs)", lastTopo.size(), topo.size());
         }
         lastTopo = std::move(topo);
         firstTopo = false;
@@ -576,6 +576,7 @@ void CoreLoopInner(Sess* g)
     double slewT = Millis();
     double lastFrameAt = 0.0, lastStatusLog = 0.0;    // 诊断: 末帧时刻 / 上次状态行时刻
     bool blockedLog = false;                          // 诊断: "屏幕仍熄灭"只记一次
+    bool reconnLogDone = false;                       // 串口重连失败: 只把**首次**记 WARN (实测占日志 38%)
     bool graceLog = false;                            // 诊断: "唤醒宽限期内忽略"只记一次
     double wakeGraceUntil = 0.0;                      // 刚醒的拓扑抖动宽限截止 (毫秒)
     ULONGLONG tickLoop = GetTickCount64();            // S0 唤醒自愈用 (含睡眠时间的墙钟)
@@ -612,7 +613,7 @@ void CoreLoopInner(Sess* g)
         if (C->monitorPower.load() == 0) {
             if (!blockedLog) {
                 blockedLog = true;
-                ACLOGI("WAIT_DISP: 忽略 \"%s\" (屏幕仍被报告为熄灭)", why);
+                ACLOGD("WAIT_DISP: 忽略 \"%s\" (屏幕仍被报告为熄灭)", why);
             }
             return;
         }
@@ -648,7 +649,7 @@ void CoreLoopInner(Sess* g)
     /// → 淡出 → 用户看到"闪一下")。**屏幕明确熄灭 (monitor power off) 那条不走宽限** ✓
     auto EnterWaitDisp = [&](const char* why, bool graceOnWake = false) {
         if (graceOnWake && Millis() < wakeGraceUntil) {
-            if (!graceLog) { graceLog = true; ACLOGI("WAIT_DISP: 忽略 \"%s\" (唤醒宽限期内)", why); }
+            if (!graceLog) { graceLog = true; ACLOGD("WAIT_DISP: 忽略 \"%s\" (唤醒宽限期内)", why); }
             return;
         }
         graceLog = false;
@@ -724,7 +725,8 @@ void CoreLoopInner(Sess* g)
             // 并发时会互相抢成"忙" → 会话误判无可用端口。见 serial.h ProbeLock 的说明。
             std::lock_guard probeLk(serial::ProbeLock());
             if (!sp.Open(cand, c.baudRate)) {
-                ACLOGW("open %ls failed (busy or gone)", cand.c_str());
+                if (!reconnLogDone) { reconnLogDone = true; ACLOGW("open %ls failed (busy or gone)", cand.c_str()); }
+                else ACLOGD("open %ls failed (busy or gone)", cand.c_str());
                 continue;
             }
             uint8_t resp = 0;
@@ -742,7 +744,8 @@ void CoreLoopInner(Sess* g)
                 return true;
             }
             sp.Close();
-            ACLOGW("handshake failed on %ls", cand.c_str());
+            if (!reconnLogDone) { reconnLogDone = true; ACLOGW("handshake failed on %ls", cand.c_str()); }
+            else ACLOGD("handshake failed on %ls", cand.c_str());
         }
         return false;
     };
@@ -910,7 +913,7 @@ void CoreLoopInner(Sess* g)
         if (tv != seenTopology) {
             seenTopology = tv;
             if (capValid) {
-                ACLOGI("topology change -> full capture rebuild");
+                ACLOGD("topology change -> full capture rebuild");
                 cap.Destroy(); capValid = false;   // 适配器级全量重建
             }
         }
@@ -928,6 +931,7 @@ void CoreLoopInner(Sess* g)
                 lastMcuMode = -1;           // 重连后固件特效已清, 强制重发 MCU 命令
                 phase = (capValid || applied.modeIndex != 0) ? AC_STATE_RUNNING : AC_STATE_STARTING;
                 SetPhase(g, phase);
+                reconnLogDone = false;               // 连上了 → 下次断连重新记一条 WARN
                 env.Snap(0.0);                       // 新会话/重连: 从全黑起
                 env.StartTo(1.0, kFadeInMs);         // 淡入 (追光/拾音/纯色 都吃这一份)
                 slewB = applied.brightness;          // 限幅器归位到当前配置值 (别从陈旧值爬)
@@ -991,7 +995,7 @@ void CoreLoopInner(Sess* g)
                 cols.resize((size_t)EffLeds(applied) + 4);
                 if (waitDisp) ExitWaitDisp("capture built");
                 if (!waitDisp && phase != AC_STATE_RUNNING) { phase = AC_STATE_RUNNING; SetPhase(g, phase); }
-                ACLOGI("capture built: monitor %d%s (%dx%d hdr=%d)", applied.monitorIndex,
+                ACLOGD("capture built: monitor %d%s (%dx%d hdr=%d)", applied.monitorIndex,
                        fb ? " (fallback->primary)" : "", cap.Width(), cap.Height(), 0);
             } else if (res == capture::CaptureSession::BUILD_TRANSIENT ||
                        steady_clock::now() < hardGraceUntil) {
@@ -1136,7 +1140,7 @@ void CoreLoopInner(Sess* g)
                             fcNow = g->st.frameCounter;
                             abNow = g->st.allBlackFrames;
                         }
-                        ACLOGI("status(trace): phase=%d monitorPower=%d fps=%.1f frames=%llu "
+                        ACLOGD("status(trace): phase=%d monitorPower=%d fps=%.1f frames=%llu "
                                "allBlack=%u lastFrameAgo=%.0fms",
                                phase, mpNow, fpsNow, fcNow, abNow,
                                lastFrameAt > 0 ? nowL - lastFrameAt : -1.0);
@@ -1368,7 +1372,7 @@ AC_API int32_t AC_SetConfigEx(uint32_t slot, const ACConfig* cfgIn)
         g->slots[slot].cfg = std::make_shared<const ACConfig>(c);
         g->slots[slot].cfgSerial++;
     }
-    ACLOGI("AC_SetConfigEx slot %u (serial %llu, mode %d, com '%s', leds %d)",
+    ACLOGD("AC_SetConfigEx slot %u (serial %llu, mode %d, com '%s', leds %d)",
            slot, (unsigned long long)g->slots[slot].cfgSerial.load(), c.modeIndex, c.comPort, c.ledCount);
     return 0;
 }

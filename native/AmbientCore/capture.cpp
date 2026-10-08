@@ -358,7 +358,7 @@ CaptureSession::BuildResult CaptureSession::Build(const Params& p, int* fallback
     Destroy();
     p_ = p;
     p_.leds = std::clamp(p_.leds, 1, serial::kMaxLedCount);
-    ACLOGI("capture build: enter (monitor %d leds %d)", p_.monitorIndex, p_.leds);
+    ACLOGD("capture build: enter (monitor %d leds %d)", p_.monitorIndex, p_.leds);
     if (!PickOutput(p_, fallback)) return BUILD_TRANSIENT;   // 暂无可用输出
     HRESULT hr = CreateDuplication();
     if (FAILED(hr)) {
