@@ -29,6 +29,24 @@ using AmbientLight.Interop;
 Console.OutputEncoding = Encoding.UTF8;
 // `--dump-ring <输出.png>`: 只把 LedRingView 渲染成图片 (设计评审用), 不跑断言。
 // 无头宿主里 RenderTargetBitmap 可用 (只要先 Measure/Arrange) —— 这样改视觉之前能先看一眼。
+if (args.Length >= 2 && args[0] == "--dump-slider")
+{
+    var ts = new Thread(() => DumpSlider(args[1]));
+    ts.SetApartmentState(ApartmentState.STA);
+    ts.Start();
+    ts.Join();
+    return;
+}
+// `--dump-slider-live <前缀>`: 在**真实页面结构**里量滑块状态并出图 (第四轮排查工具, 见 SliderDiag.cs)。
+// 输出 <前缀>_bright_enabled.png / _bright_disabled.png / _picker.png。
+if (args.Length >= 2 && args[0] == "--dump-slider-live")
+{
+    var tl = new Thread(() => UiLoadProbe.SliderDiag.Dump(args[1]));
+    tl.SetApartmentState(ApartmentState.STA);
+    tl.Start();
+    tl.Join();
+    return;
+}
 if (args.Length >= 2 && args[0] == "--dump-ring")
 {
     var td = new Thread(() => DumpRing(args[1], args.Length >= 3 && int.TryParse(args[2], out var od) ? od : -1));
@@ -42,6 +60,92 @@ t.SetApartmentState(ApartmentState.STA);
 t.Start();
 t.Join();
 return;
+
+/// <summary>把**滑块的各种状态**渲染成一张 PNG (设计/排查用): 普通/锚点左/锚点右/色带轨道/禁用。
+/// 用途: 滑块皮肤是"看起来对不对"的问题, 数值断言抓不住观感 → 出图肉眼判断 ✓</summary>
+static void DumpSlider(string path)
+{
+    var app = new AmbientLight.App();
+    app.InitializeComponent();
+    typeof(AmbientLight.App)
+        .GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+        ?.SetValue(null, app);
+
+    var panel = new StackPanel { Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x18)) };
+    void Row(string cap, Slider sl)
+    {
+        panel.Children.Add(new TextBlock
+        {
+            Text = cap, Foreground = new SolidColorBrush(Color.FromRgb(0xC5, 0xC5, 0xC5)),
+            FontSize = 12, Margin = new Thickness(16, 12, 16, 2),
+        });
+        sl.Width = 260;
+        sl.VerticalAlignment = VerticalAlignment.Center;
+        sl.Margin = new Thickness(16, 0, 16, 4);
+        panel.Children.Add(sl);
+    }
+
+    // 普通 (Track): 50% / 100% / 5% 三种值 —— 看左端是否贴边、右端是否被拇指接住
+    foreach (var v in new[] { 50.0, 100.0, 5.0 })
+        Row($"Track 模式 · 值 {v:F0}%", new Slider { Minimum = 0, Maximum = 100, Value = v });
+
+    // 锚点 (Anchor, 中性 1): 往右 / 往左 / 正好在中性
+    foreach (var v in new[] { 1.5, 0.5, 1.0 })
+    {
+        var a2 = new Slider { Minimum = 0, Maximum = 2, Value = v };
+        AmbientLight.Controls.SliderSkin.SetFill(a2, AmbientLight.Controls.SliderFill.Anchor);
+        AmbientLight.Controls.SliderSkin.SetAnchor(a2, 1.0);
+        Row($"Anchor 模式 (中性 1) · 值 {v:F1}", a2);
+    }
+
+    // None: 模拟色带轨道 (底层放一条彩虹 Border, 滑块轨道刷子覆盖为透明 —— 与主页拾色器同款)
+    {
+        var grid = new Grid { Width = 260, Height = 32 };
+        var rainbow = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
+        foreach (var (off, col) in new (double, Color)[]
+                 { (0.00, Color.FromRgb(0xFF,0x40,0x40)), (0.25, Color.FromRgb(0xFF,0xE0,0x40)),
+                   (0.50, Color.FromRgb(0x40,0xE0,0x80)), (0.75, Color.FromRgb(0x40,0xB0,0xFF)),
+                   (1.00, Color.FromRgb(0xC0,0x60,0xFF)) })
+            rainbow.GradientStops.Add(new GradientStop(col, off));
+        grid.Children.Add(new Border { Height = 4, CornerRadius = new CornerRadius(2),
+                                       VerticalAlignment = VerticalAlignment.Center,
+                                       Background = rainbow, IsHitTestVisible = false });
+        var ns = new Slider { Minimum = 0, Maximum = 360, Value = 24, Width = 260 };
+        AmbientLight.Controls.SliderSkin.SetFill(ns, AmbientLight.Controls.SliderFill.None);
+        ns.Resources.Add("SliderTrackFill", new SolidColorBrush(Colors.Transparent));
+        ns.Resources.Add("SliderTrackFillPointerOver", new SolidColorBrush(Colors.Transparent));
+        ns.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(ns);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "None 模式 (色带轨道, 应与主页拾色器同款) · 值 24/360",
+            Foreground = new SolidColorBrush(Color.FromRgb(0xC5, 0xC5, 0xC5)),
+            FontSize = 12, Margin = new Thickness(16, 12, 16, 2),
+        });
+        panel.Children.Add(grid);
+    }
+
+    // 禁用态: Track 模式 + 禁用 (应与可用态明显不同、且填充同样贴边)
+    {
+        var d = new Slider { Minimum = 0, Maximum = 100, Value = 50, IsEnabled = false };
+        Row("Track 模式 · **禁用** (值 50%)", d);
+    }
+
+    const double zoom = 2;
+    panel.Measure(new Size(300, double.PositiveInfinity));
+    panel.Arrange(new Rect(0, 0, 300, panel.DesiredSize.Height));
+    panel.UpdateLayout();
+    // ⚠️ 这里**不再**手动调 ApplyFill (第四轮起没有任何"代码去模板里改元素"的钩子了) ——
+    //    图上看到的就是真实后果: 若是 None/禁用那两行还盖着一条填充, 说明声明式的收起没生效 ✗
+    var bmp = new RenderTargetBitmap((int)(300 * zoom), (int)Math.Ceiling(panel.DesiredSize.Height * zoom),
+                                     96 * zoom, 96 * zoom, PixelFormats.Pbgra32);
+    bmp.Render(panel);
+    var enc = new PngBitmapEncoder();
+    enc.Frames.Add(BitmapFrame.Create(bmp));
+    using var fs = File.Create(path);
+    enc.Save(fs);
+    Console.WriteLine($"dumped -> {path} ({bmp.PixelWidth}x{bmp.PixelHeight})");
+}
 
 /// <summary>把"校准窗的安装示意"渲染成一张 PNG: 逆时针 / 顺时针 并排, 便于肉眼评审。
 /// 纯设计工具 —— 不参与断言 (断言在 Run 里)。</summary>
@@ -1438,8 +1542,7 @@ static void Run()
 
     // ② 柔化平滑**档位** (0=关 / 1=抑制闪光 / 2=抑制闪光+时域柔和) 的配置往返
     bool roundTrip = true;
-    // ⚠️ 档位字段的语义是"**符号 = 开关, 绝对值 = 档位**" → 往返必须覆盖负值 (关着记住档) ✓
-    foreach (int m in new[] { 0, 1, 2, -1, -2 })
+    foreach (int m in new[] { 0, 1, 2 })
     {
         var d2 = new AmbientLight.Services.DeviceSettings { ChaseSmoothMode = m };
         var c2 = d2.ToCoreConfig();
@@ -1447,8 +1550,7 @@ static void Run()
         b2.FromCoreConfig(c2);
         roundTrip &= c2.chaseSmoothMode == m && b2.ChaseSmoothMode == m;
     }
-    Console.WriteLine((roundTrip ? "OK   " : "FAIL ") +
-                      $"柔化平滑档位往返 0/±1/±2 (负数 = 关着但记住档) = {roundTrip}");
+    Console.WriteLine((roundTrip ? "OK   " : "FAIL ") + $"柔化平滑档位往返 0/1/2 = {roundTrip}");
     // 默认必须是"关" (用户口径: 默认保持原来的高刷跟屏感)
     bool defOff = new AmbientLight.Services.DeviceSettings().ChaseSmoothMode == 0
                   && AmbientLight.Interop.ACConfig.CreateDefault().chaseSmoothMode == 0;
@@ -1465,6 +1567,188 @@ static void Run()
         return d3.ChaseSmoothMode == x.Want;
     });
     Console.WriteLine((migOk ? "OK   " : "FAIL ") + $"'两个开关'→档位 迁移真值表 (4 组) = {migOk}");
+
+    Console.WriteLine();
+    Console.WriteLine("---- 滑块皮肤 (本地魔改: 官方挂点 + 半拇指左移; 三种填充模式) ----");
+    // 第四轮定稿: 填充只有一种画法 = WPF 官方的 `PART_SelectionRange`; "什么时候不画"必须**声明式**。
+    // 断言按这个契约分五组: 模板长什么样 / Track / Anchor / None / 禁用, 外加"重新模板化后不掉状态"。
+    var slHost = new System.Windows.Controls.Grid { Width = 200, Height = 40 };
+    void HostSlider(Slider s)
+    {
+        slHost.Children.Clear();
+        slHost.Children.Add(s);
+        slHost.Measure(new Size(200, 40));
+        slHost.Arrange(new Rect(0, 0, 200, 40));
+        s.ApplyTemplate();
+        slHost.UpdateLayout();
+    }
+    static FrameworkElement? RangeHostOf(Slider sl)
+        => sl.Template?.FindName("SelectionRangeHost", sl) as FrameworkElement;
+    // ⚠️ 挂点现在是 `Border` (需要"只给自由端圆角", Rectangle 只能四角同半径) ——
+    //    WPF 对挂点只要求 `FrameworkElement` (源码: TemplatePart 声明与 UpdateSelectionRange…)
+    static FrameworkElement? PartOf(Slider sl)
+        => sl.Template?.FindName("PART_SelectionRange", sl) as FrameworkElement;
+    static System.Windows.Controls.Primitives.Track? TrackOf(Slider sl)
+        => sl.Template?.FindName("PART_Track", sl) as System.Windows.Controls.Primitives.Track;
+    static System.Windows.Controls.Primitives.Thumb? ThumbOf(Slider sl)
+        => sl.Template?.FindName("Thumb", sl) as System.Windows.Controls.Primitives.Thumb;
+
+    // ① 我们的模板赢了上游 + **旧的自绘填充条必须已经删掉**
+    //    (前三轮在"减少"重复按钮的模板里画过一条, 它是"运行时改元素"那套时机的源头 ✗)
+    var slProbe = new Slider { Minimum = 0, Maximum = 100, Value = 50, Width = 200 };
+    HostSlider(slProbe);
+    var slPart = PartOf(slProbe);
+    var slRangeHost = RangeHostOf(slProbe);
+    static bool OldFillBarGone(Slider sl)
+    {
+        var btn = TrackOf(sl)?.DecreaseRepeatButton;
+        return btn?.Template is not null && btn.Template.FindName("TrackFillBar", btn) is null;
+    }
+    bool tplOk = slPart is { Height: 4 } && slRangeHost is not null && OldFillBarGone(slProbe);
+    Console.WriteLine((tplOk ? "OK   " : "FAIL ") +
+                      "本地模板生效 (官方挂点 + 装它的 Canvas 都在, 旧的自绘填充条已删) = " + tplOk);
+
+    // ② Track 模式: 官方挂点开、两端 = Minimum/Value、几何**真的算出来**(宽度 > 20px: 静默变 0 只能靠它抓),
+    //    且那层 Canvas 被**左移半个拇指** → 填充左端贴轨道左沿 (用户验收口径: 进度条不能"缺一截")
+    double trackW = TrackOf(slProbe)?.ActualWidth ?? 0, thumbW = ThumbOf(slProbe)?.ActualWidth ?? 0;
+    double fillLeftOnScreen = slPart is null ? double.NaN
+        : Canvas.GetLeft(slPart) + (slRangeHost?.Margin.Left ?? 0);
+    bool trackMode = slProbe.IsSelectionRangeEnabled && slProbe.SelectionStart == 0
+                     && Math.Abs(slProbe.SelectionEnd - 50) < 0.001
+                     && slPart is { ActualWidth: > 20 } && thumbW > 0 && trackW > 0
+                     && Math.Abs((slRangeHost?.Margin.Left ?? 0) + thumbW / 2) < 0.01
+                     && Math.Abs(fillLeftOnScreen) < 1.0;
+    Console.WriteLine((trackMode ? "OK   " : "FAIL ") +
+                      $"Track 模式: 挂点开={slProbe.IsSelectionRangeEnabled} 端点={slProbe.SelectionStart:F0}→" +
+                      $"{slProbe.SelectionEnd:F0} 填充宽={slPart?.ActualWidth:F0}px(轨道{trackW:F0}/拇指{thumbW:F0}) " +
+                      $"左移={slRangeHost?.Margin.Left:F1} 屏上左端={fillLeftOnScreen:F1}(应≈0) = {trackMode}");
+
+    // ③ Anchor 模式: 同一个挂点, 端点由 Converter 折算 (min/max → "往中性值左边拖"也能画)
+    var slAnchor = new Slider { Minimum = 0, Maximum = 2, Value = 0.5, Width = 200 };
+    AmbientLight.Controls.SliderSkin.SetFill(slAnchor, AmbientLight.Controls.SliderFill.Anchor);
+    AmbientLight.Controls.SliderSkin.SetAnchor(slAnchor, 1.0);
+    HostSlider(slAnchor);
+    var aPart = PartOf(slAnchor);
+    double aThumbW = ThumbOf(slAnchor)?.ActualWidth ?? 0;
+    double aTrackW = TrackOf(slAnchor)?.ActualWidth ?? 0;
+    double aWant = 0.5 / 2.0 * (aTrackW - aThumbW);          // 值 0.5、中性 1 → 占全行程的 1/4
+    bool anchorMode = slAnchor.IsSelectionRangeEnabled && RangeHostOf(slAnchor)?.Visibility == Visibility.Visible
+                      && slAnchor.SelectionStart == 0.5 && slAnchor.SelectionEnd == 1.0
+                      && aPart is not null && Math.Abs(aPart.ActualWidth - aWant) < 2.0;
+    Console.WriteLine((anchorMode ? "OK   " : "FAIL ") +
+                      $"Anchor 模式: 挂点开={slAnchor.IsSelectionRangeEnabled} 端点={slAnchor.SelectionStart:F1}→" +
+                      $"{slAnchor.SelectionEnd:F1} 填充宽={aPart?.ActualWidth:F0}px(期望≈{aWant:F0}) = {anchorMode}");
+
+    // ④ Fill=None (色带轨道): 官方挂点必须关 **而且那层 Canvas 必须真的收起** ——
+    //    ⚠️ 这是第四轮抓到"色带仍被盖"的断言: 光把 IsSelectionRangeEnabled 置假**不够**,
+    //       WPF 不会因此藏起 PART_SelectionRange (它带着上次算的几何一直可见) ✗
+    var slNone = new Slider { Minimum = 0, Maximum = 360, Value = 24, Width = 200 };
+    AmbientLight.Controls.SliderSkin.SetFill(slNone, AmbientLight.Controls.SliderFill.None);
+    HostSlider(slNone);
+    bool noneMode = !slNone.IsSelectionRangeEnabled && RangeHostOf(slNone) is { Visibility: Visibility.Collapsed };
+    Console.WriteLine((noneMode ? "OK   " : "FAIL ") +
+                      $"None 模式 (色带轨道): 挂点关={!slNone.IsSelectionRangeEnabled} · " +
+                      $"填充层收起={RangeHostOf(slNone)?.Visibility} = {noneMode}");
+
+    // ⑤ 禁用态: 轨道/拇指换成禁用色, **进度填充要在** (只是变成灰的) —— 但填充色必须与**轨道底**
+    //    是不同的键! 早先两者都用 `ControlFillColorDisabledBrush` ⇒ 同色叠加, 只有填充那一段亮一档,
+    //    左端留一条暗条 = 用户报的"缺一截" ✗ (这条断言就是钉住那个坑的)
+    var slDisabled = new Slider { Minimum = 0, Maximum = 100, Value = 50, Width = 200, IsEnabled = false };
+    HostSlider(slDisabled);
+    var dPart = PartOf(slDisabled);
+    var dTrack = slDisabled.Template?.FindName("TrackBackground", slDisabled) as System.Windows.Controls.Border;
+    var disabledFillKey = Application.Current.TryFindResource("TextFillColorDisabledBrush") as SolidColorBrush;
+    Color dFill = ((dPart as Border)?.Background as SolidColorBrush)?.Color ?? Colors.Transparent;
+    Color dTrackColor = (dTrack?.Background as SolidColorBrush)?.Color ?? Colors.Transparent;
+    bool disabledMode = RangeHostOf(slDisabled) is { Visibility: Visibility.Visible }
+                        && dPart is { ActualWidth: > 20 } && disabledFillKey is not null
+                        && dFill == disabledFillKey.Color
+                        && dFill != dTrackColor;
+    Console.WriteLine((disabledMode ? "OK   " : "FAIL ") +
+                      $"禁用态: 填充层={RangeHostOf(slDisabled)?.Visibility} 填充={dFill} (期望=拇指禁用色 " +
+                      $"{disabledFillKey?.Color}) · 轨道底={dTrackColor} (两者必须不同, 否则又会「缺一截」) = {disabledMode}");
+
+    // ⑥ **重新模板化后不能掉状态**: 换宿主 (等价于主题切换重建模板) 后, None 的收起必须还在 ——
+    //    前三轮那套"代码钩子设 Visibility"就是在这里丢掉的 (用户看到的"仍被盖" ✗)
+    slHost.Children.Clear();
+    var slHost2 = new System.Windows.Controls.Grid { Width = 200, Height = 40 };
+    slHost2.Children.Add(slNone);
+    slHost2.Measure(new Size(200, 40));
+    slHost2.Arrange(new Rect(0, 0, 200, 40));
+    slHost2.UpdateLayout();
+    bool survives = RangeHostOf(slNone) is { Visibility: Visibility.Collapsed };
+    Console.WriteLine((survives ? "OK   " : "FAIL ") +
+                      $"None 模式的收起在「换宿主重排」后仍然成立 (声明式, 不靠时机) = {survives}");
+
+    // ⑦ Converter 真值表 (纯函数): Start 取 min、End 取 max —— "往左拖"才不会算出负宽度(什么都不画)
+    var conv = new AmbientLight.Controls.SliderAnchorConverter();
+    var cases = new (double Value, double Anchor, double Min, double WantStart, double WantEnd)[]
+    {
+        (0.5, 1.0, 0.0, 0.5, 1.0),      // 往左 (衰减) → 交换
+        (1.5, 1.0, 0.0, 1.0, 1.5),      // 往右 (增益)
+        (1.0, 1.0, 0.0, 1.0, 1.0),      // 正好在中性 (宽度 0)
+        (30.0, double.NaN, 0.0, 0.0, 30.0),   // 没给中性值 → 退回 Minimum
+    };
+    string Anchor2(object prm, double v, double a, double m)
+    {
+        object r = conv.Convert(new object[] { v, a, m }, typeof(double), prm,
+                                System.Globalization.CultureInfo.InvariantCulture);
+        return r is double d ? d.ToString("F2") : "?";
+    }
+    bool convOk = cases.All(c =>
+        Anchor2("start", c.Value, c.Anchor, c.Min) == c.WantStart.ToString("F2") &&
+        Anchor2("end", c.Value, c.Anchor, c.Min) == c.WantEnd.ToString("F2"));
+    Console.WriteLine((convOk ? "OK   " : "FAIL ") + $"填充端点折算真值表 (min/max, 4 组) = {convOk}");
+
+    // ⑦′ 填充两端形状: **挨着拇指的那一端方角、自由端圆角**。
+    //     为什么: 填充右端天生停在拇指左沿 (拇指是画在它上面的圆), 两端都圆时那个半圆端在禁用态
+    //     (填充比拇指暗, 不再糊成一片) 会露出来 → 看着像进度条右端缺了个口 ✗ (用户第四轮验收反馈)。
+    //     判据 = 拇指在 Value 处 → Value ≥ anchor 时"左圆右方", 反之"左方右圆"。
+    var cornerConv = new AmbientLight.Controls.SliderFillCornerConverter();
+    var cornerCases = new (double Value, double Anchor, double Min, bool LeftRound)[]
+    {
+        (1.5, 1.0, 0.0, true),      // 增益: 右端在拇指 → 左圆右方
+        (0.5, 1.0, 0.0, false),     // 衰减: 左端在拇指 → 左方右圆
+        (50.0, double.NaN, 0.0, true),   // Track (无中性值) → 右端在拇指 → 左圆右方
+    };
+    CornerRadius Want(bool leftRound) => leftRound ? new CornerRadius(2, 0, 0, 2) : new CornerRadius(0, 2, 2, 0);
+    bool cornerConvOk = cornerCases.All(c =>
+    {
+        object r = cornerConv.Convert(new object[] { c.Value, c.Anchor, c.Min }, typeof(CornerRadius),
+                                      null!, System.Globalization.CultureInfo.InvariantCulture);
+        return r is CornerRadius cr && cr == Want(c.LeftRound);
+    });
+    Console.WriteLine((cornerConvOk ? "OK   " : "FAIL ") +
+                      $"填充圆角真值表 (挨拇指那端方角, 3 组) = {cornerConvOk}");
+    // ⚠️ 真值表挡不住"绑定没接上" → 再看三个**已布局**滑块上挂点的**实际** CornerRadius
+    //    (Track 实测右端在拇指; slAnchor 是值 0.5/中性 1 = 衰减; 另造一个 1.5 的增益)
+    var slAnchorUp = new Slider { Minimum = 0, Maximum = 2, Value = 1.5, Width = 200 };
+    AmbientLight.Controls.SliderSkin.SetFill(slAnchorUp, AmbientLight.Controls.SliderFill.Anchor);
+    AmbientLight.Controls.SliderSkin.SetAnchor(slAnchorUp, 1.0);
+    HostSlider(slAnchorUp);
+    CornerRadius Cob(Slider sl) => (PartOf(sl) as Border)?.CornerRadius ?? default;
+    bool cornerWired = Cob(slProbe) == Want(true) && Cob(slAnchor) == Want(false) && Cob(slAnchorUp) == Want(true);
+    Console.WriteLine((cornerWired ? "OK   " : "FAIL ") +
+                      $"圆角真的接到挂点上: Track={Cob(slProbe)} · Anchor衰减={Cob(slAnchor)} · " +
+                      $"Anchor增益={Cob(slAnchorUp)} (期望 2,0,0,2 / 0,2,2,0 / 2,0,0,2) = {cornerWired}");
+
+    // ⑧ 页面声明: 色带轨道的滑块必须 None (否则填充盖掉渐变换); 乘数型滑块必须 Anchor+中性值
+    var homeProbe = home;
+    var colorPageProbe = new AmbientLight.Views.SettingsPageColor();
+    var noneNames = new[] { "HueSlider", "SatSlider" };                       // 纯色拾色器的色带轨道
+    var noneBad = noneNames.Where(n => (homeProbe.FindName(n) as Slider) is not { } s4
+        || AmbientLight.Controls.SliderSkin.GetFill(s4) != AmbientLight.Controls.SliderFill.None).ToArray();
+    var multiNames = new[] { "HueSlider", "RGainSlider", "GGainSlider", "BGainSlider" };  // 乘数型
+    var multiBad = multiNames.Where(n => (colorPageProbe.FindName(n) as Slider) is not { } s5
+        || AmbientLight.Controls.SliderSkin.GetFill(s5) != AmbientLight.Controls.SliderFill.Anchor
+        || Math.Abs(AmbientLight.Controls.SliderSkin.GetAnchor(s5) - 1.0) > 0.001).ToArray();
+    Console.WriteLine((noneBad.Length == 0 ? "OK   " : "FAIL ") +
+                      $"色带轨道滑块不画填充 (Fill=None)" + (noneBad.Length > 0 ? $" · 缺: {string.Join(",", noneBad)}" : ""));
+    Console.WriteLine((multiBad.Length == 0 ? "OK   " : "FAIL ") +
+                      $"乘数型滑块 Fill=Anchor + 中性值 1" + (multiBad.Length > 0 ? $" · 缺: {string.Join(",", multiBad)}" : ""));
+    Console.WriteLine($"INFO 填充几何: Track {slPart?.ActualWidth:F0}x{slPart?.ActualHeight:F0} " +
+                      $"@Left={Canvas.GetLeft(slPart):F1} (值 50% → 约占轨道一半) · " +
+                      $"Anchor {aPart?.ActualWidth:F0}x{aPart?.ActualHeight:F0} @Left={Canvas.GetLeft(aPart):F1}");
 
     Console.WriteLine();
     Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");

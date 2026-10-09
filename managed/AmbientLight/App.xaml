@@ -17,6 +17,10 @@
                      深色既是启动期的兜底值, 也是 app.json 缺省时的默认主题 (M5.2 D2 定稿: 默认深色)。 -->
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
+                <!-- ⚠️ 必须排在 `ui:ControlsDictionary` **之后**: 这是本地魔改的滑块皮肤
+                     (进度填充 + 禁用态, 上游 4.3.0 都没有), 靠"隐式样式后加载者优先"覆盖它。
+                     说明与迁移指南见 Styles/SliderStyle.xaml 头部 + docs/SLIDER_TEMPLATE.md -->
+                <ResourceDictionary Source="Styles/SliderStyle.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <!-- M5.2 文字色层级的用法约定 (别再自造"提示文字"刷子, 轮 34 补已收回):
                    · 正文/标题 → 继承 `CardForeground` (= `TextFillColorPrimary`)
