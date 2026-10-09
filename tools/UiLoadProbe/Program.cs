@@ -1584,8 +1584,10 @@ static void Run()
     }
     static FrameworkElement? RangeHostOf(Slider sl)
         => sl.Template?.FindName("SelectionRangeHost", sl) as FrameworkElement;
-    static System.Windows.Shapes.Rectangle? PartOf(Slider sl)
-        => sl.Template?.FindName("PART_SelectionRange", sl) as System.Windows.Shapes.Rectangle;
+    // ⚠️ 挂点现在是 `Border` (需要"只给自由端圆角", Rectangle 只能四角同半径) ——
+    //    WPF 对挂点只要求 `FrameworkElement` (源码: TemplatePart 声明与 UpdateSelectionRange…)
+    static FrameworkElement? PartOf(Slider sl)
+        => sl.Template?.FindName("PART_SelectionRange", sl) as FrameworkElement;
     static System.Windows.Controls.Primitives.Track? TrackOf(Slider sl)
         => sl.Template?.FindName("PART_Track", sl) as System.Windows.Controls.Primitives.Track;
     static System.Windows.Controls.Primitives.Thumb? ThumbOf(Slider sl)
@@ -1656,7 +1658,7 @@ static void Run()
     var dPart = PartOf(slDisabled);
     var dTrack = slDisabled.Template?.FindName("TrackBackground", slDisabled) as System.Windows.Controls.Border;
     var disabledFillKey = Application.Current.TryFindResource("TextFillColorDisabledBrush") as SolidColorBrush;
-    Color dFill = (dPart?.Fill as SolidColorBrush)?.Color ?? Colors.Transparent;
+    Color dFill = ((dPart as Border)?.Background as SolidColorBrush)?.Color ?? Colors.Transparent;
     Color dTrackColor = (dTrack?.Background as SolidColorBrush)?.Color ?? Colors.Transparent;
     bool disabledMode = RangeHostOf(slDisabled) is { Visibility: Visibility.Visible }
                         && dPart is { ActualWidth: > 20 } && disabledFillKey is not null
@@ -1697,6 +1699,38 @@ static void Run()
         Anchor2("start", c.Value, c.Anchor, c.Min) == c.WantStart.ToString("F2") &&
         Anchor2("end", c.Value, c.Anchor, c.Min) == c.WantEnd.ToString("F2"));
     Console.WriteLine((convOk ? "OK   " : "FAIL ") + $"填充端点折算真值表 (min/max, 4 组) = {convOk}");
+
+    // ⑦′ 填充两端形状: **挨着拇指的那一端方角、自由端圆角**。
+    //     为什么: 填充右端天生停在拇指左沿 (拇指是画在它上面的圆), 两端都圆时那个半圆端在禁用态
+    //     (填充比拇指暗, 不再糊成一片) 会露出来 → 看着像进度条右端缺了个口 ✗ (用户第四轮验收反馈)。
+    //     判据 = 拇指在 Value 处 → Value ≥ anchor 时"左圆右方", 反之"左方右圆"。
+    var cornerConv = new AmbientLight.Controls.SliderFillCornerConverter();
+    var cornerCases = new (double Value, double Anchor, double Min, bool LeftRound)[]
+    {
+        (1.5, 1.0, 0.0, true),      // 增益: 右端在拇指 → 左圆右方
+        (0.5, 1.0, 0.0, false),     // 衰减: 左端在拇指 → 左方右圆
+        (50.0, double.NaN, 0.0, true),   // Track (无中性值) → 右端在拇指 → 左圆右方
+    };
+    CornerRadius Want(bool leftRound) => leftRound ? new CornerRadius(2, 0, 0, 2) : new CornerRadius(0, 2, 2, 0);
+    bool cornerConvOk = cornerCases.All(c =>
+    {
+        object r = cornerConv.Convert(new object[] { c.Value, c.Anchor, c.Min }, typeof(CornerRadius),
+                                      null!, System.Globalization.CultureInfo.InvariantCulture);
+        return r is CornerRadius cr && cr == Want(c.LeftRound);
+    });
+    Console.WriteLine((cornerConvOk ? "OK   " : "FAIL ") +
+                      $"填充圆角真值表 (挨拇指那端方角, 3 组) = {cornerConvOk}");
+    // ⚠️ 真值表挡不住"绑定没接上" → 再看三个**已布局**滑块上挂点的**实际** CornerRadius
+    //    (Track 实测右端在拇指; slAnchor 是值 0.5/中性 1 = 衰减; 另造一个 1.5 的增益)
+    var slAnchorUp = new Slider { Minimum = 0, Maximum = 2, Value = 1.5, Width = 200 };
+    AmbientLight.Controls.SliderSkin.SetFill(slAnchorUp, AmbientLight.Controls.SliderFill.Anchor);
+    AmbientLight.Controls.SliderSkin.SetAnchor(slAnchorUp, 1.0);
+    HostSlider(slAnchorUp);
+    CornerRadius Cob(Slider sl) => (PartOf(sl) as Border)?.CornerRadius ?? default;
+    bool cornerWired = Cob(slProbe) == Want(true) && Cob(slAnchor) == Want(false) && Cob(slAnchorUp) == Want(true);
+    Console.WriteLine((cornerWired ? "OK   " : "FAIL ") +
+                      $"圆角真的接到挂点上: Track={Cob(slProbe)} · Anchor衰减={Cob(slAnchor)} · " +
+                      $"Anchor增益={Cob(slAnchorUp)} (期望 2,0,0,2 / 0,2,2,0 / 2,0,0,2) = {cornerWired}");
 
     // ⑧ 页面声明: 色带轨道的滑块必须 None (否则填充盖掉渐变换); 乘数型滑块必须 Anchor+中性值
     var homeProbe = home;

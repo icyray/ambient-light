@@ -95,6 +95,33 @@ public sealed class HalfNegativeThicknessConverter : IValueConverter
         return double.IsNaN(w) ? default(Thickness) : new Thickness(-w / 2.0, 0, 0, 0);
     }
 
-    public object ConvertBack(object value, Type targetTypes, object parameter, CultureInfo culture)
+    public object ConvertBack(object value, Type types, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>给进度填充算圆角: **挨着拇指的那一端方角, 另一端圆角**。
+/// 为什么必须这么做: 填充右端天生停在拇指左沿, 而拇指是画在它上面的圆。填充若两端都圆
+/// (`Rectangle` 只能这样), 那个半圆端在**禁用态**会露出来 (禁用的填充比拇指暗, 不再糊成一片)
+/// → 看着像进度条右端缺了个口 ✗ (用户第四轮验收反馈; 可用态因为填充与拇指同色才一直没被发现)。
+/// 圆角半径 2 与轨道底那条 Border 的 `CornerRadius=2` 对齐 —— 所以**自由端**圆角 = 与轨道同款 ✓。
+/// 判据: 拇指永远在 `Value` 处 → `Value ≥ anchor` 时右端挨着拇指 (左圆右方), 反之左方右圆。
+/// (Track 模式 anchor 取 `Minimum` → 恒走"左圆右方"这一支 ✓)</summary>
+public sealed class SliderFillCornerConverter : IMultiValueConverter
+{
+    private static readonly CornerRadius LeftRound = new(2, 0, 0, 2);   // 左圆右方 (右端挨着拇指)
+    private static readonly CornerRadius RightRound = new(0, 2, 2, 0);  // 左方右圆 (左端挨着拇指)
+
+    /// <summary>values = [Value, Anchor, Minimum]</summary>
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length < 3) return LeftRound;
+        double value = SliderAnchorConverter.ToDouble(values[0]);
+        double anchor = SliderAnchorConverter.ToDouble(values[1]);
+        double min = SliderAnchorConverter.ToDouble(values[2]);
+        if (double.IsNaN(anchor)) anchor = min;          // 没给中性值 → 从最小值起 (Track 模式)
+        return value >= anchor ? LeftRound : RightRound;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }

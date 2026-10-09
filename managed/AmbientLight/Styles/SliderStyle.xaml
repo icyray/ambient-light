@@ -32,6 +32,7 @@
 
     <local:SliderAnchorConverter x:Key="SliderAnchorConverter" />
     <local:HalfNegativeThicknessConverter x:Key="HalfNegativeThicknessConverter" />
+    <local:SliderFillCornerConverter x:Key="SliderFillCornerConverter" />
 
     <ControlTemplate x:Key="AppHorizontalSlider" TargetType="{x:Type Slider}">
         <Grid>
@@ -61,8 +62,22 @@
                     <Binding Path="ActualWidth" ElementName="Thumb"
                              Converter="{StaticResource HalfNegativeThicknessConverter}" />
                 </Canvas.Margin>
-                <Rectangle x:Name="PART_SelectionRange" Height="4" RadiusX="2" RadiusY="2"
-                           Fill="{DynamicResource SliderThumbBackground}" />
+                <!-- ② ⚠️ 用 `Border` 而不是 `Rectangle`: 圆角要**只给自由端** (见 §5.2) ——
+                     `Rectangle` 只能四角同一个半径; 挨着拇指的那一端必须是**方角**, 否则禁用态下
+                     (填充比拇指暗, 圆角就露出来了) 会看到进度条右端缺了个口 ✗。
+                     元素类型随便: WPF 只对挂点做 `Width = ...` 与 `Canvas.SetLeft(...)`
+                     (源码 Slider.cs: `[TemplatePart(nameof(PART_SelectionRange), typeof(FrameworkElement))]`,
+                     `UpdateSelectionRangeElementPositionAndSize()` 只设这两样, 从不碰 Visibility) ✓ -->
+                <Border x:Name="PART_SelectionRange" Height="4"
+                        Background="{DynamicResource SliderThumbBackground}">
+                    <Border.CornerRadius>
+                        <MultiBinding Converter="{StaticResource SliderFillCornerConverter}">
+                            <Binding Path="Value" RelativeSource="{RelativeSource TemplatedParent}" />
+                            <Binding Path="(local:SliderSkin.Anchor)" RelativeSource="{RelativeSource TemplatedParent}" />
+                            <Binding Path="Minimum" RelativeSource="{RelativeSource TemplatedParent}" />
+                        </MultiBinding>
+                    </Border.CornerRadius>
+                </Border>
             </Canvas>
 
             <Track x:Name="PART_Track" Grid.Row="1">
@@ -129,7 +144,7 @@
                         Value="{DynamicResource ControlFillColorDisabledBrush}" />
                 <Setter TargetName="Thumb" Property="Foreground"
                         Value="{DynamicResource TextFillColorDisabledBrush}" />
-                <Setter TargetName="PART_SelectionRange" Property="Fill"
+                <Setter TargetName="PART_SelectionRange" Property="Background"
                         Value="{DynamicResource TextFillColorDisabledBrush}" />
             </Trigger>
         </ControlTemplate.Triggers>
