@@ -46,10 +46,10 @@ public sealed class DeviceSettings
     // 兼容: v1.6 早期本地配置里是两个正交开关 (未发布过) —— 只在 Load 时读一次做迁移, 不写回核心
     public int ChaseFlashGuard { get; set; } = 0;
     public int ChaseTemporalSmooth { get; set; } = 0;
-    public int CaptureRange { get; set; } = 15;
+    public int CaptureRange { get; set; } = 20;
     public int DepthOverride { get; set; } = 0;
     public int Taps { get; set; } = 8;
-    public int Smoothing { get; set; } = 0;
+    public int Smoothing { get; set; } = 5;
     public int FpsCap { get; set; } = 0;
     public bool BlackBars { get; set; } = true;
     public int BlackBarLevel { get; set; } = 3;
