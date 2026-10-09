@@ -1438,7 +1438,8 @@ static void Run()
 
     // ② 柔化平滑**档位** (0=关 / 1=抑制闪光 / 2=抑制闪光+时域柔和) 的配置往返
     bool roundTrip = true;
-    foreach (int m in new[] { 0, 1, 2 })
+    // ⚠️ 档位字段的语义是"**符号 = 开关, 绝对值 = 档位**" → 往返必须覆盖负值 (关着记住档) ✓
+    foreach (int m in new[] { 0, 1, 2, -1, -2 })
     {
         var d2 = new AmbientLight.Services.DeviceSettings { ChaseSmoothMode = m };
         var c2 = d2.ToCoreConfig();
@@ -1446,7 +1447,8 @@ static void Run()
         b2.FromCoreConfig(c2);
         roundTrip &= c2.chaseSmoothMode == m && b2.ChaseSmoothMode == m;
     }
-    Console.WriteLine((roundTrip ? "OK   " : "FAIL ") + $"柔化平滑档位往返 0/1/2 = {roundTrip}");
+    Console.WriteLine((roundTrip ? "OK   " : "FAIL ") +
+                      $"柔化平滑档位往返 0/±1/±2 (负数 = 关着但记住档) = {roundTrip}");
     // 默认必须是"关" (用户口径: 默认保持原来的高刷跟屏感)
     bool defOff = new AmbientLight.Services.DeviceSettings().ChaseSmoothMode == 0
                   && AmbientLight.Interop.ACConfig.CreateDefault().chaseSmoothMode == 0;

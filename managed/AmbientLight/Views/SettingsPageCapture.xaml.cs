@@ -38,11 +38,13 @@ public partial class SettingsPageCapture : Page
         FpsCapCombo.SelectedIndex = fps < 0 ? 0 : fps;
         BlackBarsToggle.IsChecked = dev.BlackBars;
         BlackBarLevelSlider.Value = Math.Clamp(dev.BlackBarLevel, 0, 20);
-        int chaseMode = Math.Clamp(dev.ChaseSmoothMode, 0, 2);
-        ChaseSmoothToggle.IsChecked = chaseMode != 0;
-        ChaseModeGuardRadio.IsChecked = chaseMode == 1;
-        ChaseModeBothRadio.IsChecked = chaseMode == 2;
-        ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = chaseMode != 0;
+        // 档位字段: **符号 = 开关, 绝对值 = 档位** → 关着也记得上次选的档 (用户口径)
+        int chaseMag = Math.Clamp(Math.Abs(dev.ChaseSmoothMode), 0, 2);
+        bool chaseOn = dev.ChaseSmoothMode > 0;
+        ChaseSmoothToggle.IsChecked = chaseOn;
+        ChaseModeGuardRadio.IsChecked = chaseMag <= 1;      // 0 (从未启用) 也默认停在"抑制闪光"
+        ChaseModeBothRadio.IsChecked = chaseMag == 2;
+        ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = chaseOn;
         RefreshMonitors(select: dev.MonitorIndex);
     }
 
@@ -63,13 +65,15 @@ public partial class SettingsPageCapture : Page
     private void ApplyChaseMode()
     {
         bool on = ChaseSmoothToggle.IsChecked == true;
-        // 打开总开关时**必须有一个默认档位** —— 否则会出现"两个单选都没选中, 但配置已经落在 1"的
-        // 状态: 行为生效了、界面上却看不出选了哪个 (用户实测反馈) → 默认 = 抑制闪光 ✓
-        if (on && ChaseModeGuardRadio.IsChecked != true && ChaseModeBothRadio.IsChecked != true)
+        // 首次打开 (两个单选都未选) 时默认落到"抑制闪光" —— 否则会出现"界面看不出选了哪个、
+        // 但配置已经生效"的状态 (用户实测反馈) ✓
+        if (ChaseModeGuardRadio.IsChecked != true && ChaseModeBothRadio.IsChecked != true)
             ChaseModeGuardRadio.IsChecked = true;
         ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = on;   // 关着总开关时不可选
-        ConfigStore.Device.ChaseSmoothMode =
-            !on ? 0 : (ChaseModeBothRadio.IsChecked == true ? 2 : 1);
+        int mag = ChaseModeBothRadio.IsChecked == true ? 2 : 1;              // 档位 (绝对值)
+        // **符号 = 开关, 绝对值 = 档位**: 关掉时写负值 → "关掉去玩游戏、回来再看电影"时,
+        // 打开还是他上次选的档, 不会被重置成默认 (用户 2026-10-09 提议) ✓
+        ConfigStore.Device.ChaseSmoothMode = on ? mag : -mag;
         App.Instance.ApplyConfigDebounced();
     }
 

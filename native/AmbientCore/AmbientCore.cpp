@@ -877,7 +877,8 @@ void CoreLoopInner(Sess* g)
                 nc.ledRotate != applied.ledRotate;   // 灯序偏移也走取色区重建 (校准窗实时生效)
             if (capValid && layoutChanged) cap.UpdateLayout(MakeCaptureParams(nc));
             // 灯数/边数变了 → 平滑缓冲长度不再对应; 两个开关翻转也要重新吸附
-            if (layoutChanged || nc.chaseSmoothMode != applied.chaseSmoothMode)
+            if (layoutChanged || nc.chaseSmoothMode != applied.chaseSmoothMode ||
+                std::abs(nc.chaseSmoothMode) != std::abs(applied.chaseSmoothMode))
                 InvalidateChaseSmooth();
             // cols 必须与新灯数同步, 否则 Step 的 memcpy 越界写堆 (曾致 CLR 堆损坏)
             cols.resize((size_t)std::min(nc.ledCount, serial::kMaxLedCount) + 4);
@@ -1155,8 +1156,11 @@ void CoreLoopInner(Sess* g)
                 // ---- S4: 追光时域平滑 (两个每设备开关; 都只作用于"写出去的字节", 不动颜色链) ----
                 size_t chN = (size_t)EffLeds(applied) * 3;
                 double chNow = Millis();
-                const bool chaseGuard = applied.chaseSmoothMode >= 1;    // 1 = 抑制闪光
-                const bool chaseSmooth = applied.chaseSmoothMode >= 2;   // 2 = 再加时域柔和
+                // 档位字段语义 = "符号是开关, 绝对值是档位" → **关闭时完全不介入** (绝对值只是记忆)
+                const int  chaseMag = std::abs(applied.chaseSmoothMode);
+                const bool chaseOn = applied.chaseSmoothMode > 0;
+                const bool chaseGuard = chaseOn && chaseMag >= 1;        // 1 = 抑制闪光
+                const bool chaseSmooth = chaseOn && chaseMag >= 2;       // 2 = 再加时域柔和
                 if (chaseSmooth && chN > 0) {
                     // ① 时域柔和: 逐灯逐通道一阶低通 (τ = kChaseSmoothTauMs)。治"局部颜色跳变",
                     //    代价是轻微拖影 + 一点延迟 → 游戏用户建议关 (UI 文案也这么写)。
