@@ -25,7 +25,7 @@
                      5.3 加语言切换 = 换这本字典 + 广播重取 (与主题同款) -->
                 <ResourceDictionary Source="Localization/Strings.zh.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            <!-- M5.2 文字色层级的用法约定 (别再自造"提示文字"刷子, 轮 34 补已收回):
+            <!-- M5.2 文字色层级的用法约定 (别再自造"提示文字"刷子):
                    · 正文/标题 → 继承 `CardForeground` (= `TextFillColorPrimary`)
                    · 次要/副标题/说明文字 → `TextFillColorSecondaryBrush`
                    · 更弱的辅助文字 → `TextFillColorTertiaryBrush`（浅色主题下它只有 45% 黑,
@@ -58,7 +58,7 @@
                 </Grid>
             </DataTemplate>
 
-            <!-- 只留图标的按钮模板 (轮 18 ②, 轮 29 提到 App 级共用): 去掉底/边框/悬停填充/按下填充,
+            <!-- 只留图标的按钮模板 (App 级共用): 去掉底/边框/悬停填充/按下填充,
                  只保留一个悬停淡入, 视觉上就是一个可点的图标。保留 ui:Button 宿主是为了沿用
                  Click / 键盘 / ToolTip。⚠️ 不要用 Template="{x:Null}" —— 模板为 null 什么都不渲染。 -->
             <ControlTemplate x:Key="IconOnlyButtonTemplate" TargetType="ui:Button">

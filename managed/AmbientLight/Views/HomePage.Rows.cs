@@ -16,7 +16,7 @@ namespace AmbientLight.Views;
 
 public partial class HomePage : Page
 {
-    // ---- §5 运行指标 (轮 27 用户定稿: 双层 —— 标签在上 / 数值在下) ----
+    // ---- §5 运行指标 (双层: 标签在上 / 数值在下) ----
     /// <summary>亮度参数对这个模式有意义吗 —— **纯函数** (探针打真值表)。
     /// MCU 特效的帧由**固件**渲染, 主机只发命令 → 亮度对我们没有落点 → UI 要禁用亮度滑块
     /// (用户 2026-10-08 提的: 免得用户以为那能调)。追光/拾音/纯色都可用
@@ -69,7 +69,7 @@ public partial class HomePage : Page
                 _ => "—",
             };
         }
-        // 不做健康着色 (轮 27 用户定稿): 处理/串口耗时没有公认的绝对标准, 涂绿涂红只会误导
+        // 不做健康着色: 处理/串口耗时没有公认的绝对标准, 涂绿涂红只会误导
     }
 
     /// <summary>指标条的单格数据: 标签 + 值。值走 INPC → XAML 模板里的 {Binding Value} 自动刷新
@@ -184,7 +184,7 @@ public partial class HomePage : Page
 
     private void OnDevicesChanged() => _ = RefreshDevicesAsync();
 
-    /// <summary>会话状态变化 → 重刷设备行 (轮 33)。托盘菜单开关会让会话整体消失/重建;
+    /// <summary>会话状态变化 → 重刷设备行。托盘菜单开关会让会话整体消失/重建;
     /// 灯带物理断开会让会话转 DEV_LOST —— 两种都不经过主页的按钮, 之前这一行不会更新,
     /// 用户看到的还是"运行中"。</summary>
     private void OnCoreStateChanged(int oldState, int newState) => _ = RefreshDevicesAsync();
@@ -278,12 +278,12 @@ public partial class HomePage : Page
         }
     }
 
-    /// <summary>**设备行 ↔ 会话的配对** —— 纯函数, 探针打真值表 (轮 34 补 7)。
+    /// <summary>**设备行 ↔ 会话的配对** —— 纯函数, 探针打真值表。
     /// 顺序 (先到先得):
     ///   ① **设备 key 相同** —— 最可靠。会话连不上端口时 `ACStatus.comPort` 是**空的**
     ///      (端口只在握手成功时才回填), 光按端口配就认不出"这一行正是那个会话" →
     ///      行会一直显示乐观的「就绪」, 而 banner (按 key 找 slot) 早已显示"正在尝试重连"。
-    ///      用户实测: 手动指定一个"在位但不是灯带"的端口后开启 → 行显示「就绪」就是这个原因。
+    ///      场景: 手动指定一个"在位但不是灯带"的端口后开启 → 行显示「就绪」就是这个原因。
     ///   ② 端口相同 (会话已连上, 或枚举探测没拿到类型时)。
     ///   ③ 兜底: 端口看起来被占用 + **恰有一个**非停止会话 → 按归属处理
     ///      (刚 Start 的会话端口/类型都还没回填)。多个 → 无法归属, 返回 -1。
@@ -367,12 +367,12 @@ public partial class HomePage : Page
 
     /// <summary>设备行的语义胶囊 —— **纯函数**, 探针打真值表。
     /// 关键: 有会话时**必须看会话状态**, 不能只看"slot 存在"。
-    /// 轮 33 用户反馈的两个现象都由这条规则解释:
+    /// 两个踩过的现象都由这条规则解释:
     ///   · 灯带被拔掉 → 会话转 DEV_LOST, 但 slot 还在 → 旧代码一律显示"运行中";
     ///   · 托盘菜单关灯 → 会话整体消失, 状态转 STOPPED, 但当时没有刷新信号, 行还是旧的。
     /// 判据里 `hasSlot` = 该端口归属本核心的某个会话。
     ///
-    /// 端口相关的两条 (轮 34 补 6, 用户反馈"手动指定端口后胶囊还显示就绪"):
+    /// 端口相关的两条 ("手动指定端口后胶囊还显示就绪"就是这么来的):
     ///   · `portMissing` = 配置里手动指定的那个口**本机不存在** → 「端口不在位」
     ///     (不用点开启就知道连不上; 数据源是注册表 SERIALCOMM, 一次读很便宜);
     ///   · `manualPort` = 配置里手动指定了端口 → DEV_LOST 时文案改成「指定端口无应答」
@@ -405,7 +405,7 @@ public partial class HomePage : Page
         return (Loc.T("Dev.Pill.Ready"), PillTone.Gray);
     }
 
-    /// <summary>设备行第二行的**端口**文案 —— 纯函数, 探针打真值表 (轮 34 补 5)。
+    /// <summary>设备行第二行的**端口**文案 —— 纯函数, 探针打真值表。
     /// 要显示的是"**实际会用到**的那个口":
     ///   ① **配置里手动指定了** → 配置端口 + 「手动指定」标记 (优先级最高 —— 它是"必须用它";
     ///      会话端口只是"此刻恰好在用它": 改了端口后 native 会关掉当前口重连,
@@ -413,7 +413,7 @@ public partial class HomePage : Page
     ///   ② 没指定但**有会话** → 会话端口 (核心正在用的事实);
     ///   ③ 都没有 → 枚举端口 (自动探测: 两台同型号时"谁先被占谁先分", 它只代表"可能连的那个")。
     /// 为什么必须有 ②③ 的区分: 以前无条件显示枚举端口, 于是"高级页给这台指定了 COM4"时,
-    /// 行里写着 COM5、点开启却去连 COM4 —— **界面在说谎** (用户实测反馈)。
+    /// 行里写着 COM5、点开启却去连 COM4 —— **界面在说谎**。
     /// 注: 端口是**每设备**配置 (高级页改的是当前选中那台), 不是全局设置。
     ///
     /// `Manual` = 配置里有端口 (文字加「手动指定」标记);
@@ -455,7 +455,7 @@ public partial class HomePage : Page
 
     /// <summary>设备行的数据 (XAML 模板 DeviceRowTemplate 消费): 全是预计算好的展示值。
     /// **public 是给探针用的**: 第二行的端口文案要断"接线"(配置里的端口有没有真的传到行里) ——
-    /// 纯函数真值表挡不住调用点写错 (轮 34 补 5 就是调用点多套了一个 managedHere 条件)。</summary>
+    /// 纯函数真值表挡不住调用点写错 (曾在调用点多套了一个 managedHere 条件)。</summary>
     public sealed class DeviceRowItem
     {
         public string Key { get; init; } = "";
@@ -488,7 +488,7 @@ public partial class HomePage : Page
         bool managedHere = sess != null;
         // 类型/编号: **两边都可能还没回填** —— 会话没握手成功时它的 devType 是 -1,
         // 而"我们的会话正占着那个口"时枚举也探测不到 (probe 拿不到握手)。
-        // 所以谁有值用谁, 而不是"有会话就一律信会话" (轮 34 补 7: 改成按 key 配对后,
+        // 所以谁有值用谁, 而不是"有会话就一律信会话" (按 key 配对后,
         // 会出现"会话 devType=-1 但枚举认得出类型"的组合, 再照抄会话就会退化成"未知 · 读取中")。
         int devType = sess?.devType >= 0 ? sess!.Value.devType : d.devType;
         int devId = sess?.devId >= 0 ? sess!.Value.devId : d.devId;
@@ -498,7 +498,7 @@ public partial class HomePage : Page
         bool connecting = managedHere && devType < 0;
         // 端口被占着但会话还没登记 → 极可能是"我们自己正在起"(应用启动时的那次总开启):
         // 会话线程是异步起的, 握手要先独占端口 → 这中间 `_slots` 里没有条目。
-        // 不区分就会在首次打开时显示"未知 · id -1 + 端口被占用"(轮 27 用户实测现象)。
+        // 不区分就会在首次打开时显示"未知 · id -1 + 端口被占用"(实测现象)。
         bool likelyOurs = !managedHere && d.inUse == 1
                           && (App.Instance.CoreRunning || App.Instance.Starting);
         string key = managedHere
@@ -516,7 +516,7 @@ public partial class HomePage : Page
         bool portMissing = manualPort && !SerialPorts.All()
             .Any(p => string.Equals(p, cfgPort, StringComparison.OrdinalIgnoreCase));
 
-        // 语义胶囊 (轮 33 起口径 = 会话状态; 轮 34 补 6 起叠加两条端口规则)
+        // 语义胶囊 (口径 = 会话状态, 叠加两条端口规则)
         var (pillLabel, pillTone) = DevicePill(managedHere, sessState, d.inUse == 1, devType,
                                                likelyOurs, manualPort, portMissing);
         var (pillBg, pillFg) = PillBrushes(pillTone);
@@ -530,7 +530,7 @@ public partial class HomePage : Page
         string power = PowerText(sessState, sess?.ledStatusByte ?? 0);
         // 只用查得到的配置, 不 GetOrCreate —— 光是"看一眼设备列表"不该给没见过的设备建配置文件
         string leds = managedHere && hasCfg ? Loc.F("Dev.LedCount", ds!.LedCount) : "";
-        // 端口显示**实际会用的那个** (轮 34 补 5): 以前无条件显示枚举端口, 于是在
+        // 端口显示**实际会用的那个**: 无条件显示枚举端口的话, 在
         // "高级页给这台手动指定了别的口"时, 行里写着 COM5、点开启却去连 COM4 —— 界面在说谎。
         // ⚠️ 查配置**不能**加 managedHere 条件 (那曾是个真 bug): 手动指定端口的场合里,
         // "还没开会话"恰恰是最常见的状态 —— 加上它就等于"无会话时永远显示枚举端口"。

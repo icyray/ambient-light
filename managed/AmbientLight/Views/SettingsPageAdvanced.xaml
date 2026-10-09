@@ -72,7 +72,7 @@
                 <ComboBoxItem Content="{DynamicResource Adv.WaitDisp.Hold}" />
             </ComboBox>
         </controls:SettingRow>
-        <!-- 全屏校准向导已于轮 28 移到「采集」页 (紧挨灯序偏移 —— 那才是它的使用场景) -->
+        <!-- 全屏校准向导已移到「采集」页 (紧挨灯序偏移 —— 那才是它的使用场景) -->
 
         <!-- 连接 (§8.3): 手动指定端口 / 波特率 —— 换芯片、USB 转串口桥接、两根同型灯带,
              或"端口被别的程序占着"时用。默认全是自动, 不动就不会有副作用。 -->
@@ -131,9 +131,9 @@
         <!-- 关于 -->
         <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.About}" />
 
-        <!-- 版本更新 (轮 21): UI 先就位, 检查逻辑待软件发布到 GitHub Release 后接入
+        <!-- 版本更新: UI 先就位, 检查逻辑待软件发布到 GitHub Release 后接入
              (拉 /repos/<owner>/<repo>/releases/latest 的 tag_name 与当前版本比对)。
-             轮 22: 按用户要求去掉说明文案, 版本号看页脚那一行。 -->
+             说明文案已去掉, 版本号看页脚那一行。 -->
         <controls:SettingRow x:Name="UpdateRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
                              Title="{DynamicResource Adv.Update.Title}">
             <ui:Button Content="{DynamicResource Adv.Update.Check}" Appearance="Secondary" VerticalAlignment="Center"
@@ -141,7 +141,7 @@
         </controls:SettingRow>
 
         <!-- 配置目录 (可折叠: 折叠内是"恢复默认配置"这种破坏性操作, 收起来减少误触)。
-             轮 22: 去掉说明文案 (原说明里的路径现在只在「打开」后可见)。 -->
+             说明文案已去掉 (原说明里的路径现在只在「打开」后可见)。 -->
         <ui:CardExpander Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderOpen24}" ContentPadding="0">
             <ui:CardExpander.Header>
                 <Grid>

@@ -1,4 +1,4 @@
-// AppDialogs.cs — 统一对话框 (轮 34 补)
+// AppDialogs.cs — 统一对话框
 //
 // 为什么不要用 `MessageBox`: 它是系统样式的 Win32 弹窗, 跟 Fluent 界面两套观感
 // (而且不随主题变)。应用里的"提示 / 警告 / 确认"一律走这里 → 主窗口的 ContentDialogHost。

@@ -18,7 +18,7 @@ public partial class HomePage : Page
 {
     // ---- §4 banner 底边辉光 ------------------------------------------
     // 数据零新增, 渲染 = 1 个 Border + 1 个 BlurEffect (GPU); 只重绘 banner 底边约 600×50 的区域。
-    // 净开销比轮 26 更低: 不再每帧重建画刷, 也不再 4Hz 重绘 60 个 Ellipse (几何环已收进折叠)。
+    // 净开销极低: 不再每帧重建画刷, 也不再 4Hz 重绘 60 个 Ellipse (几何环已收进折叠)。
     private void StartGlowTimer()
     {
         if (_glowTimer == null)
@@ -62,7 +62,7 @@ public partial class HomePage : Page
         EnsureGlowBrush();
         // 颜色/形状只跟模式有关 (追光蓝 / 拾音绿 / 纯色紫 / 固件白灰)。
         // 换模式时**只动颜色**并用与 banner 渐变同一个时长 (BannerFadeMs) 过渡 ——
-        // 上一版是直接换画刷 (瞬变), 所以看起来比渐变"快了一点" (轮 28 用户反馈)。
+        // 直接换画刷会瞬变, 看起来比渐变"快一拍", 所以这里做颜色过渡。
         // 比较键里含主题 → 换主题时它也变了, 于是辉光/识别线的颜色会自动跟着重解
         string key = ColorKey(mode, ThemeService.IsDark);
         bool modeChanged = key != _glowBrushKey;
@@ -83,7 +83,7 @@ public partial class HomePage : Page
         _glowApplied = true;
     }
 
-    /// <summary>固件特效的辉光: 中性微光 + **呼吸亮暗** (轮 28 用户要求)。周期 2.6s 的余弦,
+    /// <summary>固件特效的辉光: 中性微光 + **呼吸亮暗**。周期 2.6s 的余弦,
     /// 起落平滑; 与亮度滑块无关 —— 核心此时只发命令, "亮度"语义不适用。</summary>
     private double BreathLevel()
     {
@@ -93,7 +93,7 @@ public partial class HomePage : Page
     }
 
     /// <summary>追光的辉光数值 = 灯带"亮着的灯占比"/亮度水平, 归一到 [0,1]。
-    /// **两种算法二选一** (轮 28 用户要求把另一种留在代码里, 方便在 VS 里注释切换对比最终方案):
+    /// **两种算法二选一** (备选算法留在代码里, 方便在 VS 里注释切换对比):
     ///   A (现行) 相对亮度加权 `0.2126R + 0.7152G + 0.0722B` —— 符合人眼感受,
     ///            纯蓝画面不会被高估 (蓝色的 max 通道很高, 但看起来并不亮);
     ///   B (备选) HSV 的 V = `max(R,G,B)` —— 灯珠"非全亮即全灭"时它正好等于点亮比例, 但对蓝偏高。
@@ -115,7 +115,7 @@ public partial class HomePage : Page
         return sum / (n * 255.0);
     }
 
-    /// <summary>辉光基色 = 与 banner 光带同一套色系 (轮 27 用户定稿: 不再逐灯上色)。
+    /// <summary>辉光基色 = 与 banner 光带同一套色系 (不逐灯上色)。
     /// **分主题** (D1-B 起): 浅色主题的辉光是"叠在浅底上的一层着色", 需要跟深色主题用不同的基色 ——
     /// 初始值照抄深色版 (浅色观感 = 已验收的 B 方案), 想调就改浅色那一列。
     /// 与 `StreakBrushKey` 一样, 这里是**唯一**的解析处 (调用点不许再分主题写 if)。</summary>
@@ -206,9 +206,9 @@ public partial class HomePage : Page
         GlowBand.BeginAnimation(UIElement.OpacityProperty, anim);
     }
 
-    // ---- banner 视觉 (轮 16): 点亮 = 模式色渐变 + 白字, 未点亮 = 普通卡片灰 + 主题字色;
+    // ---- banner 视觉: 点亮 = 模式色渐变 + 白字, 未点亮 = 普通卡片灰 + 主题字色;
     //      换模式用双光带交叉淡化, 点亮/熄灭用整层淡入淡出。
-    //      轮 19 (用户定稿口径): **渐变 = "确实驱动上了灯带"** —— 只有 Running/WaitDisp 点亮;
+    //      口径: **渐变 = "确实驱动上了灯带"** —— 只有 Running/WaitDisp 点亮;
     //      Starting (还在探测/握手) 与 DEV_LOST/ERROR 都不点亮, 胶囊与按钮另行表达"会话还在" ----
     private const int BannerFadeMs = 260;
 
@@ -216,7 +216,7 @@ public partial class HomePage : Page
     /// - `Starting` 不算: 还在探测/握手, 灯带没被驱动。若算上, 握手失败时会"淡入又淡出"闪一下
     ///   (LightsLayer 淡变 260ms 比握手还长); 不算则任何路径都不会闪。
     /// - `DevLost` / `Error` 不算: 灯带拔出/端口被占/不可恢复错误, 灯带是灭的或不受控的,
-    ///   亮着渐变会让人误以为已经驱动成功 (轮 19 用户反馈)。</summary>
+    ///   亮着渐变会让人误以为已经驱动成功。</summary>
     private static bool IsLit(int state) => state is AmbientCore.StateRunning
                                                        or AmbientCore.StateWaitDisp;
 
@@ -275,7 +275,7 @@ public partial class HomePage : Page
     }
 
     /// <summary>胶囊的文案与配色。未点亮时还分三种情况, 都要"看得出问题但不算开启":
-    /// ① 开启失败 (无会话) → 警示色 + 失败原因 (轮 18 ③);
+    /// ① 开启失败 (无会话) → 警示色 + 失败原因;
     /// ② 有会话但没在驱动灯带 (DEV_LOST=正在重连 / ERROR) → 用该状态自己的颜色;
     /// ③ 真的停了 → 主题次色 + "已停止"。
     /// **D1-B 实验分支口径**: 点亮态 banner 也随主题 (浅色 = 浅底深字) → 胶囊色板一律按当前主题取,
@@ -353,7 +353,7 @@ public partial class HomePage : Page
     }
 
     /// <summary>状态 → 胶囊文案。DEV_LOST 用"正在尝试重连"而不是"设备未连接":
-    /// 核心此时每 2s 重试且会话还在, 说"关闭即打断重连"才讲得通 (轮 19)</summary>
+    /// 核心此时每 2s 重试且会话还在, 说"关闭即打断重连"才讲得通</summary>
     private static string StateLabel(int state) => Loc.T(state switch
     {
         AmbientCore.StateRunning => "Banner.State.Running",

@@ -178,7 +178,7 @@ public partial class HomePage : Page
         _customColorTimer.Start();
     }
 
-    /// <summary>Header 的色块 (生效色的对比行已按轮 29 用户要求去掉)。</summary>
+    /// <summary>Header 的色块 (生效色的对比行已去掉)。</summary>
     private void RefreshSolidSwatches()
     {
         var (r, g, b) = ParseHex(ConfigStore.Device.SolidColor, (255, 225, 214));

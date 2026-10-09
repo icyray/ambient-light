@@ -122,7 +122,7 @@
     <sys:String x:Key="Home.Picker.ClearHint">{0} (右键清除)</sys:String>
     <sys:String x:Key="Home.Picker.EmptySlot">自定义色槽 · 调出颜色后自动记住</sys:String>
 
-    <!-- 主页 XAML 静态文案 (M5.3 批次 8) -->
+    <!-- 主页 XAML 静态文案 -->
     <sys:String x:Key="Home.Monitor.Capturing">正在采集</sys:String>
     <sys:String x:Key="Home.Hero.Placeholder">追光</sys:String>
     <sys:String x:Key="Home.Diag.Title">核心诊断</sys:String>

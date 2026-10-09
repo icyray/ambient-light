@@ -67,7 +67,7 @@ public partial class SettingsPageCapture : Page
     {
         bool on = ChaseSmoothToggle.IsChecked == true;
         // 首次打开 (两个单选都未选) 时默认落到"抑制闪光" —— 否则会出现"界面看不出选了哪个、
-        // 但配置已经生效"的状态 (用户实测反馈) ✓
+        // 但配置已经生效"的状态 ✓
         if (ChaseModeGuardRadio.IsChecked != true && ChaseModeBothRadio.IsChecked != true)
             ChaseModeGuardRadio.IsChecked = true;
         ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = on;   // 关着总开关时不可选
@@ -83,7 +83,7 @@ public partial class SettingsPageCapture : Page
         try
         {
             var mons = AmbientCore.GetMonitors();
-            // 文案 (轮 28 用户定稿, 轮 29 微调分隔符): `序号. 分辨率 - 适配器 - 主屏`
+            // 文案: `序号. 分辨率 - 适配器 - 主屏`
             // 不再出现 `[0]` 与 `\\.\DISPLAY5` 这种不友好的名字; 序号从 1 起, 与主页编号徽标一致。
             MonitorCombo.ItemsSource = mons
                 .Select((m, i) => new MonitorItem(i,
@@ -109,7 +109,7 @@ public partial class SettingsPageCapture : Page
         _loading = false;
     }
 
-    /// <summary>全屏校准向导 (轮 28 从「高级」页移来, 就在灯序偏移下面 —— 这是它的使用场景)。</summary>
+    /// <summary>全屏校准向导 (从「高级」页移来, 就在灯序偏移下面 —— 这是它的使用场景)。</summary>
     private void OnCalibrate(object sender, RoutedEventArgs e) => CalibrateWindow.TryOpen();
 
     private void OnMonitorChanged(object sender, SelectionChangedEventArgs e)

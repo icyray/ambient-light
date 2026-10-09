@@ -33,7 +33,7 @@
                              Title="{DynamicResource Audio.Out.Title}" controls:AnimatedVisibility.Expanded="False"
                              Description="{DynamicResource Audio.Out.Desc}">
             <StackPanel Orientation="Horizontal">
-                <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页/采集页一致) -->
+                <!-- 只要图标, 不要按钮样式 (与主页/采集页一致) -->
                 <ui:Button x:Name="RefreshOutDevsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
                            ToolTip="{DynamicResource Common.Refresh}"
                            Margin="8,0,8,0" VerticalAlignment="Center" Click="OnRefreshOutDevs">
@@ -48,7 +48,7 @@
                              Title="{DynamicResource Audio.In.Title}" controls:AnimatedVisibility.Expanded="False"
                              Description="{DynamicResource Audio.In.Desc}">
             <StackPanel Orientation="Horizontal">
-                <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页/采集页一致) -->
+                <!-- 只要图标, 不要按钮样式 (与主页/采集页一致) -->
                 <ui:Button x:Name="RefreshMicDevsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
                            ToolTip="{DynamicResource Common.Refresh}"
                            Margin="8,0,8,0" VerticalAlignment="Center" Click="OnRefreshMicDevs">

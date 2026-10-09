@@ -72,7 +72,7 @@ internal static class SliderDiag
         Scan(hue, "拾色器-色相");
         Scan(sat, "拾色器-饱和度");
 
-        // 亮度行: 可用 / 禁用 (用户报「禁用态缺一截」)
+        // 亮度行: 可用 / 禁用 (「禁用态缺一截」)
         host.UpdateLayout();
         Console.WriteLine($"[3] 亮度行可用: Slider.IsEnabled={brightSlider.IsEnabled} 填充层={Describe(RangeHostOf(brightSlider))}");
         brightRow.IsEnabled = false;

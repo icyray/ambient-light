@@ -119,14 +119,14 @@ public partial class App : Application
 
     public string? KeyOf(int slot) => _slots.TryGetValue(slot, out var k) ? k : null;
 
-    // ---- 核心生命周期调用: 一律走后台**串行链** (轮 34 补 3) --------------------------
+    // ---- 核心生命周期调用: 一律走后台**串行链** ------------------------------
     // 为什么不能直接在 UI 线程上调:
     //   ① `AC_StopEx` = `SetEvent(evStop)` + **join(会话线程)** —— 而会话线程可能正卡在
     //      "打开/握手一个不是灯带的端口"上。实测 (native 侧那个诊断工具):
     //        COM4 (在位但不是灯带):  握手失败要 1122ms
     //        COM3 (在位但打不开):    光 CreateFile 就 5183ms
     //        COM5 (灯带):            146ms
-    //      于是"点关闭 → UI 无响应 2s"就是这么来的 (用户实测反馈)。
+    //      不串行化的话, 现象就是"点关闭 → UI 无响应 2s"。
     //   ② `AC_StartEx` 会先抢 native 的 `g_lifeMx` —— 上一次 Stop 还在 join 时在 UI 线程上
     //      发起开启, 照样会卡。
     // 串行链保证"调用顺序 = 执行顺序"(native 侧还有 g_lifeMx 兜第二层), 而 UI 立刻返回。
@@ -232,11 +232,10 @@ public partial class App : Application
     public (string Label, string Detail)? LastStartProblem { get; private set; }
 
     /// <summary>总开关: 枚举在位设备, 为 AutoStartCore 的设备各建会话; 选中设备可用则直接开。
-    /// 并发调用**复用同一次启动任务** —— 轮 16 用户报"快速连点开启/关闭会弹报错":
-    /// 连点会让 Stop 尚未释放端口时又发起 StartEx, 失败分支弹出模态 MessageBox (App.xaml.cs 启动失败提示)。
-    /// 去重后同一时刻只有一次枚举+建会话。
-    /// **轮 18: 不再对"设备被占用/未应答/不在位"占坑建兜底会话** —— 那会让 UI 出现一个假的开启态
-    /// (banner 亮起 + 胶囊"未连接" + 按钮却写着"开启", 再点反而变关闭)。现在改为把原因写进
+    /// 并发调用**复用同一次启动任务**: 否则连点会让 Stop 尚未释放端口时又发起 StartEx,
+    /// 失败分支弹出模态 MessageBox (App.xaml.cs 启动失败提示) —— 去重后同一时刻只有一次枚举+建会话。
+    /// **不对"设备被占用/未应答/不在位"占坑建兜底会话** —— 那会让 UI 出现一个假的开启态
+    /// (banner 亮起 + 胶囊"未连接" + 按钮却写着"开启", 再点反而变关闭)。改为把原因写进
     /// `LastStartProblem` 由 UI 呈现 (胶囊警示色 + InfoBar), 按钮保持"开启", 再点即重试。</summary>
     public Task StartAllAsync()
     {
@@ -262,7 +261,7 @@ public partial class App : Application
                 if (ConfigStore.GetOrCreate(key).AutoStartCore && await StartDeviceAsync(key))
                     any = true;
             }
-            // 用户明确点了"开启": 只要选中设备这次枚举到且可用就直接开 —— AutoStartCore 管的是
+            // 手动点了"开启" (不是自动启动): 只要选中设备这次枚举到且可用就直接开 —— AutoStartCore 管的是
             // "应用启动时自动连", 不该拦住手动开启 (否则会出现"点了没反应、也不说为什么")
             if (!any && usable.Any(d => $"{d.devType}_{d.devId}" == ConfigStore.SelectedKey))
                 any = await StartDeviceAsync(ConfigStore.SelectedKey);
@@ -314,7 +313,7 @@ public partial class App : Application
 
     /// <summary>托盘"开启氛围灯": 没开起来时把主窗带到前台 —— 那是唯一能看到失败原因的地方
     /// (banner 胶囊 + InfoBar 会说明是端口被占用 / 未应答 / 未发现灯带)。
-    /// 轮 18 之前这里会占坑建会话, 于是"点了没反应"和"灯自己亮了"都很突然; 现在改为如实报告。</summary>
+    /// 失败时不占坑建会话 (否则"点了没反应"和"灯自己亮了"都很突然), 如实报告。</summary>
     private async Task StartFromTrayAsync()
     {
         await StartAllAsync();
@@ -330,8 +329,8 @@ public partial class App : Application
         ConfigStore.SaveDevice();
     }
 
-    /// <summary>**只**把当前配置热更给会话, 不落盘。给"拖动中高频变化"的场景用
-    /// (轮 28): 原来拖动中每次热更都同步 `File.WriteAllText`, 25 次/秒压在 UI 线程上。
+    /// <summary>**只**把当前配置热更给会话, 不落盘。给"拖动中高频变化"的场景用 ——
+    /// 拖动中每次热更都同步 `File.WriteAllText` 是 25 次/秒压在 UI 线程上 (卡顿源)。
     /// 调用方负责在停手后补一次落盘。</summary>
     public void ApplyConfigHot()
     {
@@ -363,7 +362,7 @@ public partial class App : Application
     }
 
     // ---- 崩溃日志 (exe 旁 log/crash.log; 任何失败静默) ----------------------
-    // 目录与核心统一 (轮 22): 核心写的是 exe 旁 log/ambientcore.log (native/log.cpp:
+    // 目录与核心统一: 核心写的是 exe 旁 log/ambientcore.log (native/log.cpp:
     // GetModuleFileNameW + \log\), 托管侧原先却写进 config/ —— 配置目录只该放配置。
     // 程序目录不可写时 (例如装在 Program Files) 回退 %APPDATA%\AmbientLight\log。
     // 注: AC_SetTestPattern 原生接口保留 (probe 回归用), UI 入口已由全屏校准向导取代

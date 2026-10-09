@@ -14,7 +14,7 @@
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}" Title="{DynamicResource Cap.Monitor.Title}"
                              Description="{DynamicResource Cap.Monitor.Desc}">
             <StackPanel Orientation="Horizontal">
-                <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页刷新一致) -->
+                <!-- 只要图标, 不要按钮样式 (与主页刷新一致) -->
                 <ui:Button x:Name="RefreshMonitorsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
                            ToolTip="{DynamicResource Common.ReEnumerate}" Margin="8,0,8,0"
                            VerticalAlignment="Center" Click="OnRefreshMonitors">
@@ -54,7 +54,7 @@
                           SmallChange="1" MaxDecimalPlaces="0" Width="160"
                           VerticalAlignment="Center" ValueChanged="OnRotateChanged" />
         </controls:SettingRow>
-        <!-- 全屏校准向导 (轮 28 从「高级」页移来): 紧挨灯序偏移 —— 它就是用来"试出"偏移值的,
+        <!-- 全屏校准向导 (从「高级」页移来): 紧挨灯序偏移 —— 它就是用来"试出"偏移值的,
              放这里才和它的用法在一起。 -->
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Target24}" Title="{DynamicResource Cap.Calib.Title}"
                              Description="{DynamicResource Cap.Calib.Desc}">

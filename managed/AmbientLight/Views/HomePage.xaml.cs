@@ -1,15 +1,13 @@
 // HomePage.xaml.cs — 主页: banner(状态/开关/底边辉光) / 亮度 / 模式 / 拾色器 / 固件特效 /
 //                   布局预览 / 指标条 / 设备
-// 轮 27 (用户反馈第一轮修复): 辉光改"亮着的灯占比 + 中心到两边 + alpha 叠加"并自带 10Hz 刷新;
-//   预设改圆形并覆写悬停; 磁贴内容居中; 指标改双层(去 CPU/去着色); 设备行首次打开竞态;
-//   显示器行改 `编号 分辨率 适配器`.
-// 轮 26 (M5.1 主页构件重设计, 契约 = docs/M5.1_HOME_REDESIGN_PLAN.md):
+// 契约 = docs/M5.1_HOME_REDESIGN_PLAN.md (M5.1 主页构件重设计):
 //   §2 固件特效 = 图标磁贴网格 + 折叠头「当前 XX」胶囊;
 //   §3 纯色拾色器 = H + S 两根滑块 (V 就是上方「亮度」行, 不再另设第三根);
-//   §4 banner 底边辉光 = 数值驱动的模糊光带, 窗口不可见时不更新;
-//   §5 运行指标 = 指标集随模式换 (MetricKeysForMode 纯函数);
+//   §4 banner 底边辉光 = 数值驱动的模糊光带 (亮灯占比/音量/亮度), 窗口不可见时不更新;
+//   §5 运行指标 = 指标集随模式换 (MetricKeysForMode 纯函数), 双层 (去 CPU/去着色);
 //   §6 设备信息 = 结构化行 (类型图标 + 语义胶囊 + 第二行小字) / 「当前」用 3px 强调条;
 //   §7 几何环收进折叠「布局预览」, 中心只放静态几何参数。
+// 另: 显示器行文案 = `编号 分辨率 适配器`; 预设色块 = 自绘圆形 + 覆写悬停; 磁贴内容居中。
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -56,12 +54,12 @@ public partial class HomePage : Page
     private readonly SolidColorBrush _pillTextBrush = new();
     private readonly SolidColorBrush _dotBrush = new();
 
-    // ---- §4 底边辉光 (轮 27 重做) ----
+    // ---- §4 底边辉光 ----
     // 形式 = 一条"中心亮、向两边衰减"的模糊光带, 亮度由**一个数值**决定
     // (追光 = 亮着的灯占比 / 拾音 = 音量 / 纯色 = 亮度)。形状与颜色只跟模式有关 → 画刷是静态的,
     // 每次只改 Opacity。这样:
     //   ① 视觉上是 WPF 动画插值出来的, 不受轮询频率限制
-    //      (轮 26 用 ledRgb 逐段重建 64 段画刷 4 次/秒 —— 那正是用户报的卡顿来源);
+    //      (逐段重建 64 段画刷 4 次/秒曾是卡顿来源);
     //   ② 暗处 alpha=0 → 辉光是"叠加上去的", 不会把 banner 压成一条黑带。
     // 自带 10Hz 定时器: 每次只重算一个标量, 比让整个状态轮询提速便宜得多
     // (而且核心写 ledRgb / audioLevel 的频率本来就远高于 4Hz, 提出来的采样是"真"的)。
@@ -103,7 +101,7 @@ public partial class HomePage : Page
     {
         App.Instance.Poller.Polled += OnPolled;
         App.Instance.Poller.DevicesChanged += OnDevicesChanged;
-        // 轮 33: 会话状态变化也要刷设备行 —— 托盘菜单开关、灯带物理断开都不经过主页的按钮,
+        // 会话状态变化也要刷设备行 —— 托盘菜单开关、灯带物理断开都不经过主页的按钮,
         // 主页自己收不到信号。状态是**边沿触发**的 (只在真的变了时来一次), 不会造成刷新风暴。
         App.Instance.Poller.StateChanged += OnCoreStateChanged;
         // M5.2: 主题 / **强调色** 变化后, 页内几处 **code-behind 一次性赋值** 的主题刷
@@ -234,7 +232,7 @@ public partial class HomePage : Page
         _updatingMode = false;
         bool solid = cur == 11;
         // 纯色拾色器每次展示时回到**折叠**态 (只露 Header: HEX 输入 + 色块预览);
-        // 预设色板/H/S 滑块由用户点标题条自行展开 (反馈修复轮 13)
+        // 预设色板/H/S 滑块由用户点标题条自行展开
         if (solid) SolidCard.IsExpanded = false;
         FxExpander.IsExpanded = AmbientCore.IsMcuMode(cur);   // 正用固件特效时保持展开
         AnimatedVisibility.SetExpanded(SolidCard, solid);     // 纯色拾色器仅纯色灯光模式显示
@@ -333,11 +331,11 @@ public partial class HomePage : Page
         }
 
         // 按钮 = "有没有会话", 与 OnToggle 的判定同一个口径 → 标签和动作永远一致。
-        // 连接中断时会话仍在 (核心每 2s 自动重连), 所以按钮是"关闭": 按下即打断重连, 回到未连接态 (轮 19)
+        // 连接中断时会话仍在 (核心每 2s 自动重连), 所以按钮是"关闭": 按下即打断重连, 回到未连接态
         //
-        // 轮 34 补 4 (用户要求): 关闭后**收尾没完不许点开启**。native 的 StopEx 要 join 会话线程,
-        // 而线程可能正卡在握手一个错误端口上 (实测 1~5s) —— 以前靠 OnToggle 里 600ms 延时放开,
-        // 于是"端口还没释放"就能点开启。现在改成由轮询统一裁决:
+        // 关闭后**收尾没完不许点开启**。native 的 StopEx 要 join 会话线程,
+        // 而线程可能正卡在握手一个错误端口上 (实测 1~5s) —— 固定延时放开会让"端口还没释放"就能点开启。
+        // 口径 = 由轮询统一裁决:
         //   禁用 = 正在处理这次点击 || 启动任务在飞 || 队列里还有没跑完的生命周期调用 (收尾中)
         // 标签也顺便说实话: 收尾期间显示「关闭中…」(否则按钮写着"开启"却是灰的, 像卡死)。
         ToggleBtn.Content = Loc.T(App.Instance.CoreRunning ? "Home.Toggle.Close"
@@ -366,7 +364,7 @@ public partial class HomePage : Page
         if (st.allBlackFrames > 30)
             warns.Add(Loc.F("Home.Warn.AllBlack", st.allBlackFrames));
 
-        // 提示条优先显示"开启失败原因"(轮 18 ③): 它只在**没有会话**时出现, 与画面告警天然互斥
+        // 提示条优先显示"开启失败原因": 它只在**没有会话**时出现, 与画面告警天然互斥
         bool blocked = _block.HasValue;
         bool showWarn = blocked || warns.Count > 0;
         if (showWarn)
@@ -377,7 +375,7 @@ public partial class HomePage : Page
         WarnBar.IsOpen = showWarn;
 
         // 诊断只在"确实有问题"的态显示: 已停止/启动中 时核心的 LastDiag 往往是上一次的残留
-        // ("device lost: no usable port" 之类), 快速连点开关时会闪出红色报错 (轮 16 用户反馈)
+        // ("device lost: no usable port" 之类), 快速连点开关时会闪出红色报错
         string diag = AmbientCore.LastDiag();
         bool showDiag = !string.IsNullOrEmpty(diag) && st.state is AmbientCore.StateError
                                                                    or AmbientCore.StateDevLost
@@ -406,9 +404,8 @@ public partial class HomePage : Page
     private Brush ThemeBrush(string key) => TryFindResource(key) as Brush ?? Brushes.Gray;
 
     /// <summary>总开关按钮此刻能不能点 —— **纯函数**, 探针打真值表。
-    /// 轮 34 补 4 (用户要求): 关闭后**收尾没完不许点开启**。native 的 `StopEx` 要 join 会话线程,
-    /// 而线程可能正卡在握手一个错误端口上 (实测 1~5s) —— 以前靠 OnToggle 里的 600ms 延时放开,
-    /// 于是"端口还没释放"就能点开启。现在的口径:
+    /// 关闭后**收尾没完不许点开启**: native 的 `StopEx` 要 join 会话线程,
+    /// 而线程可能正卡在握手一个错误端口上 (实测 1~5s) —— 固定延时放开会让"端口还没释放"就能点开启。口径:
     ///   禁用 = 正在处理这次点击 (`toggling`) || 启动任务在飞 (`starting`)
     ///          || 队列里还有没跑完的生命周期调用 (`lifecycleBusy` = 收尾中)
     /// 收尾期间按钮文案显示「关闭中…」, 而不是灰着的"开启" (那看着像卡死)。</summary>
@@ -418,7 +415,7 @@ public partial class HomePage : Page
     // ---- 总开关 (状态卡与多设备列表同步: 开关后延时刷新, 等会话端口/状态回填) ----
     // 暂停期间整个流程持锁 + 按钮禁用 (禁用现在由轮询统一裁决, 见 UpdateBanner/OnPolled 里那条 ——
     // 收尾没完 (App.LifecycleBusy) 或启动任务在飞时按钮保持灰):
-    //   快速连点会连发 Start/Stop, 核心侧留下 "device lost: no usable port" 之类的残留诊断 (轮 16 用户反馈)
+    //   快速连点会连发 Start/Stop, 核心侧留下 "device lost: no usable port" 之类的残留诊断
     private async void OnToggle(object sender, RoutedEventArgs e)
     {
         if (_toggling) return;
@@ -432,7 +429,7 @@ public partial class HomePage : Page
             }
             else
             {
-                // 轮 18 ③: 开启失败**不进入"开启"态**。App 侧对"设备被占用/未应答/不在位"已不再建
+                // 开启失败**不进入"开启"态**。App 侧对"设备被占用/未应答/不在位"不建
                 // 兜底会话 (否则 banner 会亮起一个"未连接"的假开启态, 按钮却写着"开启", 再点变成关闭)。
                 // 这里把失败原因取回来交给胶囊 (警示色) + InfoBar; 按钮保持"开启", 再点即重试。
                 // 不在这里手动画 banner: 让 250ms 轮询发现 _block 变化后统一渲染, 免得动画跑两遍。
@@ -452,8 +449,8 @@ public partial class HomePage : Page
 
     // ---- 亮度 (节流下发: 首次立即生效, 拖动中每 40ms 一次, 收尾补发最终值) ----
     // 轨道点击跳转/跟手拖动由 SliderJump 附加行为接管 (与设置页滑条一致)
-    // 轮 28: 拖动中**只热更、不写盘**; 停手 400ms 再落盘一次。原来是每次热更都同步
-    // File.WriteAllText —— 拖动中 25 次/秒落在 UI 线程上, 那是拖亮度时的卡顿源之一。
+    // 拖动中**只热更、不写盘**; 停手 400ms 再落盘一次 (拖动中每次热更都同步
+    // File.WriteAllText = 25 次/秒落在 UI 线程上, 拖亮度时的卡顿源之一)。
     private const double BrightnessThrottleMs = 40;
     private const double BrightnessSaveDelayMs = 400;
     private DateTime _lastBrightnessApply = DateTime.MinValue;

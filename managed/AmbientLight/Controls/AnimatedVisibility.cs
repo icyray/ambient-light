@@ -1,17 +1,17 @@
-// Controls/AnimatedVisibility.cs — 高度+透明度展开/收起动画附加行为 (M5.1 用户反馈⑨):
+// Controls/AnimatedVisibility.cs — 高度+透明度展开/收起动画附加行为 (M5.1):
 // 让设置行/整卡像 CardExpander 一样有弹出/收回过渡。用法:
 //   <controls:SettingRow controls:AnimatedVisibility.Expanded="False" ... />
 //   AnimatedVisibility.SetExpanded(row, true/false);
 //
-// 四个 WPF 陷阱 (首版踩坑, 修复轮 5/6/16):
+// 四个 WPF 陷阱 (全部为实测踩坑):
 // 1. 依赖属性"同值不触发回调": 默认值必须是 true, XAML 显式写 Expanded="False" 才有
-//    true→false 变更、解析期回调才会执行 (首版默认 false, 显式 False 与默认相同 →
+//    true→false 变更、解析期回调才会执行 (默认写 false 的后果: 显式 False 与默认相同 →
 //    回调不触发 → 初始化该隐藏的控件全部可见);
 // 2. 动画结束后属性回落到本地基准值: Completed 里必须显式写终态 (收起 → Height=0,
 //    展开 → Height=NaN), 否则收起的行会跳回基准高度 (→ "重新展示后展不开")。
 // 3. **基准 Margin 不能早于 Loaded 捕获**: BAML 属性应用顺序与源码不一致 (M2 老坑),
 //    解析期读到/写到的 Margin 都还不是 XAML 声明的值 → 若此时把它当"基准值"记住,
-//    展开后下边距永久少 4px (轮 16 用户报"纯色/固件特效两张卡间距更窄")。
+//    展开后下边距永久少 4px (现象: "纯色/固件特效两张卡间距更窄")。
 //    故基准 Margin 统一等元素 Loaded (XAML 属性必然就位) 再捕获, 期间只设显隐、不碰 Margin。
 // 4. **只读 DP 的默认值不能用 `is Thickness t` 判"未捕获"**: 只读 DP 的默认值就是
 //    default(Thickness) = (0,0,0,0), 模式匹配恒为 true → 永远区分不出"还没捕获"。

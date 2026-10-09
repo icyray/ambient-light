@@ -64,8 +64,8 @@ public partial class CalibrateWindow : Window
         int slot = app.SlotOf(key);
         if (slot < 0)
         {
-            // 轮 34 补: 原来用 MessageBox —— 系统样式弹窗跟 Fluent 界面两套观感
-            // (而且不随主题变)。统一走主窗口的 ContentDialogHost。
+            // 不要用 MessageBox —— 系统样式弹窗跟 Fluent 界面两套观感 (而且不随主题变)。
+            // 统一走主窗口的 ContentDialogHost。
             _ = Controls.AppDialogs.ShowAsync(Loc.T("Calib.Title"),
                 Loc.T("Calib.NeedSession"), closeText: Loc.T("Common.GotIt"));
             return;
@@ -185,7 +185,7 @@ public partial class CalibrateWindow : Window
             if (core.Length > 0)
             {
                 mw = core[i].width; mh = core[i].height;
-                // 与主页/采集页统一 (轮 28): 用 1 起的序号 + 分辨率 + 适配器,
+                // 与主页/采集页统一: 用 1 起的序号 + 分辨率 + 适配器,
                 // 不再显示 `\\.\DISPLAY5` 这种不友好的设备名
                 ResText.Text = Loc.F("Calib.Screen", i + 1, mw, mh, core[i].Adapter) +
                                (core[i].primary != 0 ? " " + Loc.T("Calib.Screen.Primary") : "");
@@ -203,7 +203,7 @@ public partial class CalibrateWindow : Window
         Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, 0, mw, mh);
         Ring.ShowQuadrantMap([Palette[s[0]], Palette[s[1]], Palette[s[2]], Palette[s[3]]]);
         // 中心区: 在屏幕矩形里画"灯带怎么绕"—— 环线 + 箭头表示绕向, "起点"徽标贴在 0 号灯那个角
-        // (2026-10-08 用户设计稿替换了原来那行小字: "0 号"没信息量, 且文字说不清绕法)。
+        // (安装示意替换了原来那行小字: "0 号"没信息量, 且文字说不清绕法)。
         // direction 0 = 逆时针 → 起点在右下角 (与核心段序一致)。
         Ring.SetOrientation(true, dev.Direction);
         IndexText.Text = Loc.T("Calib.Index.Prefix") + " " + Ring.DescribeIndices();
