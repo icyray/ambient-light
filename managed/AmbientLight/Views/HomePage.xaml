@@ -392,8 +392,11 @@
                     <Grid Grid.Column="2" Width="200" VerticalAlignment="Center">
                         <Border x:Name="HueTrackBar" Height="4" CornerRadius="2"
                                 VerticalAlignment="Center" Background="{StaticResource HueRainbowBrush}" />
+                        <!-- Fill=None: 这个滑块的"轨道"是它自己画的彩虹色带 (HueTrackBar),
+                             所以不画进度填充 —— 否则会把渐变换盖掉 (用户实测反馈) ✓ -->
                         <Slider x:Name="HueSlider" Minimum="0" Maximum="360" Value="24"
                                 LargeChange="0" controls:SliderJump.Enabled="True"
+                                controls:SliderSkin.Fill="None"
                                 VerticalAlignment="Center">
                             <Slider.Resources>
                                 <SolidColorBrush x:Key="SliderTrackFill" Color="Transparent" />
@@ -419,8 +422,10 @@
                     <Grid Grid.Column="2" Width="200" VerticalAlignment="Center">
                         <Border x:Name="SatTrackBar" Height="4" CornerRadius="2"
                                 VerticalAlignment="Center" />
+                        <!-- Fill=None: 同 HueSlider —— 轨道是自绘的饱和度色带 ✓ -->
                         <Slider x:Name="SatSlider" Minimum="0" Maximum="100" Value="22"
                                 LargeChange="0" controls:SliderJump.Enabled="True"
+                                controls:SliderSkin.Fill="None"
                                 VerticalAlignment="Center">
                             <Slider.Resources>
                                 <SolidColorBrush x:Key="SliderTrackFill" Color="Transparent" />
