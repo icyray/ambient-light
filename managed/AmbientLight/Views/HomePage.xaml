@@ -173,6 +173,62 @@
             </Grid>
         </DataTemplate>
 
+        <!-- 设备行模板 (每台一行, §6): 类型图标 + 名称 + 语义胶囊 + 右侧动作; COM/供电/灯数下沉第二行。
+             「当前」设备用左侧 3px 强调条 + 强调色胶囊标出。
+             语义规则 (胶囊/端口/配对) 全在 code-behind 的纯函数里 —— 本模板只负责摆结构。 -->
+        <DataTemplate x:Key="DeviceRowTemplate">
+            <Grid Margin="0,5,0,5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <!-- 当前条 (未选中收起; 列宽固定 3px, 显隐不引起布局跳动) -->
+                <Border Grid.Column="0" Width="3" CornerRadius="2" Margin="0,2,0,2"
+                        Background="{DynamicResource AccentFillColorDefaultBrush}"
+                        Visibility="{Binding Selected, Converter={StaticResource BoolToVis}}" />
+                <!-- 类型图标: 独立一列、两行整体垂直居中 -->
+                <ui:SymbolIcon Grid.Column="1" Symbol="{Binding Icon}" FontSize="18"
+                               VerticalAlignment="Center" Margin="10,0,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <StackPanel Grid.Column="2" Margin="10,0,12,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding NameText}" FontSize="13" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <!-- 「当前」胶囊: 强调色**底**上的字必须用 TextOnAccentFillColorPrimaryBrush
+                             (用 AccentTextFillColorPrimaryBrush = 强调色写强调色, 看不见字) -->
+                        <Border CornerRadius="9" Padding="7,1,7,1" Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                Visibility="{Binding Selected, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="当前" FontSize="10.5"
+                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                        </Border>
+                        <!-- 语义胶囊 (配色由数据项携带; 文案/色调口径见 DevicePill) -->
+                        <Border CornerRadius="9" Padding="7,1,7,1" Margin="8,0,0,0"
+                                VerticalAlignment="Center" Background="{Binding PillBg}">
+                            <TextBlock Text="{Binding PillLabel}" FontSize="10.5"
+                                       Foreground="{Binding PillFg}" />
+                        </Border>
+                    </StackPanel>
+                    <!-- 第二行小字 (空则不占位); 警示色由数据项给 (端口不一致/不在位时) -->
+                    <TextBlock Text="{Binding Line2Text}" FontSize="11" Margin="0,4,0,0"
+                               Foreground="{Binding Line2Brush}"
+                               Visibility="{Binding HasLine2, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button Content="{Binding ToggleText}" Appearance="{Binding ToggleAppearance}"
+                               Margin="0,0,6,0" IsEnabled="{Binding Usable}" MinWidth="64"
+                               Click="OnDeviceToggleClick" />
+                    <ui:Button Content="设为当前" Appearance="Secondary" MinWidth="76"
+                               IsEnabled="{Binding Usable}"
+                               Visibility="{Binding ShowSelectButton, Converter={StaticResource BoolToVis}}"
+                               Click="OnDeviceSelectClick" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
         <!-- 只留图标的按钮模板已提到 App.xaml (轮 29: 采集页/拾音页也要用同一个) -->
 
         <!-- 预设色板单个色块 (轮 27, 轮 28 修同心, 轮 29 去掉"原始/生效色"行):
@@ -870,7 +926,11 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </ui:Button>
                 </Grid>
-                <StackPanel x:Name="DevicesPanel" Margin="0,8,0,0" />
+                <StackPanel x:Name="DevicesPanel" Margin="0,8,0,0">
+                    <ItemsControl x:Name="DevicesList" ItemTemplate="{StaticResource DeviceRowTemplate}" />
+                    <TextBlock x:Name="DevicesStateText" FontSize="12" TextWrapping="Wrap"
+                               Visibility="Collapsed" />
+                </StackPanel>
                 <Separator Margin="0,10" />
                 <Grid>
                     <TextBlock Text="显示器" FontWeight="SemiBold" />

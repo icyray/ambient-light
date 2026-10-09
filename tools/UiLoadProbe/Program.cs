@@ -1892,6 +1892,23 @@ static void Run()
     //   光验纯函数不够 —— 真正的 bug 是调用点把"配置里的端口"多套了一个 managedHere 条件,
     //   导致**无会话时永远显示枚举端口**。这里真的建一行, 看第二行文字是什么。
     // 轮 34 补 6 再扩两条: ① 端口不在位时胶囊要是「端口不在位」; ② 警示色真的落到第二行上。
+    // 行元素现在是 ContentPresenter (模板渲染) → 逻辑树里看不到模板内容, 改用**宿主 + 视觉树**读文本
+    // (模板应用发生在 Measure; 控件不接窗口也能对它自身 Measure/Arrange)。
+    List<TextBlock> RowTextBlocks(UIElement el)
+    {
+        var host = new ContentControl { Content = el, Width = 700 };
+        host.Measure(new Size(700, 160));
+        host.Arrange(new Rect(0, 0, 700, 160));
+        var list = new List<TextBlock>();
+        void RWalk(DependencyObject d)
+        {
+            if (d is TextBlock t) list.Add(t);
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+                RWalk(VisualTreeHelper.GetChild(d, i));
+        }
+        RWalk(host);
+        return list;
+    }
     const string probeKey = "9_3";                       // 用个不会被选中的 key, 免得影响别的断言
     var cautionBrush = Application.Current.TryFindResource("SystemFillColorCautionBrush") as SolidColorBrush;
     try
@@ -1905,7 +1922,7 @@ static void Run()
         {
             devType = 9, devId = 3, inUse = 0,
         }, sess: null, sessSlot: -1);
-        var texts = LogicalDescendants(devRow).OfType<TextBlock>().Select(t => t.Text).ToArray();
+        var texts = RowTextBlocks(devRow).Select(t => t.Text).ToArray();
         bool wired = texts.Any(t => t.Contains("COM4 (手动指定)"));
         Console.WriteLine((wired ? "OK   " : "FAIL ") +
                           $"设备行(无会话)第二行真的显示了配置端口 = {wired} · 行内文字: " +
@@ -1918,7 +1935,7 @@ static void Run()
             new AmbientLight.Services.DeviceSettings { ComPort = "COM99" };  // 本机不存在的口
         var missRow = home.BuildDeviceRow(new ACDeviceInfo { devType = 9, devId = 3, inUse = 0 },
                                           sess: null, sessSlot: -1);
-        var missTexts = LogicalDescendants(missRow).OfType<TextBlock>().ToList();
+        var missTexts = RowTextBlocks(missRow);
         bool missPill = missTexts.Any(t => t.Text == "端口不在位");
         Console.WriteLine((missPill ? "OK   " : "FAIL ") +
                           $"指定了口但本机没有 → 胶囊「端口不在位」= {missPill} · 行内文字: " +
@@ -1939,8 +1956,7 @@ static void Run()
         var lostSess = new ACStatus { devType = -1, devId = -1, state = AmbientCore.StateDevLost };
         var lostRow = home.BuildDeviceRow(new ACDeviceInfo { devType = 9, devId = 3, inUse = 0 },
                                           lostSess, sessSlot: 0);
-        var lostTexts = LogicalDescendants(lostRow).OfType<TextBlock>()
-            .Select(t => t.Text).Where(s => s.Length > 0).ToArray();
+        var lostTexts = RowTextBlocks(lostRow).Select(t => t.Text).Where(s => s.Length > 0).ToArray();
         bool lostPill = lostTexts.Contains("指定端口无应答");
         Console.WriteLine((lostPill ? "OK   " : "FAIL ") +
                           $"连不上的会话仍被行认出来 → 胶囊「指定端口无应答」= {lostPill} · " +

@@ -207,30 +207,6 @@ public partial class HomePage : Page
     // 它点亮时不看主题、恒用深色套)。见 Services/ThemePalette.cs。
     private static ToneColors ToneBrush(Tone tone) => ThemePalette.Of(tone, ThemeService.IsDark);
 
-    /// <summary>语义色对 (M5.2, 随主题深浅) 的胶囊 —— 与下面那个"指定画刷/资源键"的版本共存,
-    /// 用具名 `left:` 调用时不会歧义 (那个版本 bg/fg 都是必填位置参数)。</summary>
-    private static Border Pill(string text, ToneColors colors, double left = 0)
-        => Pill(text, Frozen(colors.Background), Frozen(colors.Foreground), left: left);
-
-    private static Border Pill(string text, Brush? bg, Brush? fg,
-                               string? bgKey = null, string? fgKey = null, double left = 0)
-    {
-        var tb = new System.Windows.Controls.TextBlock { Text = text, FontSize = 10.5 };
-        if (fg != null) tb.Foreground = fg;
-        else if (fgKey != null) tb.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, fgKey);
-        var b = new Border
-        {
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(7, 1, 7, 1),
-            Margin = new Thickness(left, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = tb,
-        };
-        if (bg != null) b.Background = bg;
-        else if (bgKey != null) b.SetResourceReference(Border.BackgroundProperty, bgKey);
-        return b;
-    }
-
     private void RefreshMonitors()
     {
         if (MonitorsPanel == null) return;
@@ -348,26 +324,14 @@ public partial class HomePage : Page
 
     private async Task RefreshDevicesCoreAsync()
     {
-        DevicesPanel.Children.Clear();
-        DevicesPanel.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = "探测中… (打开串口握手, ~0.2s/台)",
-            Opacity = 0.6,
-            FontSize = 12,
-        });
+        ShowDevicesState("探测中… (打开串口握手, ~0.2s/台)", dim: true);
         try
         {
             var devices = await Task.Run(AmbientCore.GetDevices).ConfigureAwait(true);
-            DevicesPanel.Children.Clear();
             if (devices.Length == 0)
             {
-                DevicesPanel.Children.Add(new System.Windows.Controls.TextBlock
-                {
-                    Text = "未发现灯带 (VID_2E3C & PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口。\n" +
-                           "换芯片或 USB 转串口桥接的灯带, 可在「高级 → 连接」里手动指定端口。",
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                });
+                ShowDevicesState("未发现灯带 (VID_2E3C & PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口。\n" +
+                                 "换芯片或 USB 转串口桥接的灯带, 可在「高级 → 连接」里手动指定端口。", dim: false);
                 return;
             }
             // 会话快照取**一次** (原来是每行每 slot 各取一次 AC_GetStatusEx)。配对规则见 MatchSessionSlot。
@@ -380,6 +344,7 @@ public partial class HomePage : Page
                 sessions.Add((slot, key, st0.ComPort, st0.state));
             }
 
+            var items = new List<DeviceRowItem>(devices.Length);
             foreach (var d in devices)
             {
                 // 本核心会话占用的端口必然探测为 [端口被占用][未应答] —
@@ -387,18 +352,24 @@ public partial class HomePage : Page
                 string rowKey = $"{d.devType}_{d.devId}";
                 int sessSlot = MatchSessionSlot(rowKey, d.ComPort ?? "", d.inUse == 1, sessions);
                 ACStatus? sess = sessSlot >= 0 ? statusBySlot[sessSlot] : null;
-                DevicesPanel.Children.Add(BuildDeviceRow(d, sess, sessSlot));
+                items.Add(MakeDeviceRow(d, sess, sessSlot));
             }
+            DevicesList.ItemsSource = items;
+            DevicesStateText.Visibility = Visibility.Collapsed;
         }
         catch (Exception ex)
         {
-            DevicesPanel.Children.Clear();
-            DevicesPanel.Children.Add(new System.Windows.Controls.TextBlock
-            {
-                Text = $"探测失败: {ex.Message}",
-                FontSize = 12,
-            });
+            ShowDevicesState($"探测失败: {ex.Message}", dim: false);
         }
+    }
+
+    /// <summary>设备列表的状态占位文本 (探测中 / 未发现 / 失败) —— 只在列表为空时显示。</summary>
+    private void ShowDevicesState(string text, bool dim)
+    {
+        DevicesList.ItemsSource = null;
+        DevicesStateText.Text = text;
+        DevicesStateText.Opacity = dim ? 0.6 : 1.0;
+        DevicesStateText.Visibility = Visibility.Visible;
     }
 
     /// <summary>设备行胶囊的色调 (与 banner 同一套色板)</summary>
@@ -475,24 +446,45 @@ public partial class HomePage : Page
         return (enumPort, false, false);
     }
 
-    /// <summary>胶囊色调 → 画刷 (灰=默认底色/次要字, 其余用语义色对; 色对随主题深浅)</summary>
-    private static Border TonePill(string text, PillTone tone) => tone switch
+    /// <summary>胶囊色调 → 底色/字色 (灰 = 默认底色/次要字, 其余用语义色对; 色对随主题深浅)。
+    /// 设备行模板消费它 (换主题时行会重建 → 色随主题)。</summary>
+    private (Brush Bg, Brush Fg) PillBrushes(PillTone tone) => tone switch
     {
-        PillTone.Green => Pill(text, ToneBrush(Tone.Green), left: 8),
-        PillTone.Amber => Pill(text, ToneBrush(Tone.Amber), left: 8),
-        PillTone.Blue => Pill(text, ToneBrush(Tone.Blue), left: 8),
-        PillTone.Red => Pill(text, ToneBrush(Tone.Red), left: 8),
-        _ => Pill(text, null, null, "ControlFillColorDefaultBrush", "TextFillColorSecondaryBrush", left: 8),
+        PillTone.Green => (Frozen(ToneBrush(Tone.Green).Background), Frozen(ToneBrush(Tone.Green).Foreground)),
+        PillTone.Amber => (Frozen(ToneBrush(Tone.Amber).Background), Frozen(ToneBrush(Tone.Amber).Foreground)),
+        PillTone.Blue => (Frozen(ToneBrush(Tone.Blue).Background), Frozen(ToneBrush(Tone.Blue).Foreground)),
+        PillTone.Red => (Frozen(ToneBrush(Tone.Red).Background), Frozen(ToneBrush(Tone.Red).Foreground)),
+        _ => (ThemeBrush("ControlFillColorDefaultBrush"), ThemeBrush("TextFillColorSecondaryBrush")),
     };
 
-    // 每台设备一行 (§6): 类型图标 + 名称 + 语义胶囊 + 右侧动作; COM/供电/灯数下沉第二行小字。
+    // 每台设备一行 (§6): **结构在 XAML 模板 (DeviceRowTemplate); 这里只算数据 (DeviceRowItem)**。
     // 「当前」设备用左侧 3px 强调条与强调色标签标出 (与模式卡选中态同语言)。
     // sess = 该端口被本核心会话占用时的会话状态 (探测拿不到握手, 类型取自会话);
     // sessSlot = 那个会话的 slot —— 会话刚起时 devType 还没回填 (=-1), 组不出正确的设备 key,
     // 必须用 slot 反查 (否则"连接中"那一行点开启会去 StartDevice("-1_-1"))。
-    // **public 是给探针用的**: 第二行的端口文案要断"接线"(配置里的端口有没有真的传到行里) ——
-    // 纯函数真值表挡不住调用点写错 (轮 34 补 5 就是调用点多套了一个 managedHere 条件)。
-    public UIElement BuildDeviceRow(ACDeviceInfo d, ACStatus? sess, int sessSlot)
+
+    /// <summary>设备行的数据 (XAML 模板 DeviceRowTemplate 消费): 全是预计算好的展示值。
+    /// **public 是给探针用的**: 第二行的端口文案要断"接线"(配置里的端口有没有真的传到行里) ——
+    /// 纯函数真值表挡不住调用点写错 (轮 34 补 5 就是调用点多套了一个 managedHere 条件)。</summary>
+    public sealed class DeviceRowItem
+    {
+        public string Key { get; init; } = "";
+        public SymbolRegular Icon { get; init; }
+        public string NameText { get; init; } = "";
+        public bool Selected { get; init; }
+        public string PillLabel { get; init; } = "";
+        public Brush PillBg { get; init; } = Brushes.Transparent;
+        public Brush PillFg { get; init; } = Brushes.Transparent;
+        public string Line2Text { get; init; } = "";
+        public bool HasLine2 { get; init; }
+        public Brush Line2Brush { get; init; } = Brushes.Transparent;
+        public bool Usable { get; init; }
+        public string ToggleText { get; init; } = "";
+        public Wpf.Ui.Controls.ControlAppearance ToggleAppearance { get; init; }
+        public bool ShowSelectButton { get; init; }
+    }
+
+    private DeviceRowItem MakeDeviceRow(ACDeviceInfo d, ACStatus? sess, int sessSlot)
     {
         bool managedHere = sess != null;
         // 类型/编号: **两边都可能还没回填** —— 会话没握手成功时它的 devType 是 -1,
@@ -528,57 +520,20 @@ public partial class HomePage : Page
         // 语义胶囊 (轮 33 起口径 = 会话状态; 轮 34 补 6 起叠加两条端口规则)
         var (pillLabel, pillTone) = DevicePill(managedHere, sessState, d.inUse == 1, devType,
                                                likelyOurs, manualPort, portMissing);
-        Border pill = TonePill(pillLabel, pillTone);
+        var (pillBg, pillFg) = PillBrushes(pillTone);
 
-        // 类型图标**独立一列**、跨两行垂直居中 (轮 32 用户反馈: 原来它在 line1 里, 于是跟第一行
-        // 文字同一水平线; 现在与"名称+胶囊"和"COM/供电/灯数"两行整体居中)。
-        var icon = new Wpf.Ui.Controls.SymbolIcon
-        {
-            Symbol = DevIcon(devType),
-            FontSize = 18,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(10, 0, 0, 0),   // 与左侧 3px 强调条留出间距
-        };
-        icon.Foreground = ThemeBrush("TextFillColorSecondaryBrush");
+        // 名称: 会话刚起 (类型未回填) / 自己正在起 (会话未登记) 两种"读取中"变体
+        string nameText = connecting ? $"{DevTypeName(devType)} · 读取中"
+                          : likelyOurs ? "读取中…"
+                          : $"{DevTypeName(devType)} · id {devId}";
 
-        var line1 = new StackPanel { Orientation = Orientation.Horizontal };
-        var name = new System.Windows.Controls.TextBlock
-        {
-            Text = connecting ? $"{DevTypeName(devType)} · 读取中"
-                              : likelyOurs ? "读取中…"
-                              : $"{DevTypeName(devType)} · id {devId}",
-            FontSize = 13,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        line1.Children.Add(name);
-        if (selected)
-        {
-            // ⚠️ 强调色**底**上的字要用 TextOnAccentFillColorPrimaryBrush。
-            // 原来用 AccentTextFillColorPrimaryBrush = 强调色写强调色 → 用户看到的"不明橙色胶囊"
-            var cur = Pill("当前", null, null, "AccentFillColorDefaultBrush",
-                           "TextOnAccentFillColorPrimaryBrush", left: 8);
-            line1.Children.Add(cur);
-        }
-        line1.Children.Add(pill);
-
-        var line2 = new System.Windows.Controls.TextBlock
-        {
-            FontSize = 11,
-            // 横向缩进归零: 图标已经独立成一列, 这一行天然就在信息列左缘, 不必再手算图标宽度对齐。
-            // 垂直仍用 4 —— 那是用户在手调里定的行距, 别顺手改小。
-            Margin = new Thickness(0, 4, 0, 0),
-        };
-        line2.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                   "TextFillColorSecondaryBrush");
         // 供电 = 灯带固件周期状态字节的 bit0 (MCU 回报, 见 PROJECT_PLAN §7.1)。
         // 语义是"该设备自己的供电是否正常": 厂商那些**真需要外接供电的型号**(桌面氛围灯/带电池的)
         // 它会跟着外接电源变; 而 USB 供电型号**连上就恒 1** (实战: 握手后 0 → 1)。
         // 所以文案用「供电 正常」而不是"外接"——本型号上它不代表外接电源已接入。
         // bit0 = 0 有两种可能: 真的供电异常, 或者"这一帧的状态字节还没读到"(会话刚起时结构体全 0),
         // 两者分不开 → **0 时什么都不显示**: 比谎报"供电 USB"诚实, 也顺手消掉了
-        // "连接瞬间 供电 USB → 供电 外接"那一下极快翻转。DEV_LOST 同理不显示 (残留值;
-        // 原厂断连时也是 SetStatus(0,0) 清缓存)。
+        // "连接瞬间 供电 USB → 供电 外接"那一下极快翻转。DEV_LOST 同理不显示 (残留值)。
         long statusByte = sess?.ledStatusByte ?? 0;
         string power = sessState == AmbientCore.StateRunning && (statusByte & 1) == 1
             ? "供电 正常" : "";
@@ -590,81 +545,58 @@ public partial class HomePage : Page
         // "还没开会话"恰恰是最常见的状态 —— 加上它就等于"无会话时永远显示枚举端口"。
         // 规则见 PortLabel (纯函数, 探针真值表 + 一条接线断言)。
         var portLabel = PortLabel(sess?.ComPort, cfgPort, d.ComPort);
-        line2.Text = string.Join(" · ",
+        string line2 = string.Join(" · ",
             new[] { portLabel.Text, power, leds }.Where(s => s.Length > 0));
         // 警示色只在"配置端口 ≠ 本行枚举端口"时才用 (手动指定且一致 = 正常状态, 不该报警);
         // 端口**不在位**比"不一致"更严重 → 同样转警示色。
-        if (portLabel.Warn || portMissing) line2.SetResourceReference(
-            System.Windows.Controls.TextBlock.ForegroundProperty, "SystemFillColorCautionBrush");
+        bool warn = portLabel.Warn || portMissing;
 
-        var infoCol = new StackPanel
+        return new DeviceRowItem
         {
-            Margin = new Thickness(10, 0, 12, 0),
-            VerticalAlignment = VerticalAlignment.Center,
+            Key = key,
+            Icon = DevIcon(devType),
+            NameText = nameText,
+            Selected = selected,
+            PillLabel = pillLabel,
+            PillBg = pillBg,
+            PillFg = pillFg,
+            Line2Text = line2,
+            HasLine2 = line2.Length > 0,
+            Line2Brush = warn ? ThemeBrush("SystemFillColorCautionBrush")
+                              : ThemeBrush("TextFillColorSecondaryBrush"),
+            Usable = usable,
+            ToggleText = slot >= 0 ? "关闭" : "开启",
+            ToggleAppearance = slot >= 0 ? Wpf.Ui.Controls.ControlAppearance.Secondary
+                                         : Wpf.Ui.Controls.ControlAppearance.Primary,
+            ShowSelectButton = !selected,
         };
-        infoCol.Children.Add(line1);
-        if (line2.Text.Length > 0) infoCol.Children.Add(line2);
+    }
 
-        var actions = new StackPanel
+    /// <summary>探针入口 (也是唯一"渲染一行"的地方): 用真模板渲染。
+    /// ⚠️ 不用 DataTemplate.LoadContent + 事后赋 DataContext —— 实测那样绑定不刷新 (文本全空);
+    /// ContentPresenter 在模板应用时数据已就位, 绑定一次到位 (与 ItemsControl 同款路径)。</summary>
+    public UIElement BuildDeviceRow(ACDeviceInfo d, ACStatus? sess, int sessSlot)
+        => new ContentPresenter
         {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
+            Content = MakeDeviceRow(d, sess, sessSlot),
+            ContentTemplate = (DataTemplate)FindResource("DeviceRowTemplate"),
         };
-        var toggle = new Wpf.Ui.Controls.Button
-        {
-            Content = slot >= 0 ? "关闭" : "开启",
-            Appearance = slot >= 0 ? ControlAppearance.Secondary : ControlAppearance.Primary,
-            Margin = new Thickness(0, 0, 6, 0),
-            IsEnabled = usable,
-            MinWidth = 64,
-        };
-        toggle.Click += async (_, _) =>
-        {
-            if (App.Instance.SlotOf(key) >= 0) App.Instance.StopDevice(key);
-            else App.Instance.StartDevice(key);
-            await Task.Delay(600);              // 会话端口/状态回填后再刷, 避免闪现"端口被占用"
-            _ = RefreshDevicesAsync();
-        };
-        actions.Children.Add(toggle);
-        if (!selected)
-        {
-            var select = new Wpf.Ui.Controls.Button
-            {
-                Content = "设为当前",
-                IsEnabled = usable,
-                Appearance = ControlAppearance.Secondary,
-                MinWidth = 76,
-            };
-            select.Click += (_, _) =>
-            {
-                ConfigStore.Select(key);
-                _ = RefreshDevicesAsync();
-            };
-            actions.Children.Add(select);
-        }
 
-        var outer = new Grid { Margin = new Thickness(0, 5, 0, 5) };
-        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3) });   // 当前条
-        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });     // 类型图标
-        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        outer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });     // 动作按钮
+    /// <summary>设备行的「开启 / 关闭」按钮 (模板统一入口; 设备 key 从行数据取)。</summary>
+    private async void OnDeviceToggleClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: DeviceRowItem item }) return;
+        if (App.Instance.SlotOf(item.Key) >= 0) App.Instance.StopDevice(item.Key);
+        else App.Instance.StartDevice(item.Key);
+        await Task.Delay(600);              // 会话端口/状态回填后再刷, 避免闪现"端口被占用"
+        _ = RefreshDevicesAsync();
+    }
 
-        var bar = new Border
-        {
-            Width = 3,
-            CornerRadius = new CornerRadius(2),
-            Margin = new Thickness(0, 2, 0, 2),
-        };
-        if (selected) bar.SetResourceReference(Border.BackgroundProperty, "AccentFillColorDefaultBrush");
-
-        Grid.SetColumn(bar, 0);
-        Grid.SetColumn(icon, 1);
-        Grid.SetColumn(infoCol, 2);
-        Grid.SetColumn(actions, 3);
-        outer.Children.Add(bar);
-        outer.Children.Add(icon);
-        outer.Children.Add(infoCol);
-        outer.Children.Add(actions);
-        return outer;
+    /// <summary>设备行的「设为当前」按钮 (模板统一入口)。</summary>
+    private void OnDeviceSelectClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: DeviceRowItem item }) return;
+        ConfigStore.Select(item.Key);
+        _ = RefreshDevicesAsync();
     }
 }
