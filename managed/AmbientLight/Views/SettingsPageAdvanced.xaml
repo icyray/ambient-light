@@ -32,22 +32,21 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="低灰保真修正 (colorfix)" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,8,0"
                                Text="暗灰色被放大成蓝绿色时开启, 按绝对色度门限钳为中性灰" />
                     <ui:ToggleSwitch x:Name="ColorfixToggle" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                                     Margin="0,0,4,0" Click="OnColorfixChanged" />
+                                     Margin="0,0,10,0" Click="OnColorfixChanged" />
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel>
-                <Separator Margin="-18,0" BorderThickness="0,1,0,0" />
                 <Grid Margin="16,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="色度噪声门限 (sfloor)" FontSize="13" />
-                        <TextBlock FontSize="11" TextWrapping="Wrap"
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="35,0,16,0">
+                        <TextBlock Text="色度噪声门限 (sfloor)" FontSize="14" />
+                        <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,8,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="8bit max-min 低于该门限视为采样噪声 (0-255, 默认 24)" />
                     </StackPanel>
@@ -151,7 +150,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="配置目录" FontSize="14" VerticalAlignment="Center" />
-                    <ui:Button Grid.Column="1" Margin="8,0,4,0" Content="打开" Appearance="Secondary"
+                    <ui:Button Grid.Column="1" Margin="8,0,10,0" Content="打开" Appearance="Secondary"
                                VerticalAlignment="Center" Click="OnOpenConfigDir" />
                 </Grid>
             </ui:CardExpander.Header>
@@ -161,9 +160,9 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="恢复默认配置" FontSize="13" />
-                        <TextBlock FontSize="11" TextWrapping="Wrap"
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="35,0,16,0">
+                        <TextBlock Text="恢复默认配置" FontSize="14" />
+                        <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,8,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="把设置与设备配置全部重置为出厂默认 (亮度/模式/端口/采集/拾音/灯序等), 不可撤销" />
                     </StackPanel>

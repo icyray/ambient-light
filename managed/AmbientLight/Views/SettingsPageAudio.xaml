@@ -13,10 +13,11 @@
         <controls:SettingRow x:Name="VolumeRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon DataBarVertical24}" Title="实时音量"
                              Description="开启拾音模式后显示音源与电平">
             <StackPanel Orientation="Horizontal">
-                <ProgressBar x:Name="LevelBar" Minimum="0" Maximum="255" Value="0" Width="150"
-                             Height="8" VerticalAlignment="Center" Margin="0,0,10,0" />
                 <TextBlock x:Name="LevelValueText" Text="0" MinWidth="28" TextAlignment="Right"
-                           VerticalAlignment="Center" />
+                    VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ProgressBar x:Name="LevelBar" Minimum="0" Maximum="255" Value="0" Width="200"
+                             Height="8" VerticalAlignment="Center" Margin="0,0,10,0" />
+                
             </StackPanel>
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon SoundSource24}" Title="音源"

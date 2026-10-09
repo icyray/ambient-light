@@ -43,7 +43,6 @@ public partial class SettingsPageCapture : Page
         ChaseModeGuardRadio.IsChecked = chaseMode == 1;
         ChaseModeBothRadio.IsChecked = chaseMode == 2;
         ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = chaseMode != 0;
-        RefreshChaseSummary();
         RefreshMonitors(select: dev.MonitorIndex);
     }
 
@@ -67,17 +66,8 @@ public partial class SettingsPageCapture : Page
         ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = on;   // 关着总开关时不可选
         ConfigStore.Device.ChaseSmoothMode =
             !on ? 0 : (ChaseModeBothRadio.IsChecked == true ? 2 : 1);
-        RefreshChaseSummary();
         App.Instance.ApplyConfigDebounced();
     }
-
-    /// <summary>折叠组摘要 (也是"当前档位"的唯一表述): 关 / 抑制闪光 / 抑制闪光+时域柔和</summary>
-    private void RefreshChaseSummary() => ChaseSummary.Text = ConfigStore.Device.ChaseSmoothMode switch
-    {
-        1 => "抑制闪光",
-        2 => "抑制闪光+时域柔和",
-        _ => "关",
-    };
 
     private void RefreshMonitors(int select)
     {

@@ -112,11 +112,11 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="黑边自适应" FontSize="14" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="画面有黑边 (电影/宽屏) 时自动收缩取色边框" />
                     <ui:ToggleSwitch x:Name="BlackBarsToggle" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                                     Margin="0,0,4,0" IsChecked="True" Click="OnBlackBarsChanged" />
+                                     Margin="0,0,10,0" IsChecked="True" Click="OnBlackBarsChanged" />
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel>
@@ -125,9 +125,9 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="黑边判定等级" FontSize="13" />
-                        <TextBlock FontSize="11" TextWrapping="Wrap"
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="35,0,16,0">
+                        <TextBlock Text="黑边判定等级" FontSize="14" />
+                        <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,8,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    Text="越高越保守 (不易误判暗场景), 越低越激进" />
                     </StackPanel>
@@ -146,7 +146,8 @@
              ⚠️ 两项**不是互斥**: 「抑制闪光」限的是整帧平均亮度的**突变率**(硬限幅 12%/帧, 专治一两帧的
              白尖峰); 「时域柔和」是逐灯逐通道低通(首帧能走 21%、之后绵长, 专治快速摇镜的逐灯跳变)。
              两者治不同病灶 → 都开是互补, 不是重复。 -->
-        <ui:CardExpander Margin="0,10,0,4" Icon="{ui:SymbolIcon ArrowSync24}" ContentPadding="0">
+        <TextBlock Style="{StaticResource GroupLabel}" Text="柔化平滑" />
+        <ui:CardExpander Margin="0,0,0,4" Icon="{ui:SymbolIcon DataLine24}" ContentPadding="0">
             <ui:CardExpander.Header>
                 <Grid>
                     <Grid.RowDefinitions>
@@ -159,12 +160,11 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="柔化平滑" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
-                               TextWrapping="Wrap" Margin="0,2,12,0"
+                               TextWrapping="Wrap" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="观影可开、游戏建议关 (会牺牲一点跟屏感)" />
-                    <TextBlock x:Name="ChaseSummary" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                               FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="关" />
+                    <ui:ToggleSwitch x:Name="ChaseSmoothToggle"  Grid.Row="0" Grid.RowSpan="2"
+                                     Grid.Column="1" Margin="0,0,10,0" Click="OnChaseSmoothToggled" />
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel>
@@ -172,24 +172,49 @@
                      为什么要二选一而不是两个独立开关: "单时域柔和"与"两者都开"在外观上几乎分辨不出,
                      不该让用户在这种组合里做选择; 而"抑制闪光+时域柔和"在行为上**严格包含**"抑制闪光"
                      (均值被同一套更严的限幅接管, 再加逐灯柔化) → 于是只需要一个决定: 跟手优先 还是 更柔 ✓ -->
-                <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
-                                     Title="启用柔化平滑"
-                                     Description="关闭 = 保持原来的高刷跟屏感 (游戏推荐)">
-                    <ui:ToggleSwitch x:Name="ChaseSmoothToggle" Click="OnChaseSmoothToggled" />
-                </controls:SettingRow>
-                <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
-                                     Title="抑制闪光"
-                                     Description="整帧亮度的突变限幅 —— 治镜头切换/闪白; 颜色跟随仍然即时 (更跟手)">
-                    <!-- 用标准 RadioButton: WPF-UI 4.3 的 xmlns 里没有 ui:RadioButton (它给标准控件套隐式样式) -->
-                    <RadioButton x:Name="ChaseModeGuardRadio" GroupName="ChaseSmooth"
-                                 Click="OnChaseModeChanged" />
-                </controls:SettingRow>
-                <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowMinimize24}"
-                                     Title="抑制闪光 + 时域柔和"
-                                     Description="再叠逐灯颜色平滑 (治快速摇镜的逐灯跳变) —— 更柔, 但有一点拖影">
-                    <RadioButton x:Name="ChaseModeBothRadio" GroupName="ChaseSmooth"
-                                 Click="OnChaseModeChanged" />
-                </controls:SettingRow>
+                <Grid Margin="16,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                VerticalAlignment="Center" Margin="35,0,16,0" Width="24">
+                        <RadioButton x:Name="ChaseModeGuardRadio" GroupName="ChaseSmooth"
+                            Click="OnChaseModeChanged" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="抑制闪光" FontSize="14" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Margin="0,2,8,0"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="整帧亮度的突变限幅 —— 治镜头切换/闪白; 颜色跟随仍然即时 (更跟手)" />
+                    </StackPanel>
+                </Grid>
+                <Separator Margin="8,2" />
+                <Grid Margin="16,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                VerticalAlignment="Center" Margin="35,0,16,0" Width="24">
+                        <RadioButton x:Name="ChaseModeBothRadio" GroupName="ChaseSmooth"
+                            Click="OnChaseModeChanged"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="抑制闪光 + 时域柔和" FontSize="14" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Margin="0,2,8,0"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="再叠逐灯颜色平滑 (治快速摇镜的逐灯跳变) —— 更柔, 但有一点拖影" />
+                    </StackPanel>
+                </Grid>
             </StackPanel>
         </ui:CardExpander>
 

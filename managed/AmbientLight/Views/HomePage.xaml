@@ -499,7 +499,7 @@
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="按真实长宽比核对灯序与边数" />
                     <TextBlock x:Name="LayoutSummary" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                               FontSize="12" Margin="8,0,4,0" VerticalAlignment="Center"
+                               FontSize="12" Margin="8,0,10,0" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </Grid>
             </ui:CardExpander.Header>
