@@ -59,6 +59,45 @@ bool SerialPort::Write(const uint8_t* p, uint32_t n)
     return true;
 }
 
+uint32_t SerialPort::WriteSome(const uint8_t* p, uint32_t n, bool* hardOut, DWORD* lastErrOut)
+{
+    if (hardOut) *hardOut = false;
+    if (lastErrOut) *lastErrOut = 0;
+    if (h_ == INVALID_HANDLE_VALUE) { if (hardOut) *hardOut = true; return 0; }
+    DWORD done = 0;
+    BOOL ok = WriteFile(h_, p, n, &done, nullptr);
+    if (!ok) {
+        DWORD err = GetLastError();
+        if (lastErrOut) *lastErrOut = err;
+        // 121 = ERROR_SEM_TIMEOUT: 写超时 —— **设备一时没吃数据, 端口没坏** → 交给上层补写 ✓
+        if (err == ERROR_SEM_TIMEOUT) return 0;
+        if (hardOut) *hardOut = true;      // 其余错误 (端口消失 / 句柄失效) = 真掉线
+        return 0;
+    }
+    return (uint32_t)done;                 // done < n = 写超时 (同上: 软)
+}
+
+bool SerialPort::WriteAll(const uint8_t* p, uint32_t n, uint32_t budgetMs,
+                          bool* stuckOut, HANDLE abortEvent)
+{
+    if (stuckOut) *stuckOut = false;
+    uint32_t off = 0;
+    ULONGLONG t0 = GetTickCount64();
+    while (off < n) {
+        bool hard = false;
+        uint32_t w = WriteSome(p + off, n - off, &hard);
+        if (hard) return false;                              // 端口没了 → 立刻判掉线
+        if (w > 0) { off += w; continue; }
+        if ((uint32_t)(GetTickCount64() - t0) >= budgetMs) {  // 预算用尽: 设备长时间不吃数据
+            if (stuckOut) *stuckOut = true;
+            return false;
+        }
+        if (abortEvent && WaitForSingleObject(abortEvent, 1) == WAIT_OBJECT_0) return false;
+        if (!abortEvent) Sleep(1);
+    }
+    return true;
+}
+
 int SerialPort::ReadByte(uint32_t timeoutMs)
 {
     if (h_ == INVALID_HANDLE_VALUE) return -1;

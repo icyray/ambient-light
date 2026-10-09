@@ -33,6 +33,24 @@ public:
     HANDLE handle() const { return h_; }
 
     bool Write(const uint8_t* p, uint32_t n);
+    // 尽力写: 返回**本次实际写进去的字节数** (可能 < n)。0 = 没有进展。
+    //   hardOut: true = 硬错误 (端口没了/被拔出, 拔线时 WriteFile 是**立刻**返回的, 不会等超时);
+    //            false = 写超时 (ERROR_SEM_TIMEOUT) —— **设备一时没收数据, 端口还活着**。
+    //   lastErrOut: 便于日志诊断的真实 GetLastError()。
+    // 为什么需要它: 固件**按定长 kFrameLen 字节给帧定界** ⇒ 半帧被丢掉 = 它把下一帧的帧头当成
+    //   这帧的尾巴, 之后**永久错位** (只有握手/重连能复位) ✗。所以上层必须"补写剩余部分",
+    //   而不是把一次写超时当成掉线 (2026-10-09 的"切出 MCU 特效就重连"就是这么来的)。
+    uint32_t WriteSome(const uint8_t* p, uint32_t n, bool* hardOut = nullptr,
+                       DWORD* lastErrOut = nullptr);
+
+    // 把 n 字节**写完**才算成功 (写超时就补写剩余部分)。
+    //   budgetMs: "允许多久写不完" —— 超了返回 false (固件按定长 543 给帧定界, 半帧丢弃会让它
+    //             永久错位, 所以调用方宁可重连也不能丢下半帧 ✗)。
+    //   stuckOut: false = 硬错误(端口没了) / true = 预算内没写完(设备不吃数据)。
+    //   abortEvent: 可选, 每轮补写前查一次 (与 Handshake 同一套约定) → 置位就立刻放弃。
+    // 拔线时 WriteFile 是**立刻**报错的 (不会等到超时), 所以真掉线的检测速度不受本函数影响 ✓
+    bool WriteAll(const uint8_t* p, uint32_t n, uint32_t budgetMs,
+                  bool* stuckOut = nullptr, HANDLE abortEvent = nullptr);
     // 带超时的单字节读; 返回 0-255, -1 = 无数据/失败
     int  ReadByte(uint32_t timeoutMs);
     // 非阻塞读取固件周期状态字节 (cbInQue 驱动)

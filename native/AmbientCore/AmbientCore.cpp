@@ -67,6 +67,14 @@ constexpr double kChaseSmoothTauMs =  80.0;  // 追光「时域柔和」指数�
 constexpr double kChaseFlashGuard  = 0.12;   // 追光「抑制闪光」单帧亮度突变上限比例      [S4]
 // =========================================================================
 
+// ⚠️ 下面这两条**不是观感参数**, 别和上面那组混: 它们是串口写策略 (见 CoreLoopInner 的 WriteDurable)。
+//   含义 = "允许设备最多多久不吃数据" —— 固件切模式/收尾特效时会有静默期, 在预算内一律**补写等待**,
+//   超了才判掉线 (2026-10-09: 切出 MCU 特效后误判"正在重连"就是这里)。
+//   实测依据 (22:55~22:56 日志): 切出后 ~103ms 写失败; 重连时**+716ms 的握手还失败**, +1272ms 才通
+//   ⇒ 设备的静默期 ≈0.8~1.2s ⇒ 预算取 3s 留足余量。**停止不受影响**: WriteAll 每轮补写前查 evStop ✓
+constexpr double kWriteBudgetMs = 3000.0;
+constexpr uint32_t kFadeWriteBudgetMs = 600;   // 淡变逐帧写: 预算更短 (淡变丢一帧无所谓, 半帧不行)
+
 /// 毫秒时钟 (steady_clock 起点的偏移) —— 淡入淡出/限幅都用它算时间。
 inline double Millis()
 {
@@ -116,7 +124,8 @@ inline bool CrossFade(serial::SerialPort& sp, const std::vector<uint8_t>& from,
         for (size_t i = 0; i < 3; i++) scratch[i] = to[i];          // 头部(帧类型)以后者为准
         for (size_t i = 3; i < scratch.size(); i++)
             scratch[i] = (uint8_t)(from[i] * (1.0 - e) + to[i] * e + 0.5);
-        if (!sp.Write(scratch.data(), (DWORD)scratch.size())) return false;
+        if (!sp.WriteAll(scratch.data(), (uint32_t)scratch.size(), kFadeWriteBudgetMs))
+            return false;                                        // 写不完 → 放弃淡变 (调用方决定)
         Sleep(16);
     }
     return true;
@@ -138,7 +147,7 @@ inline void FadeOutToBlack(serial::SerialPort& sp, const std::vector<uint8_t>& l
         scratch.assign(lastOut.begin(), lastOut.end());
         for (size_t i = 3; i < scratch.size(); i++)
             scratch[i] = (uint8_t)(scratch[i] * e + 0.5);
-        if (!sp.Write(scratch.data(), (DWORD)scratch.size())) break;
+        if (!sp.WriteAll(scratch.data(), (uint32_t)scratch.size(), kFadeWriteBudgetMs)) break;
         Sleep(16);
     }
 }
@@ -582,14 +591,39 @@ void CoreLoopInner(Sess* g)
     double wakeGraceUntil = 0.0;                      // 刚醒的拓扑抖动宽限截止 (毫秒)
     ULONGLONG tickLoop = GetTickCount64();            // S0 唤醒自愈用 (含睡眠时间的墙钟)
 
+    /// 把一整帧/一条命令**写完**才返回 true; 写超时(设备一时没收)不判掉线, 只补写剩余部分。
+    /// 为什么必须这么写 (2026-10-09 定案, 见 docs/PROGRESS.md):
+    ///   · 固件**按定长 `serial::kFrameLen`(543) 给帧定界** ⇒ 半帧被丢掉 = 它把下一帧的帧头当成这帧的
+    ///     尾巴, 之后**永久错位** (只有握手能复位) ✗ —— 所以"写不进去就丢帧"是禁止的, 必须补写;
+    ///   · 串口写超时只有 100ms (`ConfigurePort` 的 WriteTotalTimeoutConstant), 而**从 MCU 特效切回
+    ///     内容模式时固件要收尾特效、会有 ~100ms+ 不吃 CDC 数据** (用户实测: 切出"电闪雷鸣"后
+    ///     ~103ms 必然写失败 → 判 DEV_LOST → UI 显示"正在重连" → 600ms 后又连回来 ✗)。
+    ///     端口和设备从头到尾都是好的 (拔线时 WriteFile 是立刻报错的, 不会卡到超时) ✓
+    ///   ⇒ 策略: 软失败(超时) → 继续补写, 预算 `kWriteBudgetMs` 内写完就没事; 超预算(设备真挂了)
+    ///      或硬错误(端口没了) → 返回 false, 由调用方 WireFail 走重连 (保持原来的快速检测) ✓
+    auto WriteDurable = [&](const uint8_t* d, size_t len, const char* what) -> bool {
+        double t0 = Millis();
+        bool stuck = false;
+        if (sp.WriteAll(d, (uint32_t)len, (uint32_t)kWriteBudgetMs, &stuck, g->evStop)) {
+            double ms = Millis() - t0;
+            if (ms > 30.0)                              // 设备卡了一下但补写成功 (诊断用, 缺省不落盘)
+                ACLOGD("write slow %s: %zu B in %.0fms —— 设备一时没收数据, 已补写", what, len, ms);
+            return true;
+        }
+        if (stuck)
+            ACLOGW("write stuck on %ls (%s: %zu B 超过 %.0fms 没写完) -> DEV_LOST",
+                   activePort.c_str(), what, len, kWriteBudgetMs);
+        return false;                                   // stuck / 硬错误 / 停止请求 → 交给调用方
+    };
+
     /// 按包络缩放后写出 (≈1 时零拷贝; 只动第 3 字节之后的负载)
     auto WriteEnv = [&](const uint8_t* d, size_t len) -> bool {
         double m = env.value;
-        if (m >= 0.999 || len <= 3) return sp.Write(d, (DWORD)len);
+        if (m >= 0.999 || len <= 3) return WriteDurable(d, len, "env");
         scratch.assign(d, d + len);
         for (size_t i = 3; i < scratch.size(); i++)
             scratch[i] = (uint8_t)(scratch[i] * m + 0.5);
-        return sp.Write(scratch.data(), (DWORD)scratch.size());
+        return WriteDurable(scratch.data(), scratch.size(), "env");
     };
     /// 内容帧: 先记下**原始字节**(供淡出复用, 不累乘以免量化误差), 再按包络写出。
     /// ⚠️ **WAIT_DISP 期间一律不写内容帧** —— 屏幕上该显示的是 policy 帧 (熄灭/最暗/保持),
@@ -639,7 +673,7 @@ void CoreLoopInner(Sess* g)
         if (!sp.IsOpen()) return;
         std::vector<uint8_t> z;
         serial::BuildZeroFrame(z);
-        sp.Write(z.data(), (DWORD)z.size());
+        WriteDurable(z.data(), z.size(), "off");
     };
 
     auto SendPolicyFrame = [&](const ACConfig& c) {
@@ -651,7 +685,7 @@ void CoreLoopInner(Sess* g)
             uint8_t g8 = (uint8_t)std::clamp(c.minBrightness, 0, 255);
             std::fill(frame.begin() + 3, frame.end(), g8);
         }   // 0 = 保持最后帧: 直接重发现有 frame 内容
-        sp.Write(frame.data(), (DWORD)frame.size());
+        WriteDurable(frame.data(), frame.size(), "policy");
     };
 
     /// WAIT_DISP 进入。`graceOnWake`: 采集侧报的拓扑/访问抖动 —— 唤醒后 1.5s 内忽略,
@@ -1123,7 +1157,7 @@ void CoreLoopInner(Sess* g)
                 }
                 const uint8_t cmd[3] = { 'A', 'd', (uint8_t)(0x61 + applied.modeIndex) };
                 auto tw = steady_clock::now();
-                if (!sp.Write(cmd, 3)) { WireFail("write failed"); continue; }
+                if (!WriteDurable(cmd, 3, "mcu cmd")) { WireFail("write failed"); continue; }
                 double wireMs = duration_cast<duration<double, std::milli>>(steady_clock::now() - tw).count();
                 wireEma = wireEma == 0 ? wireMs : wireEma * 0.9 + wireMs * 0.1;
                 lastMcuCmd = now1;
@@ -1251,7 +1285,7 @@ void CoreLoopInner(Sess* g)
                 // WAIT_DISP 除外, 那里由策略帧 2s 重发接管)。
                 auto nowT = steady_clock::now();
                 if (!waitDisp && serialOpen && frameCounter > 0 && nowT - lastFrameSend >= milliseconds(200)) {
-                    if (!sp.Write(frame.data(), (DWORD)frame.size())) { WireFail("write failed"); continue; }
+                    if (!WriteDurable(frame.data(), frame.size(), "frame")) { WireFail("write failed"); continue; }
                     uint8_t sb;
                     if (sp.PollStatusByte(sb)) { std::unique_lock lk(g->stMx); g->st.ledStatusByte = sb; }
                     lastFrameSend = nowT;
