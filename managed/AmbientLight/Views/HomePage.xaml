@@ -90,6 +90,45 @@
             </ControlTemplate.Triggers>
         </ControlTemplate>
 
+        <!-- 模式区样式与图标底 (控件本体在下方 PrimaryModeGrid/FxPanel 静态声明, 这里只放"长什么样"):
+             · ⚠️ 必须 BasedOn 隐式的 RadioButton 样式: WPF 里**显式样式会整体替换隐式样式** ——
+               不 BasedOn 的话会静默丢掉主题的字色/字体 (白字变黑字), 而且只在出图上肉眼可见;
+             · GroupName 也在这里统一 (卡片组 / 磁贴组互不干扰)。
+             图标底渐变 = 同色系"亮→深" (追光蓝 / 拾音绿 / 纯色紫), 与旧代码
+             `new LinearGradientBrush(from, to, 50.0)` 的实际端点一致 (WPF 折算: Start=(0,0),
+             End=(cos50°, sin50°) —— 是"左上→右下"的向下方, 别按数学系的角度改。 -->
+        <Style x:Key="ModeCardStyle" TargetType="RadioButton"
+               BasedOn="{StaticResource {x:Type RadioButton}}">
+            <Setter Property="Template" Value="{StaticResource ModeCardTemplate}" />
+            <Setter Property="GroupName" Value="PrimaryModes" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="MinHeight" Value="96" />
+        </Style>
+        <Style x:Key="FxTileStyle" TargetType="RadioButton"
+               BasedOn="{StaticResource {x:Type RadioButton}}">
+            <Setter Property="Template" Value="{StaticResource FxTileTemplate}" />
+            <Setter Property="GroupName" Value="FxTiles" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Width" Value="152" />
+            <Setter Property="Height" Value="56" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+        </Style>
+
+        <LinearGradientBrush x:Key="ModeTileChaseBrush" StartPoint="0,0" EndPoint="0.642788,0.766044">
+            <GradientStop Offset="0" Color="#FF46CCFC" />
+            <GradientStop Offset="1" Color="#FF2E80D7" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ModeTileAudioBrush" StartPoint="0,0" EndPoint="0.642788,0.766044">
+            <GradientStop Offset="0" Color="#FF61EDD4" />
+            <GradientStop Offset="1" Color="#FF0DA2AA" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ModeTileSolidBrush" StartPoint="0,0" EndPoint="0.642788,0.766044">
+            <GradientStop Offset="0" Color="#FFCA9FF1" />
+            <GradientStop Offset="1" Color="#FF8F68C9" />
+        </LinearGradientBrush>
+
         <!-- 只留图标的按钮模板已提到 App.xaml (轮 29: 采集页/拾音页也要用同一个) -->
 
         <!-- 预设色板单个色块 (轮 27, 轮 28 修同心, 轮 29 去掉"原始/生效色"行):
@@ -323,7 +362,8 @@
             </StackPanel>
         </controls:SettingRow>
 
-        <!-- 模式: 三张主模式卡 (等宽三列 + 8px 间隙; 内容由 code-behind 组装) -->
+        <!-- 模式: 三张主模式卡 (等宽三列 + 8px 间隙; 控件本体静态声明, 样式见 ModeCardStyle)。
+             Tag = 模式号, 供 code-behind 收集后同步选中态; 点选统一走 Checked=OnModeChecked。 -->
         <TextBlock Style="{StaticResource GroupLabel}" Text="模式" />
         <Grid x:Name="PrimaryModeGrid" Margin="0,0,0,4">
             <Grid.ColumnDefinitions>
@@ -333,6 +373,63 @@
                 <ColumnDefinition Width="8" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+
+            <!-- 追光 (mode 0): 44px 圆角渐变图标 + 标题 + 一句功能说明 -->
+            <RadioButton Grid.Column="0" Style="{StaticResource ModeCardStyle}" Tag="0"
+                         Checked="OnModeChecked">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="44" Height="44" CornerRadius="8" VerticalAlignment="Center"
+                            Margin="0,0,12,0" Background="{StaticResource ModeTileChaseBrush}">
+                        <ui:SymbolIcon Symbol="WeatherSunny24" FontSize="24" Filled="True"
+                                       Foreground="#FFFFFFFF"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="屏幕追光" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="跟随屏幕边缘取色, 实时同步画面" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </RadioButton>
+
+            <!-- 拾音 (mode 1) -->
+            <RadioButton Grid.Column="2" Style="{StaticResource ModeCardStyle}" Tag="1"
+                         Checked="OnModeChecked">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="44" Height="44" CornerRadius="8" VerticalAlignment="Center"
+                            Margin="0,0,12,0" Background="{StaticResource ModeTileAudioBrush}">
+                        <ui:SymbolIcon Symbol="SoundWaveCircle24" FontSize="24" Filled="True"
+                                       Foreground="#FFFFFFFF"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="拾音律动" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="跟随系统声音或麦克风律动" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </RadioButton>
+
+            <!-- 纯色 (mode 11) -->
+            <RadioButton Grid.Column="4" Style="{StaticResource ModeCardStyle}" Tag="11"
+                         Checked="OnModeChecked">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="44" Height="44" CornerRadius="8" VerticalAlignment="Center"
+                            Margin="0,0,12,0" Background="{StaticResource ModeTileSolidBrush}">
+                        <ui:SymbolIcon Symbol="Color24" FontSize="24" Filled="True"
+                                       Foreground="#FFFFFFFF"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="纯色灯光" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="整条灯带单色, 无需画面" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </RadioButton>
         </Grid>
 
         <!-- §3 纯色灯光拾色器: 仅「纯色灯光」模式时显示 (AnimatedVisibility), 且显示时默认折叠 —
@@ -467,16 +564,99 @@
                     </Border>
                 </Grid>
             </ui:CardExpander.Header>
-            <ItemsControl x:Name="FxPanel" Margin="16,12,16,8">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <!-- 轮 28: 回到上一版 —— 磁贴**组**的对齐方式不动 (上一轮误把"磁贴内内容居中"
-                             改成了"磁贴组居中", 而 WrapPanel 的 DesiredSize 本来就占满可用宽度,
-                             Center 实际是空操作, 只会让人以为改错了地方)。 -->
-                        <WrapPanel />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-            </ItemsControl>
+            <WrapPanel x:Name="FxPanel" Margin="16,12,16,8">
+                <!-- 固件特效磁贴 (静态声明; 与固件模式表一一对应 —— 探针断言"磁贴数 == MCU 模式数",
+                     加新款特效时这里要同步). 图标只表达"是哪一款", 不暗示配色 (固件自己渲染配色)。
+                     Tag = 模式号; 点选统一走 Checked=OnModeChecked。 -->
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="2" Checked="OnModeChecked"
+                             ToolTip="彩虹跳跃 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="ColorFill24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="彩虹跳跃" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="3" Checked="OnModeChecked"
+                             ToolTip="海浪潮汐 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Water24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="海浪潮汐" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="4" Checked="OnModeChecked"
+                             ToolTip="电闪雷鸣 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Flash24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="电闪雷鸣" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="5" Checked="OnModeChecked"
+                             ToolTip="呼吸心跳 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Heart24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="呼吸心跳" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="6" Checked="OnModeChecked"
+                             ToolTip="火焰燃烧 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Fire24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="火焰燃烧" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="7" Checked="OnModeChecked"
+                             ToolTip="南极光彩 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="WeatherSnowflake24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="南极光彩" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="8" Checked="OnModeChecked"
+                             ToolTip="粒子碰撞 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Molecule24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="粒子碰撞" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="9" Checked="OnModeChecked"
+                             ToolTip="圣诞节日 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Gift24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="圣诞节日" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="10" Checked="OnModeChecked"
+                             ToolTip="变幻莫测 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Wand24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="变幻莫测" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="12" Checked="OnModeChecked"
+                             ToolTip="浓情夏日 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Beach24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="浓情夏日" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="13" Checked="OnModeChecked"
+                             ToolTip="北极冰山 · 由灯带固件渲染, 主机只下发命令">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="WeatherSnow24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="北极冰山" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+            </WrapPanel>
         </ui:CardExpander>
 
         <!-- §5 运行指标 (轮 27 双层 / 轮 29 关闭时自动动画收起)。

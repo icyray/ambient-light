@@ -108,13 +108,13 @@ public partial class HomePage : Page
         // 主页自己收不到信号。状态是**边沿触发**的 (只在真的变了时来一次), 不会造成刷新风暴。
         App.Instance.Poller.StateChanged += OnCoreStateChanged;
         // M5.2: 主题 / **强调色** 变化后, 页内几处 **code-behind 一次性赋值** 的主题刷
-        // (banner 文字/胶囊、设备行语义色对、固件磁贴图标色、自定义色槽的选中圈) 不会自己更新 ——
+        // (banner 文字/胶囊、设备行语义色对、自定义色槽的选中圈) 不会自己更新 ——
         // 容器靠 DynamicResource 是自动的, 但"当时取到的那个刷子实例"不是。
         // 用 ThemeService.AppearanceChanged 而不是 ApplicationThemeManager.Changed:
         // 后者只在**换主题**时触发, 强调色变化不会触发它。
         ThemeService.AppearanceChanged += OnAppearanceChanged;
 
-        BuildModeGrid();
+        CollectModeButtons();
         var dev = ConfigStore.Device;
         BrightnessSlider.Value = dev.Brightness * 100.0;    // 先设初值 (事件未挂)
         BrightnessValueText.Text = $"{(int)(dev.Brightness * 100)}%";
@@ -154,7 +154,7 @@ public partial class HomePage : Page
             _metricsSig = "\0";                   // 指标条的字色也是 code-behind 赋的, 重建一次
             ApplyBannerLook(_lastPolledState < 0 ? AmbientCore.StateStopped : _lastPolledState,
                             ConfigStore.Device.ModeIndex, animate: false);
-            BuildModeGrid();                      // 固件磁贴图标的 Foreground 是构造期取的主题刷
+            // (模式区不用重建: 磁贴图标/说明文字随 XAML 走 DynamicResource, 换主题自动跟)
             BuildPresets();                       // 自定义色槽的选中圈取的是 AccentFillColorDefaultBrush
             RefreshMonitors();
             _ = RefreshDevicesAsync();            // 设备行的语义胶囊随深/浅换套
@@ -201,174 +201,37 @@ public partial class HomePage : Page
     }
 
     // ---- 模式选择 (M5.1 §2): 三张主模式卡 + 固件特效图标磁贴 ----
-    private void BuildModeGrid()
+    // 控件本体 = XAML 静态声明 (静态内容不动态生成); 这里只做两件事:
+    //   ① 收集控件 (按 Tag=模式号) 供选中态同步; ② 刷新选中态与相关容器的显隐/文案。
+    private void CollectModeButtons()
     {
-        PrimaryModeGrid.Children.Clear();
-        FxPanel.Items.Clear();
-        _modeBtns.Clear();
-        var cardTemplate = (ControlTemplate)FindResource("ModeCardTemplate");
-        var tileTemplate = (ControlTemplate)FindResource("FxTileTemplate");
-        int primaryIndex = 0;
-        foreach (var (index, name, kind) in AmbientCore.Modes)
-        {
-            if (kind == "MCU")
-            {
-                // §2 固件特效 = 图标磁贴 (24px 图标 + 名称, 选中 = 强调描边/淡底/对勾)。
-                // 图标只表达"是哪一款", 不暗示配色 —— 仓库里没有任何固件配色资料
-                // (AmbientCore_API.md 只定义 3 字节命令, 效果由灯带固件自己渲染)。
-                var ico = new Wpf.Ui.Controls.SymbolIcon
-                {
-                    Symbol = FxIcon(index),
-                    FontSize = 20,
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                // 直接赋值而不是 SetResourceReference(Control.ForegroundProperty): FontIcon 的
-                // Foreground 未必就是 Control 那个 DP, 传错 DP 会在运行期抛"DP 不适用于该类型"。
-                ico.Foreground = ThemeBrush("TextFillColorPrimaryBrush");                var tileContent = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Children =
-                    {
-                        ico,
-                        new System.Windows.Controls.TextBlock
-                        {
-                            Text = name, FontSize = 12.5, Margin = new Thickness(8, 0, 0, 0),
-                            VerticalAlignment = VerticalAlignment.Center,
-                        },
-                    },
-                };
-                var tile = new System.Windows.Controls.RadioButton
-                {
-                    Content = tileContent,
-                    GroupName = "FxTiles",
-                    Template = tileTemplate,
-                    Cursor = Cursors.Hand,
-                    Width = 152,
-                    Height = 56,
-                    Margin = new Thickness(0, 0, 8, 8),
-                    ToolTip = $"{name} · 由灯带固件渲染, 主机只下发命令",
-                };
-                tile.Checked += (_, _) => SetMode(index);
-                FxPanel.Items.Add(tile);
-                _modeBtns[index] = tile;
-                continue;
-            }
-
-            // 主模式卡 (Gallery 风): 44px 圆角**渐变**图标 + 标题 + 一句功能说明;
-            // 等宽三列, 列位 = 序号×2 (中间列是 8px 间隙)
-            // 渐变 = 与 banner 光带/辉光同一套基色 (追光蓝 / 拾音绿 / 纯色紫), 便于"看色识模式"
-            var icon = index switch
-            {
-                0 => SymbolRegular.WeatherSunny24,
-                1 => SymbolRegular.SoundWaveCircle24,
-                _ => SymbolRegular.Color24,
-            };
-            var tileIcon = new Border
-            {
-                Width = 44,
-                Height = 44,
-                CornerRadius = new CornerRadius(8),
-                Background = ModeTileBrush(index),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 12, 0),
-                Child = new Wpf.Ui.Controls.SymbolIcon
-                {
-                    Symbol = icon,
-                    FontSize = 24,
-                    // 底色是亮色 → 图标取近黑: 深浅主题下对比都成立
-                    Foreground = new System.Windows.Media.SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Filled = true,
-                },
-            };
-            var descEl = new System.Windows.Controls.TextBlock
-            {
-                Text = ModeDesc(index),
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 3, 0, 0),
-            };
-            descEl.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                        "TextFillColorSecondaryBrush");
-            var content = new StackPanel { Orientation = Orientation.Horizontal };
-            content.Children.Add(tileIcon);
-            content.Children.Add(new StackPanel
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    new System.Windows.Controls.TextBlock
-                    {
-                        Text = name, FontSize = 14, FontWeight = FontWeights.SemiBold,
-                    },
-                    descEl,
-                },
-            });
-
-            var rb = new System.Windows.Controls.RadioButton
-            {
-                Content = content,
-                GroupName = "PrimaryModes",
-                Template = cardTemplate,
-                Cursor = Cursors.Hand,
-                HorizontalAlignment = HorizontalAlignment.Stretch,     // 等宽三列撑满
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                MinHeight = 96,
-            };
-            Grid.SetColumn(rb, primaryIndex * 2);
-            primaryIndex++;
-            rb.Checked += (_, _) => SetMode(index);
-            PrimaryModeGrid.Children.Add(rb);
-            _modeBtns[index] = rb;
-        }
+        if (_modeBtns.Count > 0) return;
+        foreach (var rb in PrimaryModeGrid.Children.OfType<System.Windows.Controls.RadioButton>())
+            if (int.TryParse(rb.Tag as string, out int i)) _modeBtns[i] = rb;
+        foreach (var rb in FxPanel.Children.OfType<System.Windows.Controls.RadioButton>())
+            if (int.TryParse(rb.Tag as string, out int i)) _modeBtns[i] = rb;
         RefreshModeButtons();
     }
 
-    /// <summary>固件特效图标 (§2; 全部已核对 WPF-UI 4.3.0 的 SymbolRegular)。
-    /// ⚠️ 不要凭记忆加名字 —— 这里写错会编译失败, 那是好事 (XAML 里写错只会运行时闪退)。</summary>
-    private static SymbolRegular FxIcon(int mode) => mode switch
+    /// <summary>模式卡 / 磁贴被点选 (XAML Checked 的统一入口; Tag = 模式号)。
+    /// 程序化改选 (_updatingMode) 期间不回环下发。</summary>
+    private void OnModeChecked(object sender, RoutedEventArgs e)
     {
-        2 => SymbolRegular.ColorFill24,           // 彩虹跳跃
-        3 => SymbolRegular.Water24,               // 海浪潮汐
-        4 => SymbolRegular.Flash24,               // 电闪雷鸣
-        5 => SymbolRegular.Heart24,               // 呼吸心跳
-        6 => SymbolRegular.Fire24,                // 火焰燃烧
-        7 => SymbolRegular.WeatherSnowflake24,    // 南极光彩
-        8 => SymbolRegular.Molecule24,            // 粒子碰撞
-        9 => SymbolRegular.Gift24,                // 圣诞节日
-        10 => SymbolRegular.Wand24,               // 变幻莫测
-        12 => SymbolRegular.Beach24,              // 浓情夏日
-        13 => SymbolRegular.WeatherSnow24,        // 北极冰山
-        _ => SymbolRegular.Sparkle24,
-    };
-
-    /// <summary>主模式卡图标底色 = 同色系"亮→深"的 135° 渐变 (轮 32: 原来是纯色块)。
-    /// 三个模式各自对应 banner 光带/辉光的同一套基色 (追光蓝 / 拾音绿 / 纯色紫),
-    /// 固件特效预留一组中性色 (后续"固件特效升为主模式卡"时直接可用)。
-    /// 想调手感就改这张表 —— 两端色都是"同一色系的亮色与深色", 所以图标用近黑在深浅主题下都清楚。</summary>
-    private static LinearGradientBrush ModeTileBrush(int mode)
-    {
-        var (from, to) = mode switch
-        {
-            0 => (Rgb(0x46, 0xCC, 0xFC), Rgb(0x2E, 0x80, 0xD7)),   // 追光 · 蓝
-            1 => (Rgb(0x61, 0xED, 0xD4), Rgb(0x0D, 0xA2, 0xAA)),   // 拾音 · 绿
-            11 => (Rgb(0xCA, 0x9F, 0xF1), Rgb(0x8F, 0x68, 0xC9)),  // 纯色 · 紫
-            _ => (Rgb(0xDC, 0xE4, 0xEE), Rgb(0x8E, 0x9C, 0xB0)),   // 固件特效 · 中性
-        };
-        return new LinearGradientBrush(from, to, 50.0);            // 135° = 左上 → 右下
+        if (_updatingMode) return;
+        if (sender is System.Windows.Controls.RadioButton { Tag: string tag }
+            && int.TryParse(tag, out int idx))
+            SetMode(idx);
     }
+
+    // 固件磁贴的图标/名称已随控件一起写进 XAML (HomePage.xaml 的 FxPanel);
+    // 主模式卡的图标底渐变也在 XAML (ModeTile*Brush 资源) —— 这两张映射表因此删除。
 
     private void RefreshModeButtons()
     {
         int cur = ConfigStore.Device.ModeIndex;
         _updatingMode = true;
-        foreach (var (index, _, _) in AmbientCore.Modes)
-        {
-            if (!_modeBtns.TryGetValue(index, out var ctl)) continue;
+        foreach (var (index, ctl) in _modeBtns)
             if (ctl is System.Windows.Controls.RadioButton rb) rb.IsChecked = index == cur;
-        }
         _updatingMode = false;
         bool solid = cur == 11;
         // 纯色拾色器每次展示时回到**折叠**态 (只露 Header: HEX 输入 + 色块预览);
@@ -395,7 +258,7 @@ public partial class HomePage : Page
     /// 让探针能拿到真实的磁贴结构与指标条空态。</summary>
     public void BuildForProbe()
     {
-        BuildModeGrid();
+        CollectModeButtons();
         LoadSolidFromConfig();      // 拾色器初值 (顺带建立 S 轨道渐变 —— 无头宿主里 OnLoaded 不触发)
         _metricsSig = "\0";
         RebuildMetrics(MetricKeysForMode(0, false));   // 未运行 → 一行灰字空态

@@ -550,9 +550,9 @@ static void Run()
 
     Console.WriteLine();
     Console.WriteLine("---- §2 固件特效: 图标磁贴网格 ----");
-    var fxPanel = home.FindName("FxPanel") as ItemsControl;
+    var fxPanel = home.FindName("FxPanel") as Panel;   // 磁贴已改为 XAML 静态子元素 (WrapPanel)
     var fxTpl = home.TryFindResource("FxTileTemplate");
-    var fxTiles = fxPanel?.Items.OfType<System.Windows.Controls.RadioButton>().ToList() ?? [];
+    var fxTiles = fxPanel?.Children.OfType<System.Windows.Controls.RadioButton>().ToList() ?? [];
     // 磁贴数必须等于**MCU 模式数** (数据驱动), 不写死 11 —— 加一款特效不该让探针报警
     int mcuCount = AmbientCore.Modes.Count(m => AmbientCore.IsMcuMode(m.Index));
     bool tilesOk = fxTpl is ControlTemplate && fxPanel is not null && fxTiles.Count == mcuCount
@@ -571,6 +571,14 @@ static void Run()
     Console.WriteLine((namesOk ? "OK   " : "FAIL ") +
                       $"磁贴文案 == 模式表里的名字 = {namesOk}" +
                       (namesOk ? "" : $"  (实得 [{string.Join(", ", tileNames)}])"));
+    // 主模式卡: 同为 XAML 静态声明 —— 三张、都带 ModeCardTemplate、每张有 Tag(=模式号, 供选中态同步)
+    var cardGrid = home.FindName("PrimaryModeGrid") as Panel;
+    var modeCards = cardGrid?.Children.OfType<System.Windows.Controls.RadioButton>().ToList() ?? [];
+    bool cardsOk = modeCards.Count == 3
+        && modeCards.All(c => c.Template is ControlTemplate
+                              && c.Tag is string s && int.TryParse(s, out _));
+    Console.WriteLine((cardsOk ? "OK   " : "FAIL ") +
+                      $"主模式卡 {modeCards.Count} 张 (期望 3), 均带模板与 Tag = {cardsOk}");
     // 折叠头右侧的「当前 XX」胶囊: 非 MCU 模式时必须收起 (收起状态靠它一眼看出用哪款)
     var fxPill = home.FindName("FxCurrentPill") as UIElement;
     var fxPillText = home.FindName("FxCurrentText") as TextBlock;
