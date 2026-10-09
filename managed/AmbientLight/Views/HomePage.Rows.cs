@@ -474,6 +474,15 @@ public partial class HomePage : Page
         public bool ShowSelectButton { get; init; }
     }
 
+    /// <summary>供电文案 = 灯带固件状态字节 bit0 (MCU 回报, 见 PROJECT_PLAN §7.1)。
+    /// 语义是"该设备自己的供电是否正常": 真需要外接供电的型号会跟着外接电源变; USB 供电型号连上恒 1。
+    /// **只有 Running 且 bit0=1 才显示「供电 正常」** —— banner 端口行与设备行共用本函数 (同一口径);
+    /// bit0=0 分不清"真异常"与"状态字节还没读到" → 什么都不显示: 比谎报诚实,
+    /// 也消掉连接瞬间 0→1 的极快翻转; DEV_LOST 同理不显示 (残留值)。</summary>
+    public static string PowerText(int state, long statusByte)
+        => state == AmbientCore.StateRunning && (statusByte & 1) == 1
+            ? Loc.T("Dev.Power.Normal") : "";
+
     private DeviceRowItem MakeDeviceRow(ACDeviceInfo d, ACStatus? sess, int sessSlot)
     {
         bool managedHere = sess != null;
@@ -517,16 +526,8 @@ public partial class HomePage : Page
                           : likelyOurs ? Loc.T("Dev.Name.ReadingShort")
                           : Loc.F("Dev.Name.WithId", DevTypeName(devType), devId);
 
-        // 供电 = 灯带固件周期状态字节的 bit0 (MCU 回报, 见 PROJECT_PLAN §7.1)。
-        // 语义是"该设备自己的供电是否正常": 厂商那些**真需要外接供电的型号**(桌面氛围灯/带电池的)
-        // 它会跟着外接电源变; 而 USB 供电型号**连上就恒 1** (实战: 握手后 0 → 1)。
-        // 所以文案用「供电 正常」而不是"外接"——本型号上它不代表外接电源已接入。
-        // bit0 = 0 有两种可能: 真的供电异常, 或者"这一帧的状态字节还没读到"(会话刚起时结构体全 0),
-        // 两者分不开 → **0 时什么都不显示**: 比谎报"供电 USB"诚实, 也顺手消掉了
-        // "连接瞬间 供电 USB → 供电 外接"那一下极快翻转。DEV_LOST 同理不显示 (残留值)。
-        long statusByte = sess?.ledStatusByte ?? 0;
-        string power = sessState == AmbientCore.StateRunning && (statusByte & 1) == 1
-            ? Loc.T("Dev.Power.Normal") : "";
+        // 供电口径见 PowerText (banner 端口行与设备行共用, 同一规则)
+        string power = PowerText(sessState, sess?.ledStatusByte ?? 0);
         // 只用查得到的配置, 不 GetOrCreate —— 光是"看一眼设备列表"不该给没见过的设备建配置文件
         string leds = managedHere && hasCfg ? Loc.F("Dev.LedCount", ds!.LedCount) : "";
         // 端口显示**实际会用的那个** (轮 34 补 5): 以前无条件显示枚举端口, 于是在

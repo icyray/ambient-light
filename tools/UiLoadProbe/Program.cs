@@ -2003,6 +2003,26 @@ static void Run()
         AmbientLight.Services.ConfigStore.Devices.Remove(probeKey);
     }
 
+    // 供电口径 (banner 端口行与设备行共用 PowerText, 2026-10-10 统一):
+    // 只有 Running + bit0=1 才显示「供电 正常」; 其余一律不显示 (0 分不清真异常/还没读到)。
+    // 同时兜"缺键" —— 显示出来的必须是字典值, 不能是 key 本身。
+    var powerCases = new (int State, long Byte, bool Expect)[]
+    {
+        (AmbientCore.StateRunning, 1, true),
+        (AmbientCore.StateRunning, 0, false),
+        (AmbientCore.StateStarting, 1, false),
+        (AmbientCore.StateWaitDisp, 1, false),
+        (AmbientCore.StateDevLost, 1, false),
+        (AmbientCore.StateStopped, 1, false),
+    };
+    int powerOk = powerCases.Count(c =>
+    {
+        string got = AmbientLight.Views.HomePage.PowerText(c.State, c.Byte);
+        return c.Expect ? got.Length > 0 && got != "Dev.Power.Normal" : got.Length == 0;
+    });
+    Console.WriteLine((powerOk == powerCases.Length ? "OK   " : "FAIL ") +
+                      $"供电口径 (仅 Running+bit0=1 显示「供电 正常」) = {powerOk}/{powerCases.Length}");
+
     Console.WriteLine();
     Console.WriteLine("---- 轮 34 补 4: 总开关按钮的放开条件 (纯函数真值表) ----");
     // 用户要求: 关闭后**收尾没完**不许点开启 (native StopEx 的 join 可能还在跑 1~5s);

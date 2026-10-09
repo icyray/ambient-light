@@ -344,11 +344,15 @@ public partial class HomePage : Page
             : App.Instance.LifecycleBusy ? "Home.Toggle.Closing" : "Home.Toggle.Open");
         ToggleBtn.IsEnabled = ToggleEnabled(_toggling, App.Instance.Starting, App.Instance.LifecycleBusy);
 
+        // 端口行与设备行第二行同构 (分段 join, 空段跳过); 供电口径见 PowerText
         PortText.Text = st.state == AmbientCore.StateStopped && !App.Instance.CoreRunning
             ? Loc.T("Home.Port.None")
-            : Loc.F("Home.Port.Line", st.ComPort, DevTypeName(st.devType),
-                    Loc.T((st.ledStatusByte & 1) == 1 ? "Home.Power.External" : "Home.Power.Usb"),
-                    ConfigStore.Device.LedCount);
+            : string.Join(" · ", new[]
+              {
+                  Loc.F("Home.Port.Prefix", st.ComPort, DevTypeName(st.devType)),
+                  PowerText(st.state, st.ledStatusByte),
+                  Loc.F("Dev.LedCount", ConfigStore.Device.LedCount),
+              }.Where(s => s.Length > 0));
 
         BannerFpsText.Text = $"{st.fps:F1} FPS";
         UpdateMetrics(st);

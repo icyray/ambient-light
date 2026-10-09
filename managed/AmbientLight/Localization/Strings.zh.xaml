@@ -80,6 +80,7 @@
     <sys:String x:Key="Dev.Pill.NoAnswer">未应答</sys:String>
     <sys:String x:Key="Dev.Pill.Ready">就绪</sys:String>
     <sys:String x:Key="Dev.Port.ManualMark">(手动指定)</sys:String>
+    <!-- 供电口径唯一键: banner 端口行与设备行共用 (只有 Running+bit0=1 才显示; 见 HomePage.PowerText) -->
     <sys:String x:Key="Dev.Power.Normal">供电 正常</sys:String>
     <sys:String x:Key="Dev.LedCount">{0} 灯</sys:String>
     <sys:String x:Key="Dev.Toggle.Close">关闭</sys:String>
@@ -107,9 +108,7 @@
     <sys:String x:Key="Home.Toggle.Closing">关闭中…</sys:String>
     <sys:String x:Key="Home.Toggle.Open">开启</sys:String>
     <sys:String x:Key="Home.Port.None">未连接设备</sys:String>
-    <sys:String x:Key="Home.Port.Line">端口 {0} · {1} · 供电 {2} · {3} 灯</sys:String>
-    <sys:String x:Key="Home.Power.External">外接</sys:String>
-    <sys:String x:Key="Home.Power.Usb">USB</sys:String>
+    <sys:String x:Key="Home.Port.Prefix">端口 {0} · {1}</sys:String>
     <sys:String x:Key="Home.Warn.Title">画面提示</sys:String>
     <sys:String x:Key="Home.Warn.Blocked">无法开启灯带</sys:String>
     <sys:String x:Key="Home.Warn.MonitorFallback">配置的显示器不可用, 已回退主屏 (margin {{底,右,顶,左}} = {0},{1},{2},{3})</sys:String>
