@@ -64,10 +64,10 @@ public partial class HomePage : Page
         if (keys.Length == 0) return;
 
         var dev = ConfigStore.Device;
-        foreach (var (key, el) in _metricValues)
+        for (int i = 0; i < _metricItems.Count && i < keys.Length; i++)
         {
             // 不适用 / 取不到一律显示 "—" (0 会被读成"卡住了", 空着又像没填)
-            el.Text = key switch
+            _metricItems[i].Value = keys[i] switch
             {
                 "proc" => st.state == AmbientCore.StateRunning ? $"{st.procMs:F2} ms" : "—",
                 "wire" => st.state == AmbientCore.StateRunning ? $"{st.wireMs:F2} ms" : "—",
@@ -82,58 +82,40 @@ public partial class HomePage : Page
         // 不做健康着色 (轮 27 用户定稿): 处理/串口耗时没有公认的绝对标准, 涂绿涂红只会误导
     }
 
-    /// <summary>双层等宽分栏: 标签在上 (11px 次要色) / 数值在下 (16px), 都居中。
-    /// 初值一律 "—" 由 UpdateMetrics 填 —— 这样"取不到"与"还没填"长得一样, 不会一闪一闪。</summary>
+    /// <summary>指标条的单格数据: 标签 + 值。值走 INPC → XAML 模板里的 {Binding Value} 自动刷新
+    /// (code-behind 不再直接改 TextBlock)。</summary>
+    public sealed class MetricCell : System.ComponentModel.INotifyPropertyChanged
+    {
+        private string _value = "—";
+
+        public string Label { get; }
+
+        public MetricCell(string label) => Label = label;
+
+        public string Value
+        {
+            get => _value;
+            set
+            {
+                _value = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Value)));
+            }
+        }
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    /// <summary>重建指标条 (指标集变化时)。结构在 XAML 模板里 (双层: 标签上 / 数值下, 等宽分栏);
+    /// 这里只把"这一模式的指标键"变成数据项, 并切换空态占位。</summary>
     private void RebuildMetrics(string[] keys)
     {
-        MetricsGrid.Children.Clear();
-        MetricsGrid.ColumnDefinitions.Clear();
-        _metricValues.Clear();
-        if (keys.Length == 0)
-        {
-            // 未启动 → 一行灰字 (不是四个 0.0: 0 会被读成"卡住了")
-            MetricsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var gray = new System.Windows.Controls.TextBlock
-            {
-                Text = "未开启 · 指标在灯带运行后显示",
-                FontSize = 12,
-                HorizontalAlignment = HorizontalAlignment.Center,
-            };
-            gray.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                      "TextFillColorSecondaryBrush");
-            MetricsGrid.Children.Add(gray);
-            return;
-        }
-        for (int i = 0; i < keys.Length; i++)
-        {
-            MetricsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var label = new System.Windows.Controls.TextBlock
-            {
-                Text = MetricLabel(keys[i]),
-                FontSize = 11,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
-            };
-            label.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                       "TextFillColorSecondaryBrush");
-            var val = new System.Windows.Controls.TextBlock
-            {
-                Text = "—",
-                FontSize = 14,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 2, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Center,
-            };
-            val.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                     "TextFillColorPrimaryBrush");
-            var cell = new StackPanel();
-            cell.Children.Add(label);
-            cell.Children.Add(val);
-            Grid.SetColumn(cell, i);
-            MetricsGrid.Children.Add(cell);
-            _metricValues.Add((keys[i], val));
-        }
+        var items = new List<MetricCell>(keys.Length);
+        foreach (var k in keys) items.Add(new MetricCell(MetricLabel(k)));
+        _metricItems = items;
+        MetricsPanel.ItemsSource = items;
+        bool empty = keys.Length == 0;
+        MetricsPanel.Visibility = empty ? Visibility.Collapsed : Visibility.Visible;
+        MetricsEmptyText.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ---- §7 布局预览 (折叠) -----------------------------------------
@@ -191,35 +173,6 @@ public partial class HomePage : Page
     }
 
     // ---- 模式/设备图标与名称 ------------------------------------------
-    /// <summary>显示器编号徽标 (轮 28): 自绘小圆圈 + 数字。
-    /// UI 库里确实有 `NumberCircle1..9`, 但实测 **2 号渲染不出数字**
-    /// (枚举里搜得到这些名字, 字形却对不上 —— 又是"二进制串里搜得到 ≠ 能用"那条坑),
-    /// 与其赌字体某个序号, 不如自己画: 任意序号都对, 还跟着主题走。
-    /// 轮 29: 改成**实心强调色 + 反白数字**, 不描边。</summary>
-    private static UIElement MonitorBadge(int index)
-    {
-        var text = new System.Windows.Controls.TextBlock
-        {
-            Text = (index + 1).ToString(),
-            FontSize = 10,
-            FontWeight = FontWeights.SemiBold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        text.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                  "TextOnAccentFillColorPrimaryBrush");
-        var badge = new Border
-        {
-            Width = 16,
-            Height = 16,
-            CornerRadius = new CornerRadius(8),      // = 半边长 → 正圆
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = text,
-        };
-        badge.SetResourceReference(Border.BackgroundProperty, "AccentFillColorDefaultBrush");
-        return badge;
-    }
-
     private static SymbolRegular DevIcon(int t) => t switch
     {
         AmbientCore.DevScreen => SymbolRegular.Desktop24,
@@ -281,91 +234,55 @@ public partial class HomePage : Page
     private void RefreshMonitors()
     {
         if (MonitorsPanel == null) return;
-        MonitorsPanel.Children.Clear();
         try
         {
             var mons = AmbientCore.GetMonitors();
-            if (mons.Length == 0)
-            {
-                MonitorsPanel.Children.Add(GrayText("未枚举到显示器"));
-                return;
-            }
             int cur = ConfigStore.Device.MonitorIndex;
-            for (int i = 0; i < mons.Length; i++)
-                MonitorsPanel.Children.Add(BuildMonitorRow(i, mons[i], i == cur));
+            var items = new List<MonitorRowItem>(mons.Length);
+            for (int i = 0; i < mons.Length; i++) items.Add(MakeMonitorRow(i, mons[i], i == cur));
+            MonitorsList.ItemsSource = items;
+            // 空态/提示文本是**动态状态** → 显隐仍归 code-behind (文本与结构在 XAML)
+            bool any = items.Count > 0;
+            MonitorsStateText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+            if (!any) MonitorsStateText.Text = "未枚举到显示器";
             // 选择器不在这里重复做 (已在「采集」页) —— 这里只做"正在采集的是哪台"的识别
-            var hint = GrayText("切换采集目标在「采集」页");
-            hint.Margin = new Thickness(0, 4, 0, 0);
-            MonitorsPanel.Children.Add(hint);
+            MonitorsHintText.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         }
         catch (Exception ex)
         {
-            MonitorsPanel.Children.Add(GrayText($"枚举失败: {ex.Message}"));
+            MonitorsList.ItemsSource = null;
+            MonitorsStateText.Text = $"枚举失败: {ex.Message}";
+            MonitorsStateText.Visibility = Visibility.Visible;
+            MonitorsHintText.Visibility = Visibility.Collapsed;
         }
     }
 
-    private static System.Windows.Controls.TextBlock GrayText(string text)
+    /// <summary>显示器行的数据 (XAML 模板 MonitorRowTemplate 消费)。
+    /// 「正在采集」的配色由 ThemePalette 纯函数按当前主题给, 与设备行胶囊同一套。</summary>
+    public sealed class MonitorRowItem
     {
-        var t = new System.Windows.Controls.TextBlock { Text = text, FontSize = 12 };
-        t.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                               "TextFillColorSecondaryBrush");
-        return t;
+        public int Number { get; init; }
+        public string ResolutionText { get; init; } = "";
+        public string AdapterText { get; init; } = "";
+        public bool IsPrimary { get; init; }
+        public bool Capturing { get; init; }
+        public Brush? CaptureBg { get; init; }
+        public Brush? CaptureFg { get; init; }
     }
 
-    /// <summary>显示器行 (轮 27 用户定稿): `编号  分辨率  适配器`。
-    /// - 编号 = UI 库里现成的数字圆形图标 (NumberCircle1..9), 不再显示 `[0] \\.\DISPLAY5`;
-    /// - 适配器用**次要色** (它只是"哪块卡带出来的", 不是主信息); 不再挂悬浮提示;
-    /// - 去掉按长宽比画的小方块 (形状预览)。
-    /// 注: 适配器名受 native 侧 32 字节缓冲限制, 太长的会被截断 (如 "…Laptop GPU" → "…Laptop")。</summary>
-    private UIElement BuildMonitorRow(int index, ACMonitorInfo m, bool capturing)
+    private static MonitorRowItem MakeMonitorRow(int index, ACMonitorInfo m, bool capturing)
     {
-        var numIcon = MonitorBadge(index);
-
-        var res = new System.Windows.Controls.TextBlock
+        var tone = ThemePalette.Of(Tone.Blue, ThemeService.IsDark);
+        return new MonitorRowItem
         {
-            Text = m.width > 0 && m.height > 0 ? $"{m.width}×{m.height}" : "分辨率未知",
-            FontSize = 12.5,
-            VerticalAlignment = VerticalAlignment.Center,
+            Number = index + 1,
+            ResolutionText = m.width > 0 && m.height > 0 ? $"{m.width}×{m.height}" : "分辨率未知",
+            AdapterText = m.Adapter,
+            IsPrimary = m.primary != 0,
+            Capturing = capturing,
+            CaptureBg = Frozen(tone.Background),
+            CaptureFg = Frozen(tone.Foreground),
         };
-        res.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                 "TextFillColorPrimaryBrush");
-        var adapter = new System.Windows.Controls.TextBlock
-        {
-            Text = m.Adapter,
-            FontSize = 11.5,
-            Margin = new Thickness(10, 0, 8, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        adapter.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
-                                     "TextFillColorSecondaryBrush");
-
-        var texts = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(10, 0, 8, 0),
-        };
-        texts.Children.Add(res);
-        texts.Children.Add(adapter);
-
-        var marks = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        if (m.primary != 0)
-            marks.Children.Add(Pill("主屏", null, null, "ControlFillColorDefaultBrush", "TextFillColorSecondaryBrush"));
-        if (capturing)
-            marks.Children.Add(Pill("正在采集", ToneBrush(Tone.Blue), left: 6));
-
-        var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(numIcon, 0);
-        Grid.SetColumn(texts, 1);
-        Grid.SetColumn(marks, 2);
-        grid.Children.Add(numIcon);
-        grid.Children.Add(texts);
-        grid.Children.Add(marks);
-        return grid;
     }
 
     private async Task RefreshDevicesAsync()

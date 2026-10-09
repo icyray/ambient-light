@@ -45,7 +45,7 @@ public partial class HomePage : Page
     private bool _updatingMode;                 // 程序化设 IsChecked 时不回环下发
     private bool _hexEditing;                   // HexBox / H,S 滑块的程序化写入期间避免回环
     private readonly Dictionary<int, System.Windows.Controls.Control> _modeBtns = new();
-    private readonly List<(string Key, System.Windows.Controls.TextBlock Value)> _metricValues = new();
+    private List<MetricCell> _metricItems = [];
 
     // banner 文字/胶囊用**自有画刷**: 只有自己的 SolidColorBrush 才能做 ColorAnimation
     // (主题资源刷子是共享且可能已冻结的)
@@ -267,8 +267,8 @@ public partial class HomePage : Page
     /// <summary>探针用: 按给定指标集渲染一次 (无头宿主没有运行中的会话, 只能这样验双层结构)</summary>
     public void RenderMetricsForProbe(string[] keys) => RebuildMetrics(keys);
 
-    /// <summary>探针用: 造一行显示器 (无头宿主枚举不到真显示器) —— 验"编号图标 + 分辨率 + 适配器"
-    /// 的格式, 以及"不再有形状方块 / 不再有悬浮提示"。</summary>
+    /// <summary>探针用: 造一行显示器 (无头宿主枚举不到真显示器) —— 用**真模板**渲染,
+    /// 验"编号 + 分辨率 + 适配器真的进了模板"与"不再有形状方块 / 不再有悬浮提示"。</summary>
     public UIElement BuildMonitorRowForProbe(int index, string adapter, int w, int h)
     {
         ACMonitorInfo m = default;
@@ -282,7 +282,13 @@ public partial class HomePage : Page
         m.width = w;
         m.height = h;
         m.primary = 1;
-        return BuildMonitorRow(index, m, capturing: true);
+        // 用 ContentPresenter 渲染 (与 ItemsControl 同款路径): 模板应用时数据已在, 绑定一次到位。
+        // ⚠️ 不用 DataTemplate.LoadContent + 事后赋 DataContext —— 实测那样绑定不刷新 (文本全空)。
+        return new ContentPresenter
+        {
+            Content = MakeMonitorRow(index, m, capturing: true),
+            ContentTemplate = (DataTemplate)FindResource("MonitorRowTemplate"),
+        };
     }
 
     // ---- 状态轮询 ----------------------------------------------------

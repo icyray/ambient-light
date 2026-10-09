@@ -752,30 +752,59 @@ static void Run()
                       "  · 当前措辞: " +
                       string.Join(" / ", allMetricKeys.Select(k => $"{k}={AmbientLight.Views.HomePage.MetricLabel(k)}")));
     // 双层结构: 栏数必须等于指标数 (数据驱动), 每栏 = 标签行 + 数值行, 数值初值不能是空/0
-    // (0 会被读成"卡住了"); 等宽分栏。
-    var metricsGrid = home.FindName("MetricsGrid") as Grid;
+    // (0 会被读成"卡住了"); 等宽分栏。结构在 XAML 模板里 → 这里验"数据 → 模板 → 实际渲染"整条线。
+    void CollectTextBlocks(DependencyObject d, List<TextBlock> into)
+    {
+        if (d is TextBlock t) into.Add(t);
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+            CollectTextBlocks(VisualTreeHelper.GetChild(d, i), into);
+    }
+    var metricsPanel = home.FindName("MetricsPanel") as ItemsControl;
+    var metricsEmpty = home.FindName("MetricsEmptyText") as TextBlock;
     var keysForProbe = AmbientLight.Views.HomePage.MetricKeysForMode(0, true);
     home.RenderMetricsForProbe(keysForProbe);
-    var cells = metricsGrid?.Children.OfType<StackPanel>().ToList() ?? [];
-    bool twoLine = cells.Count == keysForProbe.Length && cells.All(c => c.Children.Count == 2
-        && c.Children[0] is TextBlock c0 && c0.Text.Length > 0
-        && c.Children[1] is TextBlock c1 && c1.Text.Length > 0 && c1.Text != "0");
-    bool equalCols = metricsGrid?.ColumnDefinitions.Count == cells.Count
-                     && metricsGrid.ColumnDefinitions.All(cd => cd.Width.IsStar && cd.Width.Value == 1);
+    // 逼出容器 (ItemsControl 的容器在布局时生成; 控件不接窗口也能对它自身 Measure/Arrange)
+    metricsPanel!.Measure(new Size(800, 120));
+    metricsPanel.Arrange(new Rect(0, 0, 800, 120));
+    metricsPanel.UpdateLayout();
+    var cellTexts = new List<List<TextBlock>>();
+    for (int i = 0; i < metricsPanel.Items.Count; i++)
+    {
+        var tbs = new List<TextBlock>();
+        if (metricsPanel.ItemContainerGenerator.ContainerFromIndex(i) is { } cont)
+            CollectTextBlocks(cont, tbs);
+        cellTexts.Add(tbs);
+    }
+    bool twoLine = cellTexts.Count == keysForProbe.Length && cellTexts.All(t =>
+        t.Count == 2 && t[0].Text.Length > 0 && t[1].Text.Length > 0 && t[1].Text != "0");
+    bool equalCols = metricsPanel.ItemsPanel.LoadContent()
+                     is System.Windows.Controls.Primitives.UniformGrid { Rows: 1 };
     Console.WriteLine((twoLine ? "OK   " : "FAIL ") +
-                      $"双层结构: {cells.Count} 栏 == 指标数 {keysForProbe.Length}, 每栏 2 行 (标签/数值), " +
+                      $"双层结构: {cellTexts.Count} 栏 == 指标数 {keysForProbe.Length}, 每栏 2 行 (标签/数值), " +
                       $"数值初值非空非 0 = {twoLine}");
     Console.WriteLine((equalCols ? "OK   " : "FAIL ") +
-                      $"等宽分栏 = {equalCols} (列数 {metricsGrid?.ColumnDefinitions.Count}, 全 1*)");
+                      $"等宽分栏 (UniformGrid 单行) = {equalCols}");
+    // 接线断言: 改数据项 → 看**渲染出来的**文本是否跟随 (证明模板里的绑定真的活着)
+    bool valueWired = false;
+    if (metricsPanel.Items.Count > 0
+        && metricsPanel.Items[0] is AmbientLight.Views.HomePage.MetricCell mc
+        && cellTexts.Count > 0 && cellTexts[0].Count == 2)
+    {
+        mc.Value = "接线探针";
+        valueWired = cellTexts[0][1].Text == "接线探针";
+    }
+    Console.WriteLine((valueWired ? "OK   " : "FAIL ") +
+                      $"指标值绑定是活的 (改数据项 → 渲染文本跟随) = {valueWired}");
     // 没指标时 (灯带没开) 收成一行占位, 而不是铺 N 栏空值; 同时指标卡本身要挂着 AnimatedVisibility
     // 且初始是**收起**的 (轮 29: 关闭时整块高度动画收掉, 与拾音页「输入/输出设备」同一套机制)
     home.RenderMetricsForProbe([]);
-    bool emptyCollapsed = metricsGrid is { Children.Count: 1 } && metricsGrid.ColumnDefinitions.Count == 1;
+    bool emptyCollapsed = metricsPanel.Items.Count == 0
+                          && metricsEmpty?.Visibility == Visibility.Visible;
     var metricsCard = home.FindName("MetricsCard") as FrameworkElement;
     bool cardWired = metricsCard != null
                      && !AmbientLight.Controls.AnimatedVisibility.GetExpanded(metricsCard);
     Console.WriteLine((emptyCollapsed ? "OK   " : "FAIL ") +
-                      $"空指标集 → 单栏占位 (不铺空值) = {emptyCollapsed}");
+                      $"空指标集 → 单行灰字占位 (不铺空值) = {emptyCollapsed}");
     Console.WriteLine((cardWired ? "OK   " : "FAIL ") +
                       $"指标卡挂 AnimatedVisibility 且初始收起 = {cardWired} " +
                       "(与拾音页「输入/输出设备」同一套收展机制)");
@@ -948,6 +977,11 @@ static void Run()
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) WalkMon(VisualTreeHelper.GetChild(d, i));
         }
         WalkMon(mrow);
+        // [diag] 绑定没生效时看这里: 数据项到底有没有挂上
+        var rowItem = ((mrow as FrameworkElement)?.DataContext
+                       ?? (mrow as ContentPresenter)?.Content) as AmbientLight.Views.HomePage.MonitorRowItem;
+        Console.WriteLine($"       [diag] 行根={mrow.GetType().Name}, 数据项=" +
+                          (rowItem is null ? "(null)" : $"#{rowItem.Number} / {rowItem.ResolutionText}"));
         string joined = string.Join(" | ", texts.Select(t => t.Text));
         bool resOk = texts.Any(t => t.Text.Contains($"{probeW}×{probeH}"));
         bool adOk = texts.Any(t => t.Text.Contains(probeAdapter));

@@ -129,6 +129,50 @@
             <GradientStop Offset="1" Color="#FF8F68C9" />
         </LinearGradientBrush>
 
+        <!-- 布尔 → Visibility (显示器行的「主屏 / 正在采集」标记用; WPF 自带转换器) -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- 显示器行模板 (由 MonitorsList 逐行渲染):
+             · 编号徽标 = 自绘正圆 (库里的 NumberCircle1..9 实测渲染不出数字; 强调色底 + 反白数字);
+             · 分辨率主信息色、适配器次要色 (它只是"哪块卡带出来的");
+             · 「正在采集」的配色由数据项携带 (ThemePalette 纯函数, 随主题深浅)。 -->
+        <DataTemplate x:Key="MonitorRowTemplate">
+            <Grid Margin="0,4,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Width="16" Height="16" CornerRadius="8" VerticalAlignment="Center"
+                        Background="{DynamicResource AccentFillColorDefaultBrush}">
+                    <TextBlock Text="{Binding Number}" FontSize="10" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                </Border>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                            Margin="10,0,8,0">
+                    <TextBlock Text="{Binding ResolutionText}" FontSize="12.5" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Text="{Binding AdapterText}" FontSize="11.5" Margin="10,0,8,0"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border CornerRadius="9" Padding="7,1,7,1" VerticalAlignment="Center"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            Visibility="{Binding IsPrimary, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="主屏" FontSize="10.5"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Border>
+                    <Border CornerRadius="9" Padding="7,1,7,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                            Background="{Binding CaptureBg}"
+                            Visibility="{Binding Capturing, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="正在采集" FontSize="10.5" Foreground="{Binding CaptureFg}" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
         <!-- 只留图标的按钮模板已提到 App.xaml (轮 29: 采集页/拾音页也要用同一个) -->
 
         <!-- 预设色板单个色块 (轮 27, 轮 28 修同心, 轮 29 去掉"原始/生效色"行):
@@ -782,7 +826,34 @@
         </ui:CardExpander>
         <ui:Card x:Name="MetricsCard" Padding="16,10" Margin="0,0,0,4"
                  controls:AnimatedVisibility.Expanded="False">
-            <Grid x:Name="MetricsGrid" />
+            <Grid>
+                <!-- 指标格: 等宽分栏 (UniformGrid 单行), 每格 = 标签上 / 数值下;
+                     数值经 {Binding Value} 刷新 (MetricCell 是 INPC 数据项)。
+                     指标集随模式换 (MetricKeysForMode 纯函数)。 -->
+                <ItemsControl x:Name="MetricsPanel" Visibility="Collapsed">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Label}" FontSize="11"
+                                           HorizontalAlignment="Center" TextAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding Value}" FontSize="14" FontWeight="SemiBold"
+                                           Margin="0,2,0,0" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- 未开启 (无指标集) 时的一行灰字占位 (不铺 0.0: 0 会被读成"卡住了") -->
+                <TextBlock x:Name="MetricsEmptyText" Text="未开启 · 指标在灯带运行后显示" FontSize="12"
+                           HorizontalAlignment="Center" Visibility="Collapsed"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Grid>
         </ui:Card>
 
         <!-- §6 设备 / 显示器 (结构化行) -->
@@ -810,8 +881,16 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </ui:Button>
                 </Grid>
-                <!-- 显示器改成按真实长宽比画的缩略矩形 + 语义标记; 采集在此处不可切换 (选择器在「采集」页) -->
-                <StackPanel x:Name="MonitorsPanel" Margin="0,8,0,0" />
+                <!-- 显示器行 (模板 MonitorRowTemplate); 采集目标不在此切换 (选择器在「采集」页)。
+                     行列表与状态/提示文本是**动态内容**, 由 code-behind 填/控制显隐。 -->
+                <StackPanel x:Name="MonitorsPanel" Margin="0,8,0,0">
+                    <ItemsControl x:Name="MonitorsList" ItemTemplate="{StaticResource MonitorRowTemplate}" />
+                    <TextBlock x:Name="MonitorsStateText" FontSize="12" Visibility="Collapsed"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="MonitorsHintText" Text="切换采集目标在「采集」页" FontSize="12"
+                               Margin="0,4,0,0" Visibility="Collapsed"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
             </StackPanel>
         </ui:Card>
 
