@@ -664,7 +664,8 @@
 
                 <!-- 色相 H: 彩虹轨道。滑块自身的轨道用局部资源刷覆盖成透明, 渐变交给下层 Border 承担
                      (WPF-UI 4.3.0 模板里轨道是 Border#TrackBackground, Background = SliderTrackFill)。 -->
-                <Grid x:Name="HueRow" Margin="0,10,0,0">                    <Grid.ColumnDefinitions>
+                <Grid x:Name="HueRow" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />

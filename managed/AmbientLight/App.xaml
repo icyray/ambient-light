@@ -40,6 +40,21 @@
                 <Setter Property="Margin" Value="4,14,4,6" />
             </Style>
 
+            <!-- SettingRow 的头部结构 (标题 + 说明两行)。控件构造期只装一次, 之后 Title/Description
+                 变化只改这两行文本 —— 结构在 XAML, 代码不重复生成 (全项目 ~30 处 SettingRow)。
+                 空说明时由代码把第二行 Collapsed (不留空行)。 -->
+            <DataTemplate x:Key="SettingRowHeaderTemplate">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="" FontSize="14" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="1" Text="" FontSize="12" Margin="0,2,8,0" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Grid>
+            </DataTemplate>
+
             <!-- 只留图标的按钮模板 (轮 18 ②, 轮 29 提到 App 级共用): 去掉底/边框/悬停填充/按下填充,
                  只保留一个悬停淡入, 视觉上就是一个可点的图标。保留 ui:Button 宿主是为了沿用
                  Click / 键盘 / ToolTip。⚠️ 不要用 Template="{x:Null}" —— 模板为 null 什么都不渲染。 -->

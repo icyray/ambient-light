@@ -1,6 +1,7 @@
 // Controls/SettingRow.cs — Win11 设置风格行卡片 (M5.1): 图标 + 左侧标题/说明 + 右侧交互控件。
-// 复用 WPF-UI CardControl 模板的三列 Grid (Icon | Header | Content), Header 由
-// Title/Description 自动生成为两行文本, 免去每行 ~20 行样板 (全项目 ~30 行设置项)。
+// 复用 WPF-UI CardControl 模板的三列 Grid (Icon | Header | Content); Header 用 App 资源里的
+// `SettingRowHeaderTemplate` **装一次** (标题 + 说明两行), 之后 Title/Description 变化只改两行文本
+// —— 结构在 XAML, 代码不重复生成 (全项目 ~30 处)。
 // 说明文字挂 TextFillColorSecondaryBrush (WPF-UI 的"次要文字"档, 随主题自动跟随)。
 // 为什么不用 Tertiary: 浅色主题下它是 #72000000 (45% 黑), 落在卡片底上对比度只有 ~3.3 → 发虚;
 // 也别用 Opacity 压暗文字 (同样会掉到 3:1 以下)。
@@ -22,9 +23,14 @@ public class SettingRow : Wpf.Ui.Controls.CardControl
     public static readonly DependencyProperty DescriptionProperty = DependencyProperty.Register(
         nameof(Description), typeof(string), typeof(SettingRow), new PropertyMetadata(null, OnTextChanged));
 
+    // Header 里两行文本的引用 (装一次模板后缓存; 之后只改 .Text / Visibility)
+    private TextBlock? _titleText;
+    private TextBlock? _descText;
+
     public SettingRow()
     {
         SetResourceReference(StyleProperty, typeof(Wpf.Ui.Controls.CardControl));
+        LoadHeaderTemplate();
     }
 
     public string Title
@@ -40,37 +46,30 @@ public class SettingRow : Wpf.Ui.Controls.CardControl
     }
 
     private static void OnTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        => ((SettingRow)d).RebuildHeader();
+        => ((SettingRow)d).UpdateHeaderTexts();
 
-    private void RebuildHeader()
+    /// <summary>把 Header 结构从 App 资源装一次。模板里固定: Children[0] = 标题 / [1] = 说明。</summary>
+    private void LoadHeaderTemplate()
     {
-        var grid = new Grid();
-
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var title = new TextBlock
-        {
-            Text = Title,
-            FontSize = 14,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        Grid.SetRow(title, 0);
-        grid.Children.Add(title);
-
-        if (!string.IsNullOrEmpty(Description))
-        {
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var desc = new TextBlock
-            {
-                Text = Description,
-                FontSize = 12,
-                Margin = new Thickness(0, 2, 8, 0),
-                TextWrapping = TextWrapping.Wrap,
-            };
-            desc.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
-            Grid.SetRow(desc, 1);
-            grid.Children.Add(desc);
-        }
-
+        if (TryFindResource("SettingRowHeaderTemplate") is not DataTemplate tpl
+            || tpl.LoadContent() is not Grid grid
+            || grid.Children.Count < 2
+            || grid.Children[0] is not TextBlock title
+            || grid.Children[1] is not TextBlock desc)
+            return;                              // 资源缺失时保持空 Header (探针有接线断言守着)
+        _titleText = title;
+        _descText = desc;
         Header = grid;
+        UpdateHeaderTexts();
+    }
+
+    /// <summary>只有文本在动 (构造期也可能先于 XAML 属性应用被调 → 判空)。</summary>
+    private void UpdateHeaderTexts()
+    {
+        if (_titleText is null || _descText is null) return;
+        _titleText.Text = Title ?? "";
+        bool hasDesc = !string.IsNullOrEmpty(Description);
+        _descText.Text = Description ?? "";
+        _descText.Visibility = hasDesc ? Visibility.Visible : Visibility.Collapsed;
     }
 }

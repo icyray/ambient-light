@@ -310,6 +310,27 @@ static void Run()
             : $"FAIL {pt.Name}: {string.Join(", ", bad)}");
     }
 
+    // SettingRow 头部结构: 从 App 资源模板装出来 (标题/说明真的进了两行文本); 空说明收起第二行。
+    {
+        var advRows = new AmbientLight.Views.SettingsPageAdvanced();
+        var rows = LogicalDescendants(advRows).OfType<AmbientLight.Controls.SettingRow>().ToList();
+        int wired = 0, mismatch = 0;
+        foreach (var r in rows)
+        {
+            if (r.Header is not Grid hg || hg.Children.Count < 2
+                || hg.Children[0] is not TextBlock t0 || hg.Children[1] is not TextBlock t1)
+                continue;
+            bool titleOk = t0.Text == (r.Title ?? "");
+            bool descOk = string.IsNullOrEmpty(r.Description)
+                ? t1.Visibility == Visibility.Collapsed && t1.Text.Length == 0
+                : t1.Visibility == Visibility.Visible && t1.Text == r.Description;
+            if (titleOk && descOk) wired++;
+            else mismatch++;
+        }
+        Console.WriteLine((rows.Count > 0 && mismatch == 0 && wired == rows.Count ? "OK   " : "FAIL ") +
+                          $"SettingRow 头部模板接线: {wired}/{rows.Count} 行的标题/说明进了两行文本 (不匹配 {mismatch})");
+    }
+
     Console.WriteLine();
     Console.WriteLine("---- ModeCard visual check (HomePage 资源模板) ----");
     var home = new AmbientLight.Views.HomePage();
