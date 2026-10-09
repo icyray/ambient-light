@@ -1465,47 +1465,6 @@ static void Run()
     Console.WriteLine((migOk ? "OK   " : "FAIL ") + $"'两个开关'→档位 迁移真值表 (4 组) = {migOk}");
 
     Console.WriteLine();
-    Console.WriteLine("---- 滑块皮肤 (本地魔改: 进度填充 + 禁用态) ----");
-    // ① 我们的隐式样式必须**赢过** WPF-UI 的 (靠 App.xaml 合并顺序) —— 判据:
-    //    解析出的 Style 里带 `IsSelectionRangeEnabled` 的 Setter (上游 4.3.0 没有这一条)
-    var sliderStyle = home.TryFindResource(typeof(Slider)) as Style;
-    bool styleWins = sliderStyle?.Setters.OfType<Setter>()
-        .Any(x2 => x2.Property == Slider.IsSelectionRangeEnabledProperty) == true;
-    Console.WriteLine((styleWins ? "OK   " : "FAIL ") + $"本地滑块样式生效(含进度填充开关) = {styleWins}");
-
-    // ② 模板里真有 PART_SelectionRange (官方机制的挂点), 且 4px 圆角
-    var slProbe = new Slider { Minimum = 0, Maximum = 100, Value = 50, Width = 200 };
-    var slHost = new System.Windows.Controls.Grid { Width = 200, Height = 40 };
-    slHost.Children.Add(slProbe);
-    slHost.Measure(new Size(200, 40));
-    slHost.Arrange(new Rect(0, 0, 200, 40));
-    slProbe.ApplyTemplate();
-    var slPart = slProbe.Template?.FindName("PART_SelectionRange", slProbe)
-                 as System.Windows.Shapes.Rectangle;
-    bool partOk = slPart is { Height: 4 } && slPart.RadiusX == 2;
-    Console.WriteLine((partOk ? "OK   " : "FAIL ") +
-                      $"模板含 PART_SelectionRange (高 4 圆角 2) = {partOk} (实测高 {slPart?.Height})");
-
-    // ③ 官方机制真的在驱动它: 50% 时宽度应是轨道可用段的一半 (WPF 用 track-thumb 折算)
-    double slW = slPart?.Width ?? 0;
-    bool driven = slW > 20 && slW < 200;
-    var slTrackBg = slProbe.Template?.FindName("TrackBackground", slProbe) as Border;
-    Console.WriteLine((driven ? "OK   " : "FAIL ") + $"滑块值驱动填充宽度 (50% → {slW:F1}px) = {driven}");
-    // ④ 乘数型滑块 (中性值在中间) 必须显式设 SelectionStart=1 —— 否则填充会画成"从 0 拉满",
-    //    对"增益/倍率"这种滑块的语义是误导 (0 不是"更小", 是"全无")
-    var colorPageProbe = new AmbientLight.Views.SettingsPageColor();
-    var multNames = new[] { "HueSlider", "RGainSlider", "GGainSlider", "BGainSlider" };
-    var multBad = multNames.Where(n =>
-        (colorPageProbe.FindName(n) as Slider) is not { } s3 || Math.Abs(s3.SelectionStart - 1) > 0.001).ToArray();
-    Console.WriteLine((multBad.Length == 0 ? "OK   " : "FAIL ") +
-                      $"乘数型滑块填充起点=1 (色相/三通道增益)" +
-                      (multBad.Length > 0 ? $" · 缺: {string.Join(",", multBad)}" : ""));
-
-    Console.WriteLine($"INFO 填充几何: {slW:F1}x{slPart?.Height} · Canvas.Left={Canvas.GetLeft(slPart):F1} " +
-                      $"Top={Canvas.GetTop(slPart):F1} · 轨道底 {slTrackBg?.ActualWidth:F0}x{slTrackBg?.ActualHeight:F0} " +
-                      $"@Top={Canvas.GetTop(slTrackBg):F1}");
-
-    Console.WriteLine();
     Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");
     // 用户的调参入口有两处: XAML 的 BannerStreak<色系>Brush(Light) 与代码里的 ModeGlowColor(mode, dark)。
     // 这里断三件事: ① 键的约定 (浅色版 = 深色版 + "Light"); ② **资源真能解析**(解析失败是静默的);
