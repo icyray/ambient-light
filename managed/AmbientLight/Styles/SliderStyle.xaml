@@ -6,19 +6,21 @@
          ============================================================================
          来源: WPF-UI **4.3.0** `src/Wpf.Ui/Controls/Slider/Slider.xaml` 的 `UiHorizontalSlider`。
          为什么自己抄一份: 上游缺两样, 而且**从外部改不了** ——
-           · 没有 `PART_SelectionRange` → 官方进度填充机制全失效;
+           · 没有 `PART_SelectionRange` → WPF 官方的进度填充机制没挂点 (静默什么都不做);
            · `ControlTemplate.Triggers` 只有 TickPlacement×3 + IsMouseOver → **禁用态零视觉差异**;
            · 两个 RepeatButton 的 Style 在模板内 `StaticResource` 写死 → 外部覆盖不了。
          本文件 = **上游模板逐字照抄 + 三处改动**(标 ①②③), 刻意保持最小差异便于升级 diff。
 
-         填充有三种模式, 由页面用附加属性声明 (Controls/SliderSkin.cs):
-           `SliderSkin.Fill="Track"` (默认) —— **贴左边缘**的实体填充 (画在 Decrease 重复按钮里);
-           `SliderSkin.Fill="Anchor"`          —— 从**中性值**向两侧 (官方 PART 机制 + 两端 min/max 折算),
-                                                 需要 `SliderSkin.Anchor` 给中性值;
-           `SliderSkin.Fill="None"`            —— 不画 (轨道本身就是色带, 例如纯色拾色器的色调/饱和度)。
-         ⚠️ 后两种"不画 Track 那条"是**代码**做的 (SliderSkin.ApplyFill 遍历模板收起它) ——
-            所有跨模板的绑定/触发都试过且都不可靠, 见那边注释。
+         填充只有一种画法: **WPF 官方的 `PART_SelectionRange`**(上游模板缺的那个挂点)。
+         为什么不自己在重复按钮里画一条 (前三轮的做法): 那条填充"什么时候该藏起来"**只能在
+         运行时改元素的 Visibility/Fill**, 而所有"改元素"的时机 (Loaded / LayoutUpdated / 跨模板触发)
+         都不可靠 —— 折叠容器里模板根本没应用、主题切换会重建重复按钮把状态丢掉。官方机制由
+         WPF 自己在模板应用/值变化时算几何, **没有任何时机问题** ✓ (踩坑史见文档 §7)。
 
+         三种模式 (页面用附加属性声明, 见 Controls/SliderSkin.cs):
+           `SliderSkin.Fill="Track"` (默认) —— 从**最小值**到拇指 (贴左边缘);
+           `SliderSkin.Fill="Anchor"`          —— 从**中性值**向两侧 (增益/倍率类), 需 `SliderSkin.Anchor`;
+           `SliderSkin.Fill="None"`            —— **不画** (轨道本身就是色带, 如纯色拾色器的色调/饱和度)。
          ⚠️ 维护约定:
            1. 引上游资源一律 `DynamicResource` (换主题时 WPF-UI 会整个替换主题字典,
               `StaticResource` 会钉住旧实例 —— 本项目踩过);
@@ -27,6 +29,7 @@
          ============================================================================ -->
 
     <local:SliderAnchorConverter x:Key="SliderAnchorConverter" />
+    <local:HalfNegativeThicknessConverter x:Key="HalfNegativeThicknessConverter" />
 
     <ControlTemplate x:Key="AppHorizontalSlider" TargetType="{x:Type Slider}">
         <Grid>
@@ -42,44 +45,30 @@
                     Background="{DynamicResource SliderTrackFill}"
                     BorderThickness="0" CornerRadius="2" />
 
-            <!-- ① 官方进度填充 (`PART_SelectionRange`) —— 只在 Anchor 模式下用 (样式里带条件开启)。
-                 · 名字不能改: Slider 自己按这个名字找挂点;
+            <!-- ① 进度填充 = WPF 官方的 `PART_SelectionRange` (名字不能改: Slider 自己按名字找挂点)。
                  · 必须能接 `Canvas.SetLeft` → 外套一层 Canvas;
                  · 这层 Canvas **自己 4px 高 + 垂直居中**: 实测 WPF **不设** `Canvas.Top`,
-                   纵向对齐只能由它负责 (轨道底 Border 同样 4px 居中)。
-                 ⚠️ 它左端天生内缩半个拇指宽 → 所以默认的 Track 模式**不用它**, 改用 Decrease 按钮那条 -->
+                   纵向对齐只能由它负责 (轨道底 Border 同样 4px 居中);
+                 · ⚠️ **负左外边距 = 半个拇指宽**: WPF 内部固定按 `Canvas.Left = 拇指宽/2 + 行程` 算,
+                   填充左端会**内缩半个拇指**(本项目 10px) → 用户验收口径"进度条缺一截"✗。
+                   把这层 Canvas 整体左移半个拇指 ⇒ 填充右端正好落在**拇指左沿**, 左端贴轨道左沿 ✓。
+                   位移量绑核心 Thumb 的 `ActualWidth` (不写死数字, 上游改拇指尺寸也自动跟)。 -->
             <Canvas x:Name="SelectionRangeHost" Grid.Row="1" Height="4"
                     VerticalAlignment="Center" IsHitTestVisible="False">
+                <Canvas.Margin>
+                    <Binding Path="ActualWidth" ElementName="Thumb"
+                             Converter="{StaticResource HalfNegativeThicknessConverter}" />
+                </Canvas.Margin>
                 <Rectangle x:Name="PART_SelectionRange" Height="4" RadiusX="2" RadiusY="2"
                            Fill="{DynamicResource SliderThumbBackground}" />
             </Canvas>
 
             <Track x:Name="PART_Track" Grid.Row="1">
+                <!-- 两个重复按钮 = **上游原样** (前三轮为了在它模板里画一条贴边填充而抄过一份,
+                     第四轮删掉 —— 官方挂点左移半拇指后已经贴边, 也就不需要"运行时藏那条"了) -->
                 <Track.DecreaseRepeatButton>
-                    <!-- ② 默认 (Track 模式) 的填充: 这个重复按钮本身就从**轨道左端**铺到拇指,
-                         所以在它模板里画一条 4px 条 → 宽度天然正确、左端天然齐平 ✓
-                         (官方 PART 做不到: 它左端固定内缩半个拇指, 进度条缺一截 ✗)
-                         Anchor/None 模式由 SliderSkin.ApplyFill() 把这条收起 ✓ -->
                     <RepeatButton Command="Slider.DecreaseLarge"
-                                  Style="{DynamicResource UiSliderButtonStyle}">
-                        <RepeatButton.Template>
-                            <ControlTemplate TargetType="{x:Type RepeatButton}">
-                                <Grid Background="Transparent">
-                                    <Rectangle x:Name="TrackFillBar" Height="4" RadiusX="2" RadiusY="2"
-                                               VerticalAlignment="Center" IsHitTestVisible="False"
-                                               Fill="{DynamicResource SliderThumbBackground}" />
-                                </Grid>
-                                <ControlTemplate.Triggers>
-                                    <!-- 禁用态**把填充整个收起来**, 而不是换成"和轨道同色"的灰:
-                                         同色时填充与轨道糊成一片, 看着像进度条缺了一截 ✗
-                                         (禁用态的信息由拇指位置 + 旁边的数值文字表达, 够了) -->
-                                    <Trigger Property="IsEnabled" Value="False">
-                                        <Setter TargetName="TrackFillBar" Property="Visibility" Value="Collapsed" />
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
-                            </ControlTemplate>
-                        </RepeatButton.Template>
-                    </RepeatButton>
+                                  Style="{DynamicResource UiSliderButtonStyle}" />
                 </Track.DecreaseRepeatButton>
                 <Track.Thumb>
                     <Thumb x:Name="Thumb" Style="{DynamicResource UiSliderThumbStyle}" />
@@ -111,37 +100,44 @@
                         Value="{DynamicResource SliderTrackFillPointerOver}" />
                 <Setter TargetName="Thumb" Property="Foreground"
                         Value="{DynamicResource SliderThumbBackgroundPointerOver}" />
-                <!-- ⚠️ 刻意**不**让填充跟随悬停变色: 填充是"进度"的语义, 一变色会让人以为数值变了
-                     (用户明确要求: 轨道不要跟随 hover 变色) -->
+                <!-- ⚠️ 刻意**不**让填充跟随悬停变色: 填充是"进度"的语义, 一变色会让人以为数值变了 -->
             </Trigger>
 
-            <!-- ③ 禁用态 (上游缺失): 轨道底 / 拇指 / 两种填充一起变灰 ——
-                 漏掉任何一种, 禁用滑块都会拖着一截彩色进度条, 看着像"还能动" ✗
-                 (主页 MCU 模式禁用亮度滑块靠的就是这一条; Decrease 那条在它自己的模板里换色) -->
+            <!-- ② 把 `IsSelectionRangeEnabled` 变成**真正权威**的填充开关: 假 = 整层收起。
+                 ⚠️ 为什么非做不可: 实测 (第四轮) 该属性为假时 WPF **不会**把 `PART_SelectionRange`
+                 藏起来 —— 它带着上次算出的几何一直可见 ⇒ 轨道本身就是色带时 (Fill=None),
+                 那半拇指宽的一条照样盖在色带上; 禁用态则会在左端留一条与轨道"同色不同深浅"的
+                 亮条, 看着就是"缺一截" ✗ ("色带轨道仍被盖"+"禁用态缺一截"两处残留问题的共同根因)。
+                 ⚠️ 写法: 必须用 `Trigger Property=...` 直接盯模板宿主自己的属性 —— 同一个意思写成
+                 `DataTrigger + Binding(RelativeSource=TemplatedParent, 路径为附加属性)` 在这里
+                 **不生效** (而样式里那一条同样写法的却生效, 原因未明, 已实测) ✗ -->
+            <Trigger Property="IsSelectionRangeEnabled" Value="False">
+                <Setter TargetName="SelectionRangeHost" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+
+            <!-- ③ 禁用态 (上游缺这一档): 轨道底 / 拇指换禁用色, 并把进度填充**整条收起来** ——
+                 填充与轨道同色时两者糊成一片, 看着就像进度条"缺了一截"✗
+                 (禁用信息由拇指位置 + 旁边的数值文字表达, 够了) -->
             <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="TrackBackground" Property="Background"
                         Value="{DynamicResource ControlFillColorDisabledBrush}" />
                 <Setter TargetName="Thumb" Property="Foreground"
                         Value="{DynamicResource TextFillColorDisabledBrush}" />
-                <Setter TargetName="PART_SelectionRange" Property="Fill"
-                        Value="{DynamicResource ControlFillColorDisabledBrush}" />
+                <Setter TargetName="SelectionRangeHost" Property="Visibility" Value="Collapsed" />
             </Trigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
 
     <!-- 隐式样式: 覆盖 WPF-UI 的同名隐式样式 (靠 App.xaml 合并顺序取胜)。
          除"横向模板 + 填充相关"外, 其余属性照抄上游。
-         官方填充的两端用 MultiBinding 折算成 min/max —— 这样"往中性值**左边**拖"也画得出来;
-         `IsSelectionRangeEnabled` 只在 Fill=Anchor 时打开 (默认关: 由 Decrease 填充负责) -->
+         填充两端用 MultiBinding 折算成 min/max —— 这样"往中性值**左边**拖"也画得出来
+         (官方机制要求 Start ≤ End, 否则宽度为负 = 什么都不画) -->
     <Style TargetType="{x:Type Slider}">
         <Setter Property="FocusVisualStyle" Value="{DynamicResource DefaultControlFocusVisualStyle}" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="OverridesDefaultStyle" Value="True" />
-        <!-- ⚠️ **必须显式置假**: WPF 里 `IsSelectionRangeEnabled` 的默认值就是 **True** ✗ ——
-             早期只"在 Anchor 时置真"、没置假 → 于是 Track/None/禁用 全都多画了一条**内缩半个拇指**的
-             官方填充 (Track 那条被我们的贴边填充盖住所以看不出来; None 与禁用态就暴露成
-             "最左边缺一个口" ✗)。只有 Anchor 模式才由下面的 DataTrigger 打开 ✓ -->
-        <Setter Property="IsSelectionRangeEnabled" Value="False" />
+        <!-- 进度填充默认开: Track 模式 = Minimum→Value, Anchor 模式 = 中性值→Value (同一个挂点) -->
+        <Setter Property="IsSelectionRangeEnabled" Value="True" />
         <Setter Property="SelectionStart">
             <Setter.Value>
                 <MultiBinding Converter="{StaticResource SliderAnchorConverter}" ConverterParameter="start">
@@ -161,9 +157,10 @@
             </Setter.Value>
         </Setter>
         <Style.Triggers>
-            <DataTrigger Value="Anchor"
+            <!-- 色带轨道: 不画填充 (模板里那层 Canvas 也会被收起, 见上面 ② 下面的注释) -->
+            <DataTrigger Value="None"
                          Binding="{Binding Path=(local:SliderSkin.Fill), RelativeSource={RelativeSource Self}}">
-                <Setter Property="IsSelectionRangeEnabled" Value="True" />
+                <Setter Property="IsSelectionRangeEnabled" Value="False" />
             </DataTrigger>
             <Trigger Property="Orientation" Value="Horizontal">
                 <Setter Property="MinWidth" Value="104" />

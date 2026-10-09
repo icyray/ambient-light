@@ -37,6 +37,16 @@ if (args.Length >= 2 && args[0] == "--dump-slider")
     ts.Join();
     return;
 }
+// `--dump-slider-live <前缀>`: 在**真实页面结构**里量滑块状态并出图 (第四轮排查工具, 见 SliderDiag.cs)。
+// 输出 <前缀>_bright_enabled.png / _bright_disabled.png / _picker.png。
+if (args.Length >= 2 && args[0] == "--dump-slider-live")
+{
+    var tl = new Thread(() => UiLoadProbe.SliderDiag.Dump(args[1]));
+    tl.SetApartmentState(ApartmentState.STA);
+    tl.Start();
+    tl.Join();
+    return;
+}
 if (args.Length >= 2 && args[0] == "--dump-ring")
 {
     var td = new Thread(() => DumpRing(args[1], args.Length >= 3 && int.TryParse(args[2], out var od) ? od : -1));
@@ -50,18 +60,6 @@ t.SetApartmentState(ApartmentState.STA);
 t.Start();
 t.Join();
 return;
-
-/// <summary>递归取出一棵可视化树里所有 Slider (出图工具用)。</summary>
-static IEnumerable<Slider> SliderDescendants(DependencyObject root)
-{
-    int n = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
-    for (int i = 0; i < n; i++)
-    {
-        var c = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
-        if (c is Slider s2) yield return s2;
-        foreach (var d in SliderDescendants(c)) yield return d;
-    }
-}
 
 /// <summary>把**滑块的各种状态**渲染成一张 PNG (设计/排查用): 普通/锚点左/锚点右/色带轨道/禁用。
 /// 用途: 滑块皮肤是"看起来对不对"的问题, 数值断言抓不住观感 → 出图肉眼判断 ✓</summary>
@@ -137,10 +135,8 @@ static void DumpSlider(string path)
     panel.Measure(new Size(300, double.PositiveInfinity));
     panel.Arrange(new Rect(0, 0, 300, panel.DesiredSize.Height));
     panel.UpdateLayout();
-    // 模拟 app 里的"布局兜底": 模板就绪后再执行一次收起逻辑
-    foreach (var sl2 in SliderDescendants(panel))
-        AmbientLight.Controls.SliderSkin.ApplyFillForProbe(sl2);
-    panel.UpdateLayout();
+    // ⚠️ 这里**不再**手动调 ApplyFill (第四轮起没有任何"代码去模板里改元素"的钩子了) ——
+    //    图上看到的就是真实后果: 若是 None/禁用那两行还盖着一条填充, 说明声明式的收起没生效 ✗
     var bmp = new RenderTargetBitmap((int)(300 * zoom), (int)Math.Ceiling(panel.DesiredSize.Height * zoom),
                                      96 * zoom, 96 * zoom, PixelFormats.Pbgra32);
     bmp.Render(panel);
@@ -1573,65 +1569,105 @@ static void Run()
     Console.WriteLine((migOk ? "OK   " : "FAIL ") + $"'两个开关'→档位 迁移真值表 (4 组) = {migOk}");
 
     Console.WriteLine();
-    Console.WriteLine("---- 滑块皮肤 (本地魔改: 三种填充模式 + 真禁用态) ----");
-    // ① 我们的模板必须**赢过** WPF-UI 的 (靠 App.xaml 合并顺序): 判据 = 模板里有两个只有我们才有的元素
-    //    (上游 RepeatButton 模板是空的 → 没有 TrackFillBar; 上游也没有 PART_SelectionRange)
-    var slProbe = new Slider { Minimum = 0, Maximum = 100, Value = 50, Width = 200 };
+    Console.WriteLine("---- 滑块皮肤 (本地魔改: 官方挂点 + 半拇指左移; 三种填充模式) ----");
+    // 第四轮定稿: 填充只有一种画法 = WPF 官方的 `PART_SelectionRange`; "什么时候不画"必须**声明式**。
+    // 断言按这个契约分五组: 模板长什么样 / Track / Anchor / None / 禁用, 外加"重新模板化后不掉状态"。
     var slHost = new System.Windows.Controls.Grid { Width = 200, Height = 40 };
-    slHost.Children.Add(slProbe);
-    slHost.Measure(new Size(200, 40));
-    slHost.Arrange(new Rect(0, 0, 200, 40));
-    slProbe.ApplyTemplate();
-    // Track 填充条在 **Decrease 重复按钮自己的模板**里 (独立 name scope) → 要走两跳 ✓
-    static System.Windows.Shapes.Rectangle? FillBarOf(Slider sl)
+    void HostSlider(Slider s)
     {
-        var tr = sl.Template?.FindName("PART_Track", sl) as System.Windows.Controls.Primitives.Track;
-        var btn = tr?.DecreaseRepeatButton;
-        return btn?.Template?.FindName("TrackFillBar", btn) as System.Windows.Shapes.Rectangle;
+        slHost.Children.Clear();
+        slHost.Children.Add(s);
+        slHost.Measure(new Size(200, 40));
+        slHost.Arrange(new Rect(0, 0, 200, 40));
+        s.ApplyTemplate();
+        slHost.UpdateLayout();
     }
-    var slFillBar = FillBarOf(slProbe);
-    var slPart = slProbe.Template?.FindName("PART_SelectionRange", slProbe)
-                 as System.Windows.Shapes.Rectangle;
-    bool tplOk = slFillBar is { Height: 4 } && slPart is { Height: 4 };
-    _ = tplOk;
+    static FrameworkElement? RangeHostOf(Slider sl)
+        => sl.Template?.FindName("SelectionRangeHost", sl) as FrameworkElement;
+    static System.Windows.Shapes.Rectangle? PartOf(Slider sl)
+        => sl.Template?.FindName("PART_SelectionRange", sl) as System.Windows.Shapes.Rectangle;
+    static System.Windows.Controls.Primitives.Track? TrackOf(Slider sl)
+        => sl.Template?.FindName("PART_Track", sl) as System.Windows.Controls.Primitives.Track;
+    static System.Windows.Controls.Primitives.Thumb? ThumbOf(Slider sl)
+        => sl.Template?.FindName("Thumb", sl) as System.Windows.Controls.Primitives.Thumb;
+
+    // ① 我们的模板赢了上游 + **旧的自绘填充条必须已经删掉**
+    //    (前三轮在"减少"重复按钮的模板里画过一条, 它是"运行时改元素"那套时机的源头 ✗)
+    var slProbe = new Slider { Minimum = 0, Maximum = 100, Value = 50, Width = 200 };
+    HostSlider(slProbe);
+    var slPart = PartOf(slProbe);
+    var slRangeHost = RangeHostOf(slProbe);
+    static bool OldFillBarGone(Slider sl)
+    {
+        var btn = TrackOf(sl)?.DecreaseRepeatButton;
+        return btn?.Template is not null && btn.Template.FindName("TrackFillBar", btn) is null;
+    }
+    bool tplOk = slPart is { Height: 4 } && slRangeHost is not null && OldFillBarGone(slProbe);
     Console.WriteLine((tplOk ? "OK   " : "FAIL ") +
-                      $"本地模板生效 (Track 填充条 + 官方挂点都在) = {tplOk}");
-    // ② 默认模式 (Track) 下: 填充条可见、官方挂点不启用 (它左端会内缩半个拇指, 所以默认不用它)
-    // ⚠️ 光验可见性太弱: 宽度绑岔了会变成 0 → 那根填充等于看不见 (静默失效) → 必须验宽度 ✓
-    bool trackMode = slFillBar?.Visibility == Visibility.Visible && !slProbe.IsSelectionRangeEnabled
-                     && slFillBar!.ActualWidth > 20;
+                      "本地模板生效 (官方挂点 + 装它的 Canvas 都在, 旧的自绘填充条已删) = " + tplOk);
+
+    // ② Track 模式: 官方挂点开、两端 = Minimum/Value、几何**真的算出来**(宽度 > 20px: 静默变 0 只能靠它抓),
+    //    且那层 Canvas 被**左移半个拇指** → 填充左端贴轨道左沿 (用户验收口径: 进度条不能"缺一截")
+    double trackW = TrackOf(slProbe)?.ActualWidth ?? 0, thumbW = ThumbOf(slProbe)?.ActualWidth ?? 0;
+    double fillLeftOnScreen = slPart is null ? double.NaN
+        : Canvas.GetLeft(slPart) + (slRangeHost?.Margin.Left ?? 0);
+    bool trackMode = slProbe.IsSelectionRangeEnabled && slProbe.SelectionStart == 0
+                     && Math.Abs(slProbe.SelectionEnd - 50) < 0.001
+                     && slPart is { ActualWidth: > 20 } && thumbW > 0 && trackW > 0
+                     && Math.Abs((slRangeHost?.Margin.Left ?? 0) + thumbW / 2) < 0.01
+                     && Math.Abs(fillLeftOnScreen) < 1.0;
     Console.WriteLine((trackMode ? "OK   " : "FAIL ") +
-                      $"Track 模式: 填充可见且宽度真实 (={slFillBar?.ActualWidth:F0}px, 50% 值) · " +
-                      $"官方挂点关={!slProbe.IsSelectionRangeEnabled} = {trackMode}");
-    // ③ Anchor 模式: 填充条收起 + 官方挂点开启 + 端点由 Converter 折算 (min/max, 两个方向都能画)
+                      $"Track 模式: 挂点开={slProbe.IsSelectionRangeEnabled} 端点={slProbe.SelectionStart:F0}→" +
+                      $"{slProbe.SelectionEnd:F0} 填充宽={slPart?.ActualWidth:F0}px(轨道{trackW:F0}/拇指{thumbW:F0}) " +
+                      $"左移={slRangeHost?.Margin.Left:F1} 屏上左端={fillLeftOnScreen:F1}(应≈0) = {trackMode}");
+
+    // ③ Anchor 模式: 同一个挂点, 端点由 Converter 折算 (min/max → "往中性值左边拖"也能画)
     var slAnchor = new Slider { Minimum = 0, Maximum = 2, Value = 0.5, Width = 200 };
     AmbientLight.Controls.SliderSkin.SetFill(slAnchor, AmbientLight.Controls.SliderFill.Anchor);
     AmbientLight.Controls.SliderSkin.SetAnchor(slAnchor, 1.0);
-    slHost.Children.Clear();
-    slHost.Children.Add(slAnchor);
-    slHost.Measure(new Size(200, 40));
-    slHost.Arrange(new Rect(0, 0, 200, 40));
-    slAnchor.ApplyTemplate();
-    AmbientLight.Controls.SliderSkin.ApplyFillForProbe(slAnchor);   // 模拟 Loaded 时机
-    var aBar = FillBarOf(slAnchor);
-    // 收起由 SliderSkin.ApplyFill() 完成 (代码遍历模板; 跨模板绑定都不可靠)
-    bool noTrackBar = aBar is null || aBar.Visibility == Visibility.Collapsed;
-    bool anchorMode = noTrackBar && slAnchor.IsSelectionRangeEnabled;
+    HostSlider(slAnchor);
+    var aPart = PartOf(slAnchor);
+    double aThumbW = ThumbOf(slAnchor)?.ActualWidth ?? 0;
+    double aTrackW = TrackOf(slAnchor)?.ActualWidth ?? 0;
+    double aWant = 0.5 / 2.0 * (aTrackW - aThumbW);          // 值 0.5、中性 1 → 占全行程的 1/4
+    bool anchorMode = slAnchor.IsSelectionRangeEnabled && RangeHostOf(slAnchor)?.Visibility == Visibility.Visible
+                      && slAnchor.SelectionStart == 0.5 && slAnchor.SelectionEnd == 1.0
+                      && aPart is not null && Math.Abs(aPart.ActualWidth - aWant) < 2.0;
     Console.WriteLine((anchorMode ? "OK   " : "FAIL ") +
-                      $"Anchor 模式: Track 填充已让位(={noTrackBar}) · " +
-                      $"官方挂点开={slAnchor.IsSelectionRangeEnabled} = {anchorMode}");
-    // ★ 关键: **非 Anchor 模式绝不能开官方挂点** —— WPF 的默认值是 True ✗,
-    //   没显式置假时 Track/None/禁用 都会多一条内缩 10px 的填充 (用户实测"最左边缺一个口" ✗)
-    var slNoneMode = new Slider { Minimum = 0, Maximum = 100, Value = 50 };
-    AmbientLight.Controls.SliderSkin.SetFill(slNoneMode, AmbientLight.Controls.SliderFill.None);
-    bool noneNoPart = !slNoneMode.IsSelectionRangeEnabled;
-    var slTrackMode = new Slider { Minimum = 0, Maximum = 100, Value = 50 };
-    bool trackNoPart = !slTrackMode.IsSelectionRangeEnabled;
-    Console.WriteLine((noneNoPart && trackNoPart ? "OK   " : "FAIL ") +
-                      $"Track/None 模式不开官方挂点 (Track={!slTrackMode.IsSelectionRangeEnabled} · " +
-                      $"None={!slNoneMode.IsSelectionRangeEnabled}) —— 它是内缩 10px 的, 开了就会缺一个口 ✗");
+                      $"Anchor 模式: 挂点开={slAnchor.IsSelectionRangeEnabled} 端点={slAnchor.SelectionStart:F1}→" +
+                      $"{slAnchor.SelectionEnd:F1} 填充宽={aPart?.ActualWidth:F0}px(期望≈{aWant:F0}) = {anchorMode}");
 
-    // ④ Converter 真值表 (纯函数): Start 取 min、End 取 max —— "往左拖"才不会算出负宽度(什么都不画)
+    // ④ Fill=None (色带轨道): 官方挂点必须关 **而且那层 Canvas 必须真的收起** ——
+    //    ⚠️ 这是第四轮抓到"色带仍被盖"的断言: 光把 IsSelectionRangeEnabled 置假**不够**,
+    //       WPF 不会因此藏起 PART_SelectionRange (它带着上次算的几何一直可见) ✗
+    var slNone = new Slider { Minimum = 0, Maximum = 360, Value = 24, Width = 200 };
+    AmbientLight.Controls.SliderSkin.SetFill(slNone, AmbientLight.Controls.SliderFill.None);
+    HostSlider(slNone);
+    bool noneMode = !slNone.IsSelectionRangeEnabled && RangeHostOf(slNone) is { Visibility: Visibility.Collapsed };
+    Console.WriteLine((noneMode ? "OK   " : "FAIL ") +
+                      $"None 模式 (色带轨道): 挂点关={!slNone.IsSelectionRangeEnabled} · " +
+                      $"填充层收起={RangeHostOf(slNone)?.Visibility} = {noneMode}");
+
+    // ⑤ 禁用态: 轨道/拇指换禁用色 + 填充层收起 (填充与轨道同色会糊成一片 = 看着"缺一截" ✗)
+    var slDisabled = new Slider { Minimum = 0, Maximum = 100, Value = 50, Width = 200, IsEnabled = false };
+    HostSlider(slDisabled);
+    bool disabledMode = RangeHostOf(slDisabled) is { Visibility: Visibility.Collapsed };
+    Console.WriteLine((disabledMode ? "OK   " : "FAIL ") +
+                      $"禁用态: 填充层收起={RangeHostOf(slDisabled)?.Visibility} = {disabledMode}");
+
+    // ⑥ **重新模板化后不能掉状态**: 换宿主 (等价于主题切换重建模板) 后, None 的收起必须还在 ——
+    //    前三轮那套"代码钩子设 Visibility"就是在这里丢掉的 (用户看到的"仍被盖" ✗)
+    slHost.Children.Clear();
+    var slHost2 = new System.Windows.Controls.Grid { Width = 200, Height = 40 };
+    slHost2.Children.Add(slNone);
+    slHost2.Measure(new Size(200, 40));
+    slHost2.Arrange(new Rect(0, 0, 200, 40));
+    slHost2.UpdateLayout();
+    bool survives = RangeHostOf(slNone) is { Visibility: Visibility.Collapsed };
+    Console.WriteLine((survives ? "OK   " : "FAIL ") +
+                      $"None 模式的收起在「换宿主重排」后仍然成立 (声明式, 不靠时机) = {survives}");
+
+    // ⑦ Converter 真值表 (纯函数): Start 取 min、End 取 max —— "往左拖"才不会算出负宽度(什么都不画)
     var conv = new AmbientLight.Controls.SliderAnchorConverter();
     var cases = new (double Value, double Anchor, double Min, double WantStart, double WantEnd)[]
     {
@@ -1651,7 +1687,7 @@ static void Run()
         Anchor2("end", c.Value, c.Anchor, c.Min) == c.WantEnd.ToString("F2"));
     Console.WriteLine((convOk ? "OK   " : "FAIL ") + $"填充端点折算真值表 (min/max, 4 组) = {convOk}");
 
-    // ⑤ 页面声明: 色带轨道的滑块必须 None (否则填充盖掉渐变换); 乘数型滑块必须 Anchor+中性值
+    // ⑧ 页面声明: 色带轨道的滑块必须 None (否则填充盖掉渐变换); 乘数型滑块必须 Anchor+中性值
     var homeProbe = home;
     var colorPageProbe = new AmbientLight.Views.SettingsPageColor();
     var noneNames = new[] { "HueSlider", "SatSlider" };                       // 纯色拾色器的色带轨道
@@ -1665,10 +1701,9 @@ static void Run()
                       $"色带轨道滑块不画填充 (Fill=None)" + (noneBad.Length > 0 ? $" · 缺: {string.Join(",", noneBad)}" : ""));
     Console.WriteLine((multiBad.Length == 0 ? "OK   " : "FAIL ") +
                       $"乘数型滑块 Fill=Anchor + 中性值 1" + (multiBad.Length > 0 ? $" · 缺: {string.Join(",", multiBad)}" : ""));
-    Console.WriteLine($"INFO 填充几何: Track 条 {slFillBar?.ActualWidth:F0}x{slFillBar?.ActualHeight:F0}" +
-                      $"(值 50% → 预期约占轨道一半) · " +
-                      $"官方挂点 {slPart?.ActualWidth:F1}x{slPart?.Height} @Left={Canvas.GetLeft(slPart):F1} " +
-                      $"(Track 模式不启用, 仅供对照)");
+    Console.WriteLine($"INFO 填充几何: Track {slPart?.ActualWidth:F0}x{slPart?.ActualHeight:F0} " +
+                      $"@Left={Canvas.GetLeft(slPart):F1} (值 50% → 约占轨道一半) · " +
+                      $"Anchor {aPart?.ActualWidth:F0}x{aPart?.ActualHeight:F0} @Left={Canvas.GetLeft(aPart):F1}");
 
     Console.WriteLine();
     Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");
