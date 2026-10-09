@@ -331,6 +331,30 @@ static void Run()
                           $"SettingRow 头部模板接线: {wired}/{rows.Count} 行的标题/说明进了两行文本 (不匹配 {mismatch})");
     }
 
+    // 批次 8: XAML 字面量 → {DynamicResource} 后的接线抽查 —— 断言"XAML 显示值 == 字典值 (同键同源)"。
+    // 动机: DynamicResource 缺键/断链是**静默**的 (文本变空), 出图对照能兜底, 这里再给一条数值断言
+    // (不写死文案, 只验证两边取自同一个字典)。
+    {
+        var hp8 = new AmbientLight.Views.HomePage();
+        var cap8 = new AmbientLight.Views.SettingsPageCapture();
+        var ring8 = new AmbientLight.Controls.LedRingView();
+        string K(string k) => AmbientLight.Localization.Loc.T(k);
+        var xamlWired = new (string Desc, object? Got, string Want)[]
+        {
+            ("主页 WarnBar.Title", (hp8.FindName("WarnBar") as Wpf.Ui.Controls.InfoBar)?.Title, K("Home.Warn.Title")),
+            ("主页 DiagBar.Title", (hp8.FindName("DiagBar") as Wpf.Ui.Controls.InfoBar)?.Title, K("Home.Diag.Title")),
+            ("主页 BrightnessRow.Title", (hp8.FindName("BrightnessRow") as AmbientLight.Controls.SettingRow)?.Title, K("Home.Brightness.Title")),
+            ("主页 MetricsEmptyText", (hp8.FindName("MetricsEmptyText") as TextBlock)?.Text, K("Home.Metrics.Empty")),
+            ("采集页 RotateRow.Title", (cap8.FindName("RotateRow") as AmbientLight.Controls.SettingRow)?.Title, K("Cap.Rotate.Title")),
+            ("灯环 HintTitle", (ring8.FindName("HintTitle") as TextBlock)?.Text, K("Ring.Preview")),
+        };
+        var xamlBad = xamlWired.Where(c => !Equals(c.Got, c.Want))
+                               .Select(c => $"{c.Desc}: {c.Got ?? "(null)"} != {c.Want}").ToList();
+        Console.WriteLine((xamlBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"XAML {{DynamicResource}} 文案接线抽查 {xamlWired.Length} 处 (显示值 == 字典值): " +
+                          (xamlBad.Count == 0 ? "全部同源" : string.Join("; ", xamlBad)));
+    }
+
     Console.WriteLine();
     Console.WriteLine("---- ModeCard visual check (HomePage 资源模板) ----");
     var home = new AmbientLight.Views.HomePage();
@@ -547,10 +571,50 @@ static void Run()
                           $"半透明: WindowBackdropType={win.WindowBackdropType}, " +
                           $"ExtendsContentIntoTitleBar={win.ExtendsContentIntoTitleBar} " +
                           $"(用了 backdrop 就必须为 True) = {backdropOk}");
+        // 批次 8: 左侧菜单文案 —— 按 TargetPageType 找 item (不依赖顺序), 断言 XAML ↔ 字典同源
+        if (win.FindName("RootNav") is Wpf.Ui.Controls.NavigationView nav8)
+        {
+            var navWant = new (Type Page, string Key)[]
+            {
+                (typeof(AmbientLight.Views.HomePage), "Nav.Home"),
+                (typeof(AmbientLight.Views.SettingsPageCapture), "Nav.Capture"),
+                (typeof(AmbientLight.Views.SettingsPageAudio), "Nav.Audio"),
+                (typeof(AmbientLight.Views.SettingsPageColor), "Nav.Color"),
+                (typeof(AmbientLight.Views.SettingsPageAdvanced), "Nav.Adv"),
+            };
+            var navBad = navWant.Where(w =>
+                    !nav8.MenuItems.OfType<Wpf.Ui.Controls.NavigationViewItem>().Any(it =>
+                        it.TargetPageType == w.Page && Equals(it.Content, AmbientLight.Localization.Loc.T(w.Key))))
+                .Select(w => w.Key).ToList();
+            Console.WriteLine((navBad.Count == 0 ? "OK   " : "FAIL ") +
+                              $"导航文案 {navWant.Length} 项 (XAML ↔ 字典同源): " +
+                              (navBad.Count == 0 ? "全部一致" : string.Join(", ", navBad)));
+        }
+        else
+        {
+            Console.WriteLine("FAIL 未找到 RootNav (导航文案断言无法执行)");
+        }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"FAIL MainWindow 实例化: {ex.GetType().Name}: {ex.Message}");
+    }
+
+    // 批次 8: 校准窗文案多已改成 {DynamicResource} —— 用反射实例化一次 (私有构造; 不 Show),
+    // 保证 XAML 解析得过 + 窗口标题与字典同源。该窗不在 --dump-page 的六图里, 这里是唯一防线。
+    try
+    {
+        var calCtor = typeof(AmbientLight.Views.CalibrateWindow).GetConstructor(
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+            null, new[] { typeof(int), typeof(string) }, null);
+        var calWin = (Window)calCtor!.Invoke(new object[] { 0, "0_1" });
+        bool calTitleOk = Equals(calWin.Title, AmbientLight.Localization.Loc.T("Calib.WindowTitle"));
+        Console.WriteLine((calTitleOk ? "OK   " : "FAIL ") +
+                          $"校准窗实例化 + 标题与字典同源 = {calTitleOk} ({calWin.Title})");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"FAIL 校准窗实例化: {ex.GetType().Name}: {ex.Message}");
     }
 
     var advanced = new AmbientLight.Views.SettingsPageAdvanced();

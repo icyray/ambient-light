@@ -9,9 +9,9 @@
     <StackPanel Margin="16,12,16,16">
 
         <!-- 音源与设备 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="音源与设备" />
-        <controls:SettingRow x:Name="VolumeRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon DataBarVertical24}" Title="实时音量"
-                             Description="开启拾音模式后显示音源与电平">
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Audio.Group.Source}" />
+        <controls:SettingRow x:Name="VolumeRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon DataBarVertical24}" Title="{DynamicResource Audio.Level.Title}"
+                             Description="{DynamicResource Audio.Idle}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="LevelValueText" Text="0" MinWidth="28" TextAlignment="Right"
                     VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -20,22 +20,22 @@
                 
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon SoundSource24}" Title="音源"
-                             Description="回环跟电脑播放走; 麦克风收环境声 (需在系统隐私设置放行); 固件自拾音多数硬件无麦克风, 仅 0.25s 闪烁 (原厂同样)">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon SoundSource24}" Title="{DynamicResource Audio.Source.Title}"
+                             Description="{DynamicResource Audio.Source.Desc}">
             <ComboBox x:Name="SourceCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnSourceChanged">
-                <ComboBoxItem Content="系统声音" />
-                <ComboBoxItem Content="麦克风" />
-                <ComboBoxItem Content="固件自拾音" />
+                <ComboBoxItem Content="{DynamicResource Audio.Source.System}" />
+                <ComboBoxItem Content="{DynamicResource Audio.Source.Mic}" />
+                <ComboBoxItem Content="{DynamicResource Audio.Source.Firmware}" />
             </ComboBox>
         </controls:SettingRow>
         <controls:SettingRow x:Name="OutDevRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon Speaker224}"
-                             Title="输出设备" controls:AnimatedVisibility.Expanded="False"
-                             Description="可选非默认输出; 拔出自动回退默认, 重插自动切回">
+                             Title="{DynamicResource Audio.Out.Title}" controls:AnimatedVisibility.Expanded="False"
+                             Description="{DynamicResource Audio.Out.Desc}">
             <StackPanel Orientation="Horizontal">
                 <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页/采集页一致) -->
                 <ui:Button x:Name="RefreshOutDevsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
-                           ToolTip="刷新"
+                           ToolTip="{DynamicResource Common.Refresh}"
                            Margin="8,0,8,0" VerticalAlignment="Center" Click="OnRefreshOutDevs">
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -45,12 +45,12 @@
             </StackPanel>
         </controls:SettingRow>
         <controls:SettingRow x:Name="MicDevRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon Mic24}"
-                             Title="输入设备" controls:AnimatedVisibility.Expanded="False"
-                             Description="拔出自动回退默认, 重插自动切回">
+                             Title="{DynamicResource Audio.In.Title}" controls:AnimatedVisibility.Expanded="False"
+                             Description="{DynamicResource Audio.In.Desc}">
             <StackPanel Orientation="Horizontal">
                 <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页/采集页一致) -->
                 <ui:Button x:Name="RefreshMicDevsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
-                           ToolTip="刷新"
+                           ToolTip="{DynamicResource Common.Refresh}"
                            Margin="8,0,8,0" VerticalAlignment="Center" Click="OnRefreshMicDevs">
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -61,13 +61,13 @@
         </controls:SettingRow>
 
         <!-- 律动手感 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="律动手感" />
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ScaleFit24}" Title="自动增益"
-                             Description="跟踪近几秒峰值自动归一, 安静音源也能满幅律动">
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Audio.Group.Feel}" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ScaleFit24}" Title="{DynamicResource Audio.Agc.Title}"
+                             Description="{DynamicResource Audio.Agc.Desc}">
             <ui:ToggleSwitch x:Name="AgcToggle" IsChecked="True" Click="OnAgcChanged" />
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Gauge24}" Title="灵敏度"
-                             Description="手动增益, 与自动增益相乘">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Gauge24}" Title="{DynamicResource Audio.Gain.Title}"
+                             Description="{DynamicResource Audio.Gain.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="GainValue" Text="×1.00" MinWidth="40" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -75,8 +75,8 @@
                         controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnGainChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Filter24}" Title="底噪门限"
-                             Description="低于此响度视为静默 (灯全灭); 底噪常亮调大, 安静段太灵敏调小">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Filter24}" Title="{DynamicResource Audio.Gate.Title}"
+                             Description="{DynamicResource Audio.Gate.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="GateValue" Text="0.30%" MinWidth="40" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -84,8 +84,8 @@
                         controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnGateChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Wand24}" Title="柔和度"
-                             Description="0% 硬包络最跟手 (大动态有频闪感); 越高起音越缓、间隙不再深黑">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Wand24}" Title="{DynamicResource Audio.Soft.Title}"
+                             Description="{DynamicResource Audio.Soft.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="SoftValue" Text="50%" MinWidth="40" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -93,8 +93,8 @@
                         controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnSoftChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="回落时长"
-                             Description="峰值消失后灯光熄灭的快慢; 短干脆, 长余韵">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="{DynamicResource Audio.Release.Title}"
+                             Description="{DynamicResource Audio.Release.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="ReleaseValue" Text="300 ms" MinWidth="48" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -102,8 +102,8 @@
                         controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnReleaseChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon MusicNote224}" Title="低频加权"
-                             Description="0% 跟整体响度; 100% 只跟鼓点/贝斯 (低频独立归一)">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon MusicNote224}" Title="{DynamicResource Audio.Bass.Title}"
+                             Description="{DynamicResource Audio.Bass.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="BassValue" Text="35%" MinWidth="40" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -111,8 +111,8 @@
                         controls:SliderJump.Enabled="True" VerticalAlignment="Center" ValueChanged="OnBassChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Pulse24}" Title="跟随系统音量"
-                             Description="音量调低时灯光幅度同步变小 (关闭 = 只看内容)">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Pulse24}" Title="{DynamicResource Audio.Follow.Title}"
+                             Description="{DynamicResource Audio.Follow.Desc}">
             <ui:ToggleSwitch x:Name="FollowVolumeToggle" IsChecked="False" Click="OnFollowVolumeChanged" />
         </controls:SettingRow>
 

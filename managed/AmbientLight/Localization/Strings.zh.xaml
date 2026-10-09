@@ -2,14 +2,15 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
     <!-- ════════════════════════════════════════════════════════════════════
-         Strings.zh.xaml — 全部 C# 侧用户可见文案的**唯一源** (M5.3 i18n 第一步)。
+         Strings.zh.xaml — 全部用户可见文案的**唯一源** (M5.3 i18n; C# 走 Loc.T/Loc.F,
+         XAML 走 {DynamicResource 键})。
          规则:
            1) 键稳定、值可改 —— 顺文案 / 翻译只动本文件 (5.3 加 Strings.en.xaml), 不动代码;
            2) 值不带首尾空白 (空格在调用处拼); 换行写 &#10;;
            3) {0}/{1} 是 string.Format 占位; 字面大括号写 {{ }} (string.Format 会还原);
            4) 键名约定: `Metric.*` 与 MetricKeysForMode 的键一一对应 (探针按前缀判漏配);
               `Mode.Name.<n>` / `Mode.Desc.<n>` 由 ModeCatalog 消费; 其余按区域分组。
-         读取: C# 走 Localization/Loc.T / Loc.F; XAML (第二步) 走 {DynamicResource 键}。
+         完整性检查: `.workbuddy/tmp/check_loc_keys.py` (C#/XAML 引用零缺失 + 字典零未引用)。
          ════════════════════════════════════════════════════════════════════ -->
 
     <!-- ===== 通用 ===== -->
@@ -17,6 +18,8 @@
     <sys:String x:Key="Common.Cancel">取消</sys:String>
     <sys:String x:Key="Common.GotIt">知道了</sys:String>
     <sys:String x:Key="Common.EnumSep">、</sys:String>
+    <sys:String x:Key="Common.Refresh">刷新</sys:String>
+    <sys:String x:Key="Common.ReEnumerate">重新枚举</sys:String>
 
     <!-- ===== 指标标签 (与 MetricKeysForMode 的键对应) ===== -->
     <sys:String x:Key="Metric.proc">处理</sys:String>
@@ -58,6 +61,7 @@
     <sys:String x:Key="Ring.Center">{0} 灯 · {1} 边 · {2} · 灯序偏移 {3}</sys:String>
     <sys:String x:Key="Ring.Ccw">逆时针</sys:String>
     <sys:String x:Key="Ring.Cw">顺时针</sys:String>
+    <sys:String x:Key="Ring.Preview">LED 预览</sys:String>
 
     <!-- ===== 设备 (类型名 / 设备行 / 端口 / 语义胶囊) ===== -->
     <sys:String x:Key="Dev.Type.Screen">屏幕灯带</sys:String>
@@ -85,6 +89,8 @@
     <sys:String x:Key="Dev.LedCount">{0} 灯</sys:String>
     <sys:String x:Key="Dev.Toggle.Close">关闭</sys:String>
     <sys:String x:Key="Dev.Toggle.Open">开启</sys:String>
+    <sys:String x:Key="Dev.Pill.Current">当前</sys:String>
+    <sys:String x:Key="Dev.Select">设为当前</sys:String>
     <sys:String x:Key="Dev.List.Probing">探测中… (打开串口握手, ~0.2s/台)</sys:String>
     <sys:String x:Key="Dev.List.NotFound">未发现灯带 (VID_2E3C &amp; PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口。&#10;换芯片或 USB 转串口桥接的灯带, 可在「高级 → 连接」里手动指定端口。</sys:String>
     <sys:String x:Key="Dev.List.Failed">探测失败: {0}</sys:String>
@@ -116,6 +122,50 @@
     <sys:String x:Key="Home.Picker.ClearHint">{0} (右键清除)</sys:String>
     <sys:String x:Key="Home.Picker.EmptySlot">自定义色槽 · 调出颜色后自动记住</sys:String>
 
+    <!-- 主页 XAML 静态文案 (M5.3 批次 8) -->
+    <sys:String x:Key="Home.Monitor.Capturing">正在采集</sys:String>
+    <sys:String x:Key="Home.Hero.Placeholder">追光</sys:String>
+    <sys:String x:Key="Home.Diag.Title">核心诊断</sys:String>
+    <sys:String x:Key="Home.Brightness.Title">亮度</sys:String>
+    <sys:String x:Key="Home.Section.Mode">模式</sys:String>
+    <sys:String x:Key="Home.Picker.Sub">当前模式的灯光颜色 — 原始色 (未含亮度)</sys:String>
+    <!-- 拾色器预设色块 tooltip = 名称 + 色值 (色值同时写在 Tag/Background, 改色三处一起改) -->
+    <sys:String x:Key="Home.Picker.Tip.WarmWhite">暖白 #FFE1D6</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Cream">米白 #FFF6E0</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.White">纯白 #FFFFFF</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.CoolWhite">冷白 #C9E4FF</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Red">红 #FF3B30</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Orange">橙 #FF9500</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Yellow">黄 #FFCC00</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Green">绿 #34C759</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Cyan">青 #5AC8FA</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Blue">蓝 #007AFF</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Purple">紫 #AF52DE</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Pink">粉 #FF2D55</sys:String>
+    <sys:String x:Key="Home.Picker.Hue">色相</sys:String>
+    <sys:String x:Key="Home.Picker.Sat">饱和度</sys:String>
+    <sys:String x:Key="Home.Fx.Title">固件特效</sys:String>
+    <sys:String x:Key="Home.Fx.Sub">11 款 · 由灯带固件渲染, 主机仅发命令 (无预览)</sys:String>
+    <!-- 固件磁贴 tooltip: 必须以 Mode.Name.<n> 开头 (键检查脚本对账, 防改名漏改) -->
+    <sys:String x:Key="Home.Fx.Tip.2">彩虹跳跃 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.3">海浪潮汐 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.4">电闪雷鸣 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.5">呼吸心跳 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.6">火焰燃烧 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.7">南极光彩 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.8">粒子碰撞 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.9">圣诞节日 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.10">变幻莫测 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.12">浓情夏日 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.13">北极冰山 · 由灯带固件渲染, 主机只下发命令</sys:String>
+    <sys:String x:Key="Home.Section.Metrics">调试信息</sys:String>
+    <sys:String x:Key="Home.Layout.Title">布局预览</sys:String>
+    <sys:String x:Key="Home.Layout.Sub">按真实长宽比核对灯序与边数</sys:String>
+    <sys:String x:Key="Home.Metrics.Empty">未开启 · 指标在灯带运行后显示</sys:String>
+    <sys:String x:Key="Home.Section.Device">设备</sys:String>
+    <sys:String x:Key="Home.Dev.Header">连接设备</sys:String>
+    <sys:String x:Key="Home.Monitor.Title">显示器</sys:String>
+    <sys:String x:Key="Home.Monitor.Hint">切换采集目标在「采集」页</sys:String>
     <!-- ===== 应用外壳 (托盘 / 启动 / 崩溃兜底) ===== -->
     <sys:String x:Key="App.Tray.TurnOn">开启氛围灯</sys:String>
     <sys:String x:Key="App.Tray.TurnOff">关闭氛围灯</sys:String>
@@ -143,6 +193,12 @@
     <sys:String x:Key="App.AutoStart.Fail">设置开机自启失败: {0}</sys:String>
     <sys:String x:Key="App.AutoStart.NoExe">无法定位当前 exe</sys:String>
 
+    <!-- ===== 导航 (主窗口左侧菜单; XAML 静态) ===== -->
+    <sys:String x:Key="Nav.Home">主页</sys:String>
+    <sys:String x:Key="Nav.Capture">追光</sys:String>
+    <sys:String x:Key="Nav.Audio">拾音</sys:String>
+    <sys:String x:Key="Nav.Color">颜色</sys:String>
+    <sys:String x:Key="Nav.Adv">高级</sys:String>
     <!-- ===== 高级设置 ===== -->
     <sys:String x:Key="Adv.Baud.Default">默认 (2000000)</sys:String>
     <sys:String x:Key="Adv.Theme.System">跟随系统</sys:String>
@@ -155,6 +211,42 @@
     <sys:String x:Key="Adv.Restore.Title">恢复默认配置</sys:String>
     <sys:String x:Key="Adv.Restore.Body">将把「设置」与「设备配置」全部重置为出厂默认值 —— 亮度、模式、端口、采集与拾音参数、灯序校准等都会被覆盖, 且无法撤销。&#10;&#10;确定要恢复吗?</sys:String>
     <sys:String x:Key="Adv.Restore.Confirm">恢复默认</sys:String>
+    <sys:String x:Key="Adv.Group.Fix">画面修正</sys:String>
+    <sys:String x:Key="Adv.MinBright.Title">LED 最小亮度</sys:String>
+    <sys:String x:Key="Adv.MinBright.Desc">RGB 全部低于该灰度时抬升, 避免灯带彻底熄灭</sys:String>
+    <sys:String x:Key="Adv.Colorfix.Title">低灰保真修正 (colorfix)</sys:String>
+    <sys:String x:Key="Adv.Colorfix.Desc">暗灰色被放大成蓝绿色时开启, 按绝对色度门限钳为中性灰</sys:String>
+    <sys:String x:Key="Adv.Sfloor.Title">色度噪声门限 (sfloor)</sys:String>
+    <sys:String x:Key="Adv.Sfloor.Desc">8bit max-min 低于该门限视为采样噪声 (0-255, 默认 24)</sys:String>
+    <sys:String x:Key="Adv.Group.Misc">屏幕与电源</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Title">熄屏策略</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Desc">锁屏/熄屏/切换显示器时灯带的显示策略</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Blank">熄灭</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Dim">最暗</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Hold">保持最后画面</sys:String>
+    <sys:String x:Key="Adv.Group.Conn">连接</sys:String>
+    <sys:String x:Key="Adv.Port.Title">端口</sys:String>
+    <sys:String x:Key="Adv.Port.Desc">仅对当前选中的设备生效; 自动检测按 VID_2E3C &amp; PID_5740 找并跟随端口变化, 手动指定后只认该端口 (握手失败即失败)</sys:String>
+    <sys:String x:Key="Adv.Baud.Title">波特率</sys:String>
+    <sys:String x:Key="Adv.Baud.Desc">USB CDC 虚拟串口下通常不生效 (设备端不看), 保留给桥接/旧固件</sys:String>
+    <sys:String x:Key="Adv.Group.Ui">界面</sys:String>
+    <sys:String x:Key="Adv.Theme.Title">主题</sys:String>
+    <sys:String x:Key="Adv.Theme.Desc">跟随系统时随 Windows 深浅色与强调色变化即时切换</sys:String>
+    <sys:String x:Key="Adv.Glow.Title">banner 辉光</sys:String>
+    <sys:String x:Key="Adv.Glow.Desc">主页顶栏底边按灯带实况显示模糊辉光; 关闭后回到纯渐变</sys:String>
+    <sys:String x:Key="Adv.Group.Start">启动</sys:String>
+    <sys:String x:Key="Adv.AutoStart.Title">开机自启</sys:String>
+    <sys:String x:Key="Adv.AutoStart.Desc">登录 Windows 后自动运行</sys:String>
+    <sys:String x:Key="Adv.AutoCore.Title">启动时自动开启灯带</sys:String>
+    <sys:String x:Key="Adv.AutoCore.Desc">应用启动后立即连接并恢复上次模式; 连接中断时自动重连</sys:String>
+    <sys:String x:Key="Adv.Minimize.Title">启动时收进托盘</sys:String>
+    <sys:String x:Key="Adv.Minimize.Desc">启动后不显示主窗口, 仅托盘图标</sys:String>
+    <sys:String x:Key="Adv.Group.About">关于</sys:String>
+    <sys:String x:Key="Adv.Update.Check">检查更新</sys:String>
+    <sys:String x:Key="Adv.ConfigDir.Title">配置目录</sys:String>
+    <sys:String x:Key="Adv.ConfigDir.Open">打开</sys:String>
+    <sys:String x:Key="Adv.Restore.Hint">把设置与设备配置全部重置为出厂默认 (亮度/模式/端口/采集/拾音/灯序等), 不可撤销</sys:String>
+    <sys:String x:Key="Adv.Restore.Button">恢复默认…</sys:String>
 
     <!-- ===== 拾音设置 ===== -->
     <sys:String x:Key="Audio.DefaultDevice">系统默认</sys:String>
@@ -162,6 +254,32 @@
     <sys:String x:Key="Audio.SourceLine">音源: {0}</sys:String>
     <sys:String x:Key="Audio.Rebuilding">音源重建中 (默认输出设备变化/暂不可用)…</sys:String>
     <sys:String x:Key="Audio.Idle">开启拾音模式后显示音源与电平</sys:String>
+    <sys:String x:Key="Audio.Group.Source">音源与设备</sys:String>
+    <sys:String x:Key="Audio.Level.Title">实时音量</sys:String>
+    <sys:String x:Key="Audio.Source.Title">音源</sys:String>
+    <sys:String x:Key="Audio.Source.Desc">回环跟电脑播放走; 麦克风收环境声 (需在系统隐私设置放行); 固件自拾音多数硬件无麦克风, 仅 0.25s 闪烁 (原厂同样)</sys:String>
+    <sys:String x:Key="Audio.Source.System">系统声音</sys:String>
+    <sys:String x:Key="Audio.Source.Mic">麦克风</sys:String>
+    <sys:String x:Key="Audio.Source.Firmware">固件自拾音</sys:String>
+    <sys:String x:Key="Audio.Out.Title">输出设备</sys:String>
+    <sys:String x:Key="Audio.Out.Desc">可选非默认输出; 拔出自动回退默认, 重插自动切回</sys:String>
+    <sys:String x:Key="Audio.In.Title">输入设备</sys:String>
+    <sys:String x:Key="Audio.In.Desc">拔出自动回退默认, 重插自动切回</sys:String>
+    <sys:String x:Key="Audio.Group.Feel">律动手感</sys:String>
+    <sys:String x:Key="Audio.Agc.Title">自动增益</sys:String>
+    <sys:String x:Key="Audio.Agc.Desc">跟踪近几秒峰值自动归一, 安静音源也能满幅律动</sys:String>
+    <sys:String x:Key="Audio.Gain.Title">灵敏度</sys:String>
+    <sys:String x:Key="Audio.Gain.Desc">手动增益, 与自动增益相乘</sys:String>
+    <sys:String x:Key="Audio.Gate.Title">底噪门限</sys:String>
+    <sys:String x:Key="Audio.Gate.Desc">低于此响度视为静默 (灯全灭); 底噪常亮调大, 安静段太灵敏调小</sys:String>
+    <sys:String x:Key="Audio.Soft.Title">柔和度</sys:String>
+    <sys:String x:Key="Audio.Soft.Desc">0% 硬包络最跟手 (大动态有频闪感); 越高起音越缓、间隙不再深黑</sys:String>
+    <sys:String x:Key="Audio.Release.Title">回落时长</sys:String>
+    <sys:String x:Key="Audio.Release.Desc">峰值消失后灯光熄灭的快慢; 短干脆, 长余韵</sys:String>
+    <sys:String x:Key="Audio.Bass.Title">低频加权</sys:String>
+    <sys:String x:Key="Audio.Bass.Desc">0% 跟整体响度; 100% 只跟鼓点/贝斯 (低频独立归一)</sys:String>
+    <sys:String x:Key="Audio.Follow.Title">跟随系统音量</sys:String>
+    <sys:String x:Key="Audio.Follow.Desc">音量调低时灯光幅度同步变小 (关闭 = 只看内容)</sys:String>
 
     <!-- ===== 追光设置 (采集页) ===== -->
     <sys:String x:Key="Cap.Monitor.Item">{0}. {1}×{2} - {3}</sys:String>
@@ -169,7 +287,62 @@
     <sys:String x:Key="Cap.Monitor.EnumFailed">显示器枚举失败 (核心未加载?)</sys:String>
     <sys:String x:Key="Cap.Rotate.Desc">校正灯带物理起点与协议起点的少量错位 (±{0}); 全屏校准向导里可直接试出正确值</sys:String>
     <sys:String x:Key="Cap.Rotate.NoNeed">灯数少于 10 时无需灯序偏移</sys:String>
+    <sys:String x:Key="Cap.Group.Screen">屏幕与灯带</sys:String>
+    <sys:String x:Key="Cap.Monitor.Title">显示器</sys:String>
+    <sys:String x:Key="Cap.Monitor.Desc">追光画面来源; 拓扑变化后自动回退主屏</sys:String>
+    <sys:String x:Key="Cap.LedCount.Title">灯数</sys:String>
+    <sys:String x:Key="Cap.LedCount.Desc">固件上限 180; 横竖边按屏幕宽高比自动分配</sys:String>
+    <sys:String x:Key="Cap.Sides.Title">灯带边数</sys:String>
+    <sys:String x:Key="Cap.Sides.Desc">环绕屏幕取色的边</sys:String>
+    <sys:String x:Key="Cap.Sides.2">左右 (2 边)</sys:String>
+    <sys:String x:Key="Cap.Sides.3">左右上 (3 边)</sys:String>
+    <sys:String x:Key="Cap.Sides.4">左右上下 (4 边)</sys:String>
+    <sys:String x:Key="Cap.Direction.Title">起始方向</sys:String>
+    <sys:String x:Key="Cap.Direction.Desc">第 0 颗灯所在角与绕向</sys:String>
+    <sys:String x:Key="Cap.Direction.Ccw">逆时针 (右下起)</sys:String>
+    <sys:String x:Key="Cap.Direction.Cw">顺时针 (左下起)</sys:String>
+    <sys:String x:Key="Cap.Rotate.Title">灯序偏移</sys:String>
+    <sys:String x:Key="Cap.Rotate.Default">校正灯带物理起点与协议起点的错位</sys:String>
+    <sys:String x:Key="Cap.Calib.Title">全屏校准向导</sys:String>
+    <sys:String x:Key="Cap.Calib.Desc">在目标屏铺四色大图, 移动物理灯带的颜色起点对齐四色分界</sys:String>
+    <sys:String x:Key="Cap.Calib.Open">打开向导…</sys:String>
+    <sys:String x:Key="Cap.Group.Chase">追光</sys:String>
+    <sys:String x:Key="Cap.Range.Title">追光范围</sys:String>
+    <sys:String x:Key="Cap.Range.Desc">取色带深度; 越大则远离边缘的画面也参与取色</sys:String>
+    <sys:String x:Key="Cap.Smooth.Title">追光平滑</sys:String>
+    <sys:String x:Key="Cap.Smooth.Desc">相邻灯共享采样点 (步长 3/4/5 px), 更平滑但失去细节</sys:String>
+    <sys:String x:Key="Cap.Smooth.1">平滑</sys:String>
+    <sys:String x:Key="Cap.Smooth.2">更平滑</sys:String>
+    <sys:String x:Key="Cap.Smooth.3">最平滑</sys:String>
+    <sys:String x:Key="Cap.Fps.Title">刷新率上限</sys:String>
+    <sys:String x:Key="Cap.Fps.Desc">限制核心处理帧率, 降低 CPU/串口占用</sys:String>
+    <sys:String x:Key="Cap.Fps.Unlimited">不限</sys:String>
+    <sys:String x:Key="Cap.Group.BlackBar">黑边</sys:String>
+    <sys:String x:Key="Cap.BlackBar.Title">黑边自适应</sys:String>
+    <sys:String x:Key="Cap.BlackBar.Desc">画面有黑边 (电影/宽屏) 时自动收缩取色边框</sys:String>
+    <sys:String x:Key="Cap.BlackBar.Level">黑边判定等级</sys:String>
+    <sys:String x:Key="Cap.BlackBar.LevelDesc">越高越保守 (不易误判暗场景), 越低越激进</sys:String>
+    <sys:String x:Key="Cap.Soften.Title">柔化平滑</sys:String>
+    <sys:String x:Key="Cap.Soften.Desc">观影可开、游戏建议关 (会牺牲一点跟屏感)</sys:String>
+    <sys:String x:Key="Cap.Soften.A.Title">抑制闪光</sys:String>
+    <sys:String x:Key="Cap.Soften.A.Desc">整帧亮度的突变限幅 —— 治镜头切换/闪白; 颜色跟随仍然即时 (更跟手)</sys:String>
+    <sys:String x:Key="Cap.Soften.B.Title">抑制闪光 + 时域柔和</sys:String>
+    <sys:String x:Key="Cap.Soften.B.Desc">再叠逐灯颜色平滑 (治快速摇镜的逐灯跳变) —— 更柔, 但有一点拖影</sys:String>
 
+    <!-- ===== 颜色设置 (页面) ===== -->
+    <sys:String x:Key="Color.Group">色彩调整</sys:String>
+    <sys:String x:Key="Color.Vib.Title">饱和度</sys:String>
+    <sys:String x:Key="Color.Vib.Desc">画面色彩鲜艳程度</sys:String>
+    <sys:String x:Key="Color.Hue.Title">色相强度</sys:String>
+    <sys:String x:Key="Color.Hue.Desc">整体色相偏移; 1.00 为原色, 调大色相偏红, 调小偏黄绿</sys:String>
+    <sys:String x:Key="Color.Gamma.Title">明暗强度 (伽马)</sys:String>
+    <sys:String x:Key="Color.Gamma.Desc">画面明暗向灯带的映射曲线</sys:String>
+    <sys:String x:Key="Color.Cut.Title">最低颜色亮度 (cut)</sys:String>
+    <sys:String x:Key="Color.Cut.Desc">RGB 全部低于该级别的颜色不显示 (压黑)</sys:String>
+    <sys:String x:Key="Color.Output.Title">灯珠色序</sys:String>
+    <sys:String x:Key="Color.Output.Desc">颜色不符时逐个尝试 (灯珠接线序差异)</sys:String>
+    <sys:String x:Key="Color.Balance.Title">LED 色彩平衡</sys:String>
+    <sys:String x:Key="Color.Balance.Desc">分通道增益, 白场偏色时微调 (高级)</sys:String>
     <!-- ===== 校准窗 ===== -->
     <sys:String x:Key="Calib.Color.Red">红</sys:String>
     <sys:String x:Key="Calib.Color.Green">绿</sys:String>
@@ -186,4 +359,11 @@
     <sys:String x:Key="Calib.Screen.Primary">(主屏)</sys:String>
     <sys:String x:Key="Calib.Rotate.Line">灯数 {0} · 灯序偏移 {1} (±{2}) — 按钮直接移动物理灯带</sys:String>
     <sys:String x:Key="Calib.Index.Prefix">LED 序号:</sys:String>
+    <sys:String x:Key="Calib.WindowTitle">AmbientLight - 屏幕校准</sys:String>
+    <sys:String x:Key="Calib.Intro">灯带需处于「屏幕追光」模式。用「左移/右移」直接移动物理灯带的颜色, 使每颗灯的颜色与它所在象限一致 —— 以屏幕四色的分界线为准对齐。中间示意图是标准序号参照 (不随偏移移动): 每格 = 该序号 LED 应在的位置与象限颜色, 序号范围见下方。</sys:String>
+    <sys:String x:Key="Calib.ShiftLeft">← 左移</sys:String>
+    <sys:String x:Key="Calib.ShiftRight">右移 →</sys:String>
+    <sys:String x:Key="Calib.Reset">重置</sys:String>
+    <sys:String x:Key="Calib.ChangeColors">换色</sys:String>
+    <sys:String x:Key="Calib.Footer">偏移立即生效并保存; 每步 1 颗灯, 范围 ±灯数的 12%。校准期间以 100% 亮度运行, Esc 或「关闭」退出并恢复校准前的设置。</sys:String>
 </ResourceDictionary>

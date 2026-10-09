@@ -5,7 +5,7 @@
         xmlns:controls="clr-namespace:AmbientLight.Controls"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
         WindowStartupLocation="Manual" Background="Black"
-        Topmost="True" Title="AmbientLight - 屏幕校准"
+        Topmost="True" Title="{DynamicResource Calib.WindowTitle}"
         PreviewKeyDown="OnPreviewKeyDown">
     <!-- 全屏四色校准 (厂商 FormCalibrate 同构): 灯带以屏幕追光模式采集本屏,
          每颗灯应显示其取色区所在象限的颜色; 中央面板不进取色带 (校准期间取色带临时调窄)。 -->
@@ -30,12 +30,12 @@
                 TextElement.Foreground="White">
             <StackPanel>
                 <Grid>
-                    <TextBlock Text="屏幕校准" FontSize="20" FontWeight="SemiBold" />
-                    <ui:Button Content="关闭" Appearance="Secondary" HorizontalAlignment="Right"
+                    <TextBlock Text="{DynamicResource Calib.Title}" FontSize="20" FontWeight="SemiBold" />
+                    <ui:Button Content="{DynamicResource Common.Close}" Appearance="Secondary" HorizontalAlignment="Right"
                                Click="OnClose" KeyboardNavigation.IsTabStop="True" />
                 </Grid>
                 <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Opacity="0.85"
-                           Text="灯带需处于「屏幕追光」模式。用「左移/右移」直接移动物理灯带的颜色, 使每颗灯的颜色与它所在象限一致 —— 以屏幕四色的分界线为准对齐。中间示意图是标准序号参照 (不随偏移移动): 每格 = 该序号 LED 应在的位置与象限颜色, 序号范围见下方。" />
+                           Text="{DynamicResource Calib.Intro}" />
                 <!-- 分隔线用**本地白 alpha**而不是 ui:Separator (M5.2): Separator 的描边走主题资源,
                      浅色主题下会变成一条深色线压在 #E6141418 的深面板上。 -->
                 <Border Height="1" Margin="0,12" Background="#33FFFFFF" />
@@ -53,12 +53,12 @@
                                       Surface="AlwaysDark" />
 
                 <UniformGrid Columns="4" Margin="0,12,0,0">
-                    <ui:Button x:Name="RotLeftBtn" Content="← 左移" Margin="0,0,6,0" Click="OnRotLeft" />
-                    <ui:Button x:Name="RotRightBtn" Content="右移 →" Margin="0,0,6,0" Click="OnRotRight" />
-                    <ui:Button x:Name="RotResetBtn" Content="重置" Margin="0,0,6,0" Click="OnRotReset" />
-                    <ui:Button Content="换色" Click="OnRotateColors" />
+                    <ui:Button x:Name="RotLeftBtn" Content="{DynamicResource Calib.ShiftLeft}" Margin="0,0,6,0" Click="OnRotLeft" />
+                    <ui:Button x:Name="RotRightBtn" Content="{DynamicResource Calib.ShiftRight}" Margin="0,0,6,0" Click="OnRotRight" />
+                    <ui:Button x:Name="RotResetBtn" Content="{DynamicResource Calib.Reset}" Margin="0,0,6,0" Click="OnRotReset" />
+                    <ui:Button Content="{DynamicResource Calib.ChangeColors}" Click="OnRotateColors" />
                 </UniformGrid>
-                <TextBlock Text="偏移立即生效并保存; 每步 1 颗灯, 范围 ±灯数的 12%。校准期间以 100% 亮度运行, Esc 或「关闭」退出并恢复校准前的设置。"
+                <TextBlock Text="{DynamicResource Calib.Footer}"
                            Opacity="0.6" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" />
             </StackPanel>
         </Border>

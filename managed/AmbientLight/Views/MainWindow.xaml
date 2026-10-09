@@ -30,15 +30,15 @@
                            SizeChanged="OnRootNavSizeChanged"
                            IsTopSeparatorVisible="False" IsFooterSeparatorVisible="False">
             <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem Content="主页" Icon="{ui:SymbolIcon Home24}"
+                <ui:NavigationViewItem Content="{DynamicResource Nav.Home}" Icon="{ui:SymbolIcon Home24}"
                                        TargetPageType="{x:Type views:HomePage}" />
-                <ui:NavigationViewItem Content="追光" Icon="{ui:SymbolIcon Desktop24}"
+                <ui:NavigationViewItem Content="{DynamicResource Nav.Capture}" Icon="{ui:SymbolIcon Desktop24}"
                                        TargetPageType="{x:Type views:SettingsPageCapture}" />
-                <ui:NavigationViewItem Content="拾音" Icon="{ui:SymbolIcon SoundWaveCircle24}"
+                <ui:NavigationViewItem Content="{DynamicResource Nav.Audio}" Icon="{ui:SymbolIcon SoundWaveCircle24}"
                                        TargetPageType="{x:Type views:SettingsPageAudio}" />
-                <ui:NavigationViewItem Content="颜色" Icon="{ui:SymbolIcon Color24}"
+                <ui:NavigationViewItem Content="{DynamicResource Nav.Color}" Icon="{ui:SymbolIcon Color24}"
                                        TargetPageType="{x:Type views:SettingsPageColor}" />
-                <ui:NavigationViewItem Content="高级" Icon="{ui:SymbolIcon Settings24}"
+                <ui:NavigationViewItem Content="{DynamicResource Nav.Adv}" Icon="{ui:SymbolIcon Settings24}"
                                        TargetPageType="{x:Type views:SettingsPageAdvanced}" />
             </ui:NavigationView.MenuItems>
         </ui:NavigationView>

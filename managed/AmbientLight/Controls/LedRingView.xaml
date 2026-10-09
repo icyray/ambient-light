@@ -21,7 +21,7 @@
                  只有窗口拉到最小高度时矩形会缩到 ~150px，那时文字会轻微溢出（底色同深浅，仍可读）。
                  文字色由 code-behind 按 Surface 赋（见 LedRingView.xaml.cs 的 ApplySurface）。 -->
             <StackPanel x:Name="HintBlock" MaxWidth="300">
-                <TextBlock x:Name="HintTitle" Text="LED 预览" FontWeight="SemiBold" FontSize="12"
+                <TextBlock x:Name="HintTitle" Text="{DynamicResource Ring.Preview}" FontWeight="SemiBold" FontSize="12"
                            HorizontalAlignment="Center" />
                 <TextBlock x:Name="HintText" Text="" FontSize="11" Visibility="Collapsed"
                            TextWrapping="Wrap" TextAlignment="Center" Margin="0,2,0,0" />
