@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>banner 点亮态 · D1 三方案对比</title>
+<style>
+  /* 色值来源: HomePage.xaml 的 BannerBaseBrush / BannerBaseLightBrush / BannerStreak*Brush、
+     HomePage.xaml.cs 的 ModeGlowColor / GlowBellAlphas / LitBannerColors、ThemePalette 的状态色。
+     页面上出现的每个颜色都能在代码里找到出处 —— 这不是"随手配的效果图"。 */
+  :root{
+    --page:#fafafa; --card:#ffffff; --stroke:#e6e6e6;
+    --txt:#1a1a1a; --txt2:rgba(0,0,0,.62); --txt3:rgba(0,0,0,.45);
+    --accent:#0f6ba8;
+    --a0:#0a2337; --a1:#10222d; --a2:#17242a; --a3:#1f2324;   /* A: BannerBaseBrush */
+    --b0:#e3f0fa; --b1:#ebf2f7; --b2:#f0f4f6; --b3:#f4f6f7;   /* B: BannerBaseLightBrush */
+    --streak:62,145,224;   /* BannerStreakBlueBrush = #3E91E0 */
+    --glow:86,176,240;     /* ModeGlowColor("Blue") = #56B0F0 */
+    --g-dot-d:#2dc08a; --g-txt-d:#8ce8c2;
+    --g-dot-l:#0f6b0f; --g-txt-l:#0f6b0f;
+  }
+  *{box-sizing:border-box; margin:0; font-family:"Segoe UI","Microsoft YaHei UI",sans-serif;}
+  body{background:var(--page); color:var(--txt); padding:30px 34px 40px; width:1440px;}
+  h1{font-size:21px; margin-bottom:6px;}
+  .sub{color:var(--txt2); font-size:13px; line-height:1.75; margin-bottom:24px;}
+  .sub code{background:#eef1f4; border-radius:3px; padding:1px 5px; font-size:12px;}
+
+  .cols{display:grid; grid-template-columns:repeat(3,1fr); gap:20px; align-items:start;}
+  .col{background:var(--card); border:1px solid var(--stroke); border-radius:10px; padding:14px;}
+  .tag{display:flex; align-items:baseline; gap:8px;}
+  .tag b{font-size:15px;}
+  .who{font-size:11px; color:#fff; background:var(--accent); border-radius:9px; padding:1px 8px;}
+  .who.warn{background:#b0641e;} .who.exp{background:#6a4fa3;}
+  .one{font-size:12px; color:var(--txt2); margin:7px 0 12px; line-height:1.7;}
+
+  /* 舞台: 三块 banner 放在同一个"页面底"上, 下面垫一张模式卡 —— C 的投影要有落点才看得见 */
+  .stage{background:#fafafa; border:1px solid #ececec; border-radius:10px; padding:14px;}
+  .stub{margin-top:12px; background:#fff; border:1px solid #ececec; border-radius:8px; padding:10px 12px;}
+  .stub-t{font-size:12px; font-weight:600;}
+  .stub-l{height:6px; border-radius:3px; background:#eef1f3; margin-top:8px;}
+
+  .banner{position:relative; width:auto; height:112px; border-radius:7px; padding:16px 18px;}
+  .lights{position:absolute; inset:0; border-radius:7px; overflow:hidden;}
+  .streak{position:absolute; inset:0;
+    background:linear-gradient(135deg,
+      transparent 0%, rgba(var(--streak),.05) 18%, rgba(var(--streak),.23) 38%,
+      rgba(var(--streak),.27) 52%, rgba(var(--streak),.10) 72%, transparent 100%);}
+  .glow{position:absolute; left:0; right:0; bottom:0; height:56px;
+    background:linear-gradient(90deg,
+      rgba(var(--glow),0) 0%, rgba(var(--glow),.05) 10%, rgba(var(--glow),.16) 20%,
+      rgba(var(--glow),.34) 30%, rgba(var(--glow),.58) 40%, rgba(var(--glow),1) 50%,
+      rgba(var(--glow),.58) 60%, rgba(var(--glow),.34) 70%, rgba(var(--glow),.16) 80%,
+      rgba(var(--glow),.05) 90%, rgba(var(--glow),0) 100%);
+    filter:blur(18px);
+    -webkit-mask-image:linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.4) 45%, #000 100%);
+            mask-image:linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.4) 45%, #000 100%);}
+  .content{position:relative; z-index:3;}
+  .pill{display:inline-flex; align-items:center; gap:6px; border-radius:10px; padding:3px 9px; font-size:11px;}
+  .dot{width:6px; height:6px; border-radius:50%; display:inline-block;}
+  .hero{font-size:24px; font-weight:600; margin-top:10px; line-height:1.15;}
+  .hero-sub{font-size:13px; margin-top:2px;}
+  .port{font-size:12px; margin-top:6px;}
+  .right{position:absolute; right:18px; bottom:14px; text-align:right;}
+  .fps{font-size:12px;}
+  .leds{display:flex; gap:3px; justify-content:flex-end; margin-top:6px;}
+  .leds i{width:9px; height:9px; border-radius:50%; display:block;}
+
+  /* A: 恒深色 (主线现状) */
+  .A{background:linear-gradient(160deg, var(--a0) 0%, var(--a1) 35%, var(--a2) 70%, var(--a3) 100%); color:#fff;}
+  .A .hero{color:#fff;} .A .hero-sub{color:#cfe3f2;} .A .port,.A .fps{color:#a9c0ce;}
+  .A .pill{background:rgba(255,255,255,.15); color:var(--g-txt-d);}
+  .A .dot{background:var(--g-dot-d);}
+  .A .leds i{background:#2dc08a;} .A .leds i.off{background:#1a6b52;}
+
+  /* B: 浅底 + 亮色辉光 (实验分支) */
+  .B{background:linear-gradient(160deg, var(--b0) 0%, var(--b1) 35%, var(--b2) 70%, var(--b3) 100%);}
+  .B .hero{color:rgba(0,0,0,.89);} .B .hero-sub,.B .port,.B .fps{color:rgba(0,0,0,.62);}
+  .B .pill{background:#f9f9f9; color:var(--g-txt-l);}
+  .B .dot{background:var(--g-dot-l);}
+  .B .leds i{background:#8fd0a8;} .B .leds i.off{background:#dde5e1;}
+
+  /* C: 浅底 + 暗投影 */
+  .C{background:linear-gradient(180deg,#ffffff 0%,#f4f6f8 100%);
+     box-shadow:0 14px 28px rgba(16,24,40,.16), 0 2px 4px rgba(16,24,40,.07);}
+  .C .inner{position:absolute; inset:0; border-radius:7px;
+     box-shadow:inset 0 -24px 28px -24px rgba(16,24,40,.26);}
+  .C .tagline{position:absolute; left:0; right:0; bottom:0; height:4px;
+     background:linear-gradient(90deg, transparent, #3e91e0 18%, #56b0f0 50%, #3e91e0 82%, transparent);}
+  .C .hero{color:rgba(0,0,0,.89);} .C .hero-sub,.C .port,.C .fps{color:rgba(0,0,0,.62);}
+  .C .pill{background:#f2f4f6; color:var(--g-txt-l);}
+  .C .dot{background:var(--g-dot-l);}
+  .C .leds i{background:#8fd0a8;} .C .leds i.off{background:#dde5e1;}
+
+  .below{margin-top:12px; font-size:12px; line-height:1.75; color:var(--txt2);}
+  .below div{margin-top:4px;}
+  .below b{color:var(--txt);}
+  .scale{font-size:11px; color:var(--txt3); margin-top:14px; line-height:1.7;}
+
+  h2{font-size:15px; margin:32px 0 10px;}
+  .darkwrap{background:var(--card); border:1px solid var(--stroke); border-radius:10px;
+            padding:16px; display:grid; grid-template-columns:1fr 360px; gap:22px; align-items:start;}
+  .darkstage{background:#202020; border-radius:10px; padding:16px; display:grid; gap:14px;}
+  .darkstage .cap{color:#9a9a9a; font-size:11px; margin-bottom:6px;}
+  .darkstage .stub{background:#2b2b2b; border-color:#3a3a3a;}
+  .darkstage .stub-l{background:#3a3a3a;}
+  .dark .hero{color:#fff;} .dark .hero-sub,.dark .port,.dark .fps{color:#c5c5c5;}
+  .dark .pill{background:rgba(45,192,138,.18); color:var(--g-txt-d);}
+  .dark .dot{background:var(--g-dot-d);}
+  .note{font-size:12px; color:var(--txt2); line-height:1.9;}
+  .note b{color:var(--txt);}
+
+  table{border-collapse:collapse; width:100%; font-size:12.5px; background:var(--card);
+        border:1px solid var(--stroke); border-radius:10px; overflow:hidden;}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid #eee; vertical-align:top;}
+  th{background:#f4f6f8; font-weight:600;}
+  tr:last-child td{border-bottom:none;}
+  td.y{color:#2f7d32; font-weight:600;} td.n{color:#b0401a; font-weight:600;}
+  .todo{background:var(--card); border:1px solid var(--stroke); border-radius:10px;
+        padding:14px 18px 16px; font-size:12.5px; line-height:1.9;}
+  .todo ul{margin-left:18px;} .todo li{margin-top:2px;}
+  .todo b{font-weight:600;}
+  .todo code{background:#f2f4f6; border-radius:3px; padding:1px 4px; font-size:12px;}
+</style>
+</head>
+<body>
+
+<h1>banner 点亮态 · D1 三方案对比</h1>
+<div class="sub">
+  内容与真实 banner 一字不差（状态胶囊 / 标题 / 副标题 / 端口行 / FPS / 灯珠预览）；颜色全部取自代码：
+  底色 <code>BannerBaseBrush</code>、<code>BannerBaseLightBrush</code>，光带 <code>BannerStreakBlueBrush</code>
+  （#3E91E0，峰值 alpha 27%），辉光 <code>ModeGlowColor</code>（#56B0F0）+ <code>GlowBellAlphas</code> 钟形
+  + 18px 高斯模糊 + 上透下实的遮罩。三块 banner 都放在<b>同一个浅色页面</b>上（下面垫着一张模式卡）——
+  因为 D1 要回答的正是"浅色主题下点亮态长什么样"，而 C 的投影必须有落点才看得见。
+</div>
+
+<div class="cols">
+
+  <!-- ================= A ================= -->
+  <div class="col">
+    <div class="tag"><b>A · 恒深色</b><span class="who">主线现状</span></div>
+    <div class="one">点亮态<b>不管主题</b>都保持深色。辉光叠在深底上 → 真的是"发光"。</div>
+    <div class="stage">
+      <div class="banner A">
+        <div class="lights"><div class="streak"></div><div class="glow"></div></div>
+        <div class="content">
+          <div class="pill"><span class="dot"></span>运行中</div>
+          <div class="hero">追光</div>
+          <div class="hero-sub">跟随屏幕边缘取色, 实时同步画面</div>
+          <div class="port">端口 COM5 · 屏幕灯带 · 供电 正常 · 60 灯</div>
+          <div class="right">
+            <div class="fps">60.1 FPS</div>
+            <div class="leds"><i></i><i></i><i></i><i class="off"></i><i></i><i class="off"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="stub"><div class="stub-t">模式卡</div><div class="stub-l"></div><div class="stub-l" style="width:58%"></div></div>
+    </div>
+    <div class="below">
+      <div><b>层次来源：</b>底色的明暗 + 底部辉光</div>
+      <div><b>模式色落点：</b>辉光带（56px）+ 对角光带</div>
+      <div><b>与浅色页面的关系：</b>一块"深色 hero"，对比强烈</div>
+    </div>
+  </div>
+
+  <!-- ================= B ================= -->
+  <div class="col">
+    <div class="tag"><b>B · 浅底 + 亮色叠加</b><span class="who exp">实验分支</span></div>
+    <div class="one">底色随主题变浅，辉光/光带<b>照旧叠亮色</b>。文字改主题色（深字）。</div>
+    <div class="stage">
+      <div class="banner B">
+        <div class="lights"><div class="streak"></div><div class="glow"></div></div>
+        <div class="content">
+          <div class="pill"><span class="dot"></span>运行中</div>
+          <div class="hero">追光</div>
+          <div class="hero-sub">跟随屏幕边缘取色, 实时同步画面</div>
+          <div class="port">端口 COM5 · 屏幕灯带 · 供电 正常 · 60 灯</div>
+          <div class="right">
+            <div class="fps">60.1 FPS</div>
+            <div class="leds"><i></i><i></i><i></i><i class="off"></i><i></i><i class="off"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="stub"><div class="stub-t">模式卡</div><div class="stub-l"></div><div class="stub-l" style="width:58%"></div></div>
+    </div>
+    <div class="below">
+      <div><b>层次来源：</b>底色渐变 + 辉光/光带（现在是"着色"）</div>
+      <div><b>模式色落点：</b>同 A，但饱和色叠在浅底上 → <b>彩带感</b></div>
+      <div><b>与浅色页面的关系：</b>融为一体，靠底部彩带区分</div>
+    </div>
+  </div>
+
+  <!-- ================= C ================= -->
+  <div class="col">
+    <div class="tag"><b>C · 浅底 + 暗投影</b><span class="who warn">本页要说明的</span></div>
+    <div class="one">把"往上发亮"整个换成"有厚度的实体卡"：<b>外投影 + 底部内阴影 + 一条 4px 实色底带</b>。</div>
+    <div class="stage">
+      <div class="banner C">
+        <div class="inner"><div class="tagline"></div></div>
+        <div class="content">
+          <div class="pill"><span class="dot"></span>运行中</div>
+          <div class="hero">追光</div>
+          <div class="hero-sub">跟随屏幕边缘取色, 实时同步画面</div>
+          <div class="port">端口 COM5 · 屏幕灯带 · 供电 正常 · 60 灯</div>
+          <div class="right">
+            <div class="fps">60.1 FPS</div>
+            <div class="leds"><i></i><i></i><i></i><i class="off"></i><i></i><i class="off"></i><i></i><i></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="stub"><div class="stub-t">模式卡</div><div class="stub-l"></div><div class="stub-l" style="width:58%"></div></div>
+    </div>
+    <div class="below">
+      <div><b>层次来源：</b><b>投影</b>（浮起来）+ 底部内阴影（有厚度）</div>
+      <div><b>模式色落点：</b>只留<b>一条 4px 实色底带</b>（不再有大面积叠加）</div>
+      <div><b>与浅色页面的关系：</b>像一张"贴在页面上的卡"，而不是一块发光体</div>
+    </div>
+  </div>
+
+</div>
+<div class="scale">banner 实际宽度随窗口自适应；三块同比例（440 宽 × 112 高），底部那张"模式卡"是真实页面里紧挨着 banner 的卡。</div>
+
+<h2>同一个方案在深色主题下会怎样（这一节是 C 的代价）</h2>
+<div class="darkwrap">
+  <div class="darkstage">
+    <div>
+      <div class="cap">深色主题 · A（现状：辉光在这里才算"发光"）</div>
+      <div class="banner A dark">
+        <div class="lights"><div class="streak"></div><div class="glow"></div></div>
+        <div class="content">
+          <div class="pill"><span class="dot"></span>运行中</div>
+          <div class="hero">追光</div>
+          <div class="hero-sub">跟随屏幕边缘取色, 实时同步画面</div>
+          <div class="port">端口 COM5 · 屏幕灯带 · 供电 正常 · 60 灯</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">深色主题 · C（同一套"投影"搬过来：几乎看不见，只剩一条 4px 彩线）</div>
+      <div class="banner C dark" style="background:linear-gradient(180deg,#2b2b2b 0%,#242628 100%);
+           box-shadow:0 14px 28px rgba(0,0,0,.5);">
+        <div class="inner" style="box-shadow:inset 0 -24px 28px -24px rgba(0,0,0,.85);"><div class="tagline"></div></div>
+        <div class="content">
+          <div class="pill"><span class="dot"></span>运行中</div>
+          <div class="hero">追光</div>
+          <div class="hero-sub">跟随屏幕边缘取色, 实时同步画面</div>
+          <div class="port">端口 COM5 · 屏幕灯带 · 供电 正常 · 60 灯</div>
+        </div>
+      </div>
+    </div>
+    <div class="stub"><div class="stub-t" style="color:#c5c5c5;">模式卡</div><div class="stub-l"></div></div>
+  </div>
+  <div class="note">
+    <b>C 的问题在于"方向性"：</b>发光是<b>加法</b>（叠亮色），投影是<b>减法</b>（压暗）。<br>
+    在深色主题下，投影几乎不可见 → 底部那点"灯亮着"的信息就丢了，只剩一条 4px 彩线。
+    <br><br>
+    所以选 C 意味着：<b>两套主题各要一套不同的层次语言</b> —— 浅色用投影（实体卡），深色用辉光（发光体）。
+    这不再是"一个设计、两种底色"，而是<b>两个设计</b>，也正是方案文档里把它标成"视觉语言重做"的原因。
+    <br><br>
+    <b>它换来的是什么：</b>浅色主题下 banner 与下面的卡片形成"悬浮卡片 + 彩色识别带"的干净层次，
+    不再有"浅底上叠一层彩色"的浑浊感；模式色从"大面积氛围"变成"一条识别线"。
+  </div>
+</div>
+
+<h2>对照表</h2>
+<table>
+  <tr>
+    <th style="width:120px;">维度</th>
+    <th style="width:25%;">A · 恒深色（主线）</th>
+    <th style="width:25%;">B · 浅底 + 亮色叠加（实验分支）</th>
+    <th>C · 浅底 + 暗投影</th>
+  </tr>
+  <tr><td>浅色主题下点亮态</td><td>深色 hero</td><td>浅底 + 深字</td><td>浅底 + 深字</td></tr>
+  <tr><td>"发光"这件事</td><td class="y">成立（叠亮色）</td><td class="y">成立，但读感是"彩带"</td><td class="n">放弃发光</td></tr>
+  <tr><td>层次靠什么</td><td>底色明暗 + 辉光</td><td>底色渐变 + 辉光/光带</td><td>外投影 + 内阴影 + 实色底带</td></tr>
+  <tr><td>模式色的分量</td><td>大（56px 辉光带 + 对角光带）</td><td>大（同上）</td><td class="n">小（一条 4px 线）</td></tr>
+  <tr><td>深色主题</td><td class="y">不动</td><td class="y">不动（已实测零变化）</td><td class="n">要另做一套（否则失去底部信息）</td></tr>
+  <tr><td>改动量（估）</td><td>—</td><td>小：3 处（已完成）</td><td>大：辉光钟形 alpha / BlurEffect / 模式色全部换掉 + 两套主题重调</td></tr>
+  <tr><td>探针规则</td><td>文字对比度</td><td class="y">文字对比度 + 光带/辉光 |ΔL|（已加 9 条）</td><td class="n">要新写（"阴影/底带是否可见"），现有 9 条要改 4 条</td></tr>
+  <tr><td>与 M5.1 的关系</td><td>就是 M5.1 定稿的 §4 辉光</td><td>辉光仍在（降级为着色）</td><td class="n">等于重做 §4</td></tr>
+</table>
+
+<h2>如果哪天要做 C，得动什么</h2>
+<div class="todo">
+  <ul>
+    <li><b>删</b>：<code>GlowBellAlphas</code> 钟形 alpha、<code>ModeGlowColor</code> 的 4 个基色、
+        <code>GlowBand</code> 的 <code>BlurEffect</code> 与遮罩 → 底部辉光那套
+        （<code>UpdateGlow</code> / <code>AnimateGlow</code> / 呼吸相位）整体退役；</li>
+    <li><b>加</b>：banner 的 <code>DropShadowEffect</code>（或外圈 Border + 阴影）+ 底部内阴影 +
+        一条模式色底带（模式切换时动画的对象从"辉光颜色/透明度"变成"底带颜色"）；</li>
+    <li><b>两套主题各调一遍</b>：浅色 = 投影语言；深色 = 需要另想（例如"深色下用一条更亮的底带 + 微弱内高光"）；</li>
+    <li><b>探针要换规则</b>：从"光带/辉光的 |ΔL| 可见性"换成"投影/底带的存在性与对比度"；</li>
+    <li><b>顺带</b>：<code>ConfigStore.App.BannerGlow</code>（用户可见的"底边辉光"开关）的语义要重新定义 ——
+        它在 C 里对应的是"底带/投影"而不是辉光。</li>
+  </ul>
+</div>
+<div class="scale">
+  注：方案文档里 C 只有一句"浅底 + 辉光改暗投影（视觉语言重做）"，本页的图是我给它的<b>一个具体化诠释</b>
+  （投影强度、底带宽度、是否加内高光都可以再变）。你定方向、细节我再出样。
+</div>
+
+</body>
+</html>

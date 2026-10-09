@@ -70,9 +70,11 @@
                                                Fill="{DynamicResource SliderThumbBackground}" />
                                 </Grid>
                                 <ControlTemplate.Triggers>
+                                    <!-- 禁用态**把填充整个收起来**, 而不是换成"和轨道同色"的灰:
+                                         同色时填充与轨道糊成一片, 看着像进度条缺了一截 ✗
+                                         (禁用态的信息由拇指位置 + 旁边的数值文字表达, 够了) -->
                                     <Trigger Property="IsEnabled" Value="False">
-                                        <Setter TargetName="TrackFillBar" Property="Fill"
-                                                Value="{DynamicResource ControlFillColorDisabledBrush}" />
+                                        <Setter TargetName="TrackFillBar" Property="Visibility" Value="Collapsed" />
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>

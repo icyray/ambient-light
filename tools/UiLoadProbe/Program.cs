@@ -29,6 +29,14 @@ using AmbientLight.Interop;
 Console.OutputEncoding = Encoding.UTF8;
 // `--dump-ring <输出.png>`: 只把 LedRingView 渲染成图片 (设计评审用), 不跑断言。
 // 无头宿主里 RenderTargetBitmap 可用 (只要先 Measure/Arrange) —— 这样改视觉之前能先看一眼。
+if (args.Length >= 2 && args[0] == "--dump-slider")
+{
+    var ts = new Thread(() => DumpSlider(args[1]));
+    ts.SetApartmentState(ApartmentState.STA);
+    ts.Start();
+    ts.Join();
+    return;
+}
 if (args.Length >= 2 && args[0] == "--dump-ring")
 {
     var td = new Thread(() => DumpRing(args[1], args.Length >= 3 && int.TryParse(args[2], out var od) ? od : -1));
@@ -42,6 +50,106 @@ t.SetApartmentState(ApartmentState.STA);
 t.Start();
 t.Join();
 return;
+
+/// <summary>递归取出一棵可视化树里所有 Slider (出图工具用)。</summary>
+static IEnumerable<Slider> SliderDescendants(DependencyObject root)
+{
+    int n = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+    for (int i = 0; i < n; i++)
+    {
+        var c = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+        if (c is Slider s2) yield return s2;
+        foreach (var d in SliderDescendants(c)) yield return d;
+    }
+}
+
+/// <summary>把**滑块的各种状态**渲染成一张 PNG (设计/排查用): 普通/锚点左/锚点右/色带轨道/禁用。
+/// 用途: 滑块皮肤是"看起来对不对"的问题, 数值断言抓不住观感 → 出图肉眼判断 ✓</summary>
+static void DumpSlider(string path)
+{
+    var app = new AmbientLight.App();
+    app.InitializeComponent();
+    typeof(AmbientLight.App)
+        .GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+        ?.SetValue(null, app);
+
+    var panel = new StackPanel { Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x18)) };
+    void Row(string cap, Slider sl)
+    {
+        panel.Children.Add(new TextBlock
+        {
+            Text = cap, Foreground = new SolidColorBrush(Color.FromRgb(0xC5, 0xC5, 0xC5)),
+            FontSize = 12, Margin = new Thickness(16, 12, 16, 2),
+        });
+        sl.Width = 260;
+        sl.VerticalAlignment = VerticalAlignment.Center;
+        sl.Margin = new Thickness(16, 0, 16, 4);
+        panel.Children.Add(sl);
+    }
+
+    // 普通 (Track): 50% / 100% / 5% 三种值 —— 看左端是否贴边、右端是否被拇指接住
+    foreach (var v in new[] { 50.0, 100.0, 5.0 })
+        Row($"Track 模式 · 值 {v:F0}%", new Slider { Minimum = 0, Maximum = 100, Value = v });
+
+    // 锚点 (Anchor, 中性 1): 往右 / 往左 / 正好在中性
+    foreach (var v in new[] { 1.5, 0.5, 1.0 })
+    {
+        var a2 = new Slider { Minimum = 0, Maximum = 2, Value = v };
+        AmbientLight.Controls.SliderSkin.SetFill(a2, AmbientLight.Controls.SliderFill.Anchor);
+        AmbientLight.Controls.SliderSkin.SetAnchor(a2, 1.0);
+        Row($"Anchor 模式 (中性 1) · 值 {v:F1}", a2);
+    }
+
+    // None: 模拟色带轨道 (底层放一条彩虹 Border, 滑块轨道刷子覆盖为透明 —— 与主页拾色器同款)
+    {
+        var grid = new Grid { Width = 260, Height = 32 };
+        var rainbow = new LinearGradientBrush { StartPoint = new Point(0, 0.5), EndPoint = new Point(1, 0.5) };
+        foreach (var (off, col) in new (double, Color)[]
+                 { (0.00, Color.FromRgb(0xFF,0x40,0x40)), (0.25, Color.FromRgb(0xFF,0xE0,0x40)),
+                   (0.50, Color.FromRgb(0x40,0xE0,0x80)), (0.75, Color.FromRgb(0x40,0xB0,0xFF)),
+                   (1.00, Color.FromRgb(0xC0,0x60,0xFF)) })
+            rainbow.GradientStops.Add(new GradientStop(col, off));
+        grid.Children.Add(new Border { Height = 4, CornerRadius = new CornerRadius(2),
+                                       VerticalAlignment = VerticalAlignment.Center,
+                                       Background = rainbow, IsHitTestVisible = false });
+        var ns = new Slider { Minimum = 0, Maximum = 360, Value = 24, Width = 260 };
+        AmbientLight.Controls.SliderSkin.SetFill(ns, AmbientLight.Controls.SliderFill.None);
+        ns.Resources.Add("SliderTrackFill", new SolidColorBrush(Colors.Transparent));
+        ns.Resources.Add("SliderTrackFillPointerOver", new SolidColorBrush(Colors.Transparent));
+        ns.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(ns);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "None 模式 (色带轨道, 应与主页拾色器同款) · 值 24/360",
+            Foreground = new SolidColorBrush(Color.FromRgb(0xC5, 0xC5, 0xC5)),
+            FontSize = 12, Margin = new Thickness(16, 12, 16, 2),
+        });
+        panel.Children.Add(grid);
+    }
+
+    // 禁用态: Track 模式 + 禁用 (应与可用态明显不同、且填充同样贴边)
+    {
+        var d = new Slider { Minimum = 0, Maximum = 100, Value = 50, IsEnabled = false };
+        Row("Track 模式 · **禁用** (值 50%)", d);
+    }
+
+    const double zoom = 2;
+    panel.Measure(new Size(300, double.PositiveInfinity));
+    panel.Arrange(new Rect(0, 0, 300, panel.DesiredSize.Height));
+    panel.UpdateLayout();
+    // 模拟 app 里的"布局兜底": 模板就绪后再执行一次收起逻辑
+    foreach (var sl2 in SliderDescendants(panel))
+        AmbientLight.Controls.SliderSkin.ApplyFillForProbe(sl2);
+    panel.UpdateLayout();
+    var bmp = new RenderTargetBitmap((int)(300 * zoom), (int)Math.Ceiling(panel.DesiredSize.Height * zoom),
+                                     96 * zoom, 96 * zoom, PixelFormats.Pbgra32);
+    bmp.Render(panel);
+    var enc = new PngBitmapEncoder();
+    enc.Frames.Add(BitmapFrame.Create(bmp));
+    using var fs = File.Create(path);
+    enc.Save(fs);
+    Console.WriteLine($"dumped -> {path} ({bmp.PixelWidth}x{bmp.PixelHeight})");
+}
 
 /// <summary>把"校准窗的安装示意"渲染成一张 PNG: 逆时针 / 顺时针 并排, 便于肉眼评审。
 /// 纯设计工具 —— 不参与断言 (断言在 Run 里)。</summary>

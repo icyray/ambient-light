@@ -43,14 +43,31 @@ public static class SliderSkin
     private static void OnFillChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is not Slider sl) return;
-        if (sl.IsLoaded) ApplyFill(sl);
+        ApplyFill(sl);                          // 立刻试一次 (模板可能已经就绪)
         sl.Loaded -= OnSliderLoaded;            // 避免重复订阅
         sl.Loaded += OnSliderLoaded;
+        // ⚠️ **只靠 Loaded 不可靠**: 实测在折叠容器/自定义宿主里收起动作没跑到 → 色带轨道仍被盖住 ✗
+        //    所以再加一层"布局跑过一次就执行"的兜底, 成功即摘钩 (只跑必要次数) ✓
+        sl.LayoutUpdated -= OnSliderLayoutUpdated;
+        sl.LayoutUpdated += OnSliderLayoutUpdated;
+        sl.IsEnabledChanged -= OnSliderIsEnabledChanged;   // 禁用/启用都要重新裁定那条填充
+        sl.IsEnabledChanged += OnSliderIsEnabledChanged;
+    }
+
+    private static void OnSliderIsEnabledChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is Slider sl) ApplyFill(sl);
     }
 
     private static void OnSliderLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is Slider sl) ApplyFill(sl);
+    }
+
+    private static void OnSliderLayoutUpdated(object? sender, EventArgs e)
+    {
+        if (sender is Slider sl && ApplyFill(sl))   // 模板就绪并已执行 → 摘钩
+            sl.LayoutUpdated -= OnSliderLayoutUpdated;
     }
 
     /// <summary>把 Track 填充条按当前模式收起/放开。
@@ -59,12 +76,17 @@ public static class SliderSkin
     /// `TemplatedParent` 在那层指的是 RepeatButton 自己 ✗、`ElementName` 也解析不出来 ✗、
     /// 经 Track 的属性路径绑定同样拿不到 (宽度静默变 0 ✗)。
     /// 而模板遍历是确定的: Slider 模板 → PART_Track → DecreaseRepeatButton → 它模板里的 TrackFillBar ✓</summary>
-    private static void ApplyFill(Slider sl)
+    /// <returns>是否已找到那条填充 (false = 模板还没就绪, 调用方可以稍后再来)。</returns>
+    private static bool ApplyFill(Slider sl)
     {
-        if (sl.Template?.FindName("PART_Track", sl) is not System.Windows.Controls.Primitives.Track track) return;
+        if (sl.Template?.FindName("PART_Track", sl) is not System.Windows.Controls.Primitives.Track track) return false;
         var btn = track.DecreaseRepeatButton;
-        if (btn?.Template?.FindName("TrackFillBar", btn) is UIElement bar)
-            bar.Visibility = GetFill(sl) == SliderFill.Track ? Visibility.Visible : Visibility.Collapsed;
+        if (btn?.Template?.FindName("TrackFillBar", btn) is not UIElement bar) return false;
+        // ⚠️ 禁用态也要收起 —— 否则本方法会把 XAML 里那条"禁用即收起"的触发器**覆盖掉**
+        //    (第一版就是这样: 图上禁用滑块还拖着一截蓝色填充 ✗)
+        bar.Visibility = GetFill(sl) == SliderFill.Track && sl.IsEnabled
+            ? Visibility.Visible : Visibility.Collapsed;
+        return true;
     }
 
     public static SliderFill GetFill(DependencyObject d) => (SliderFill)d.GetValue(FillProperty);
