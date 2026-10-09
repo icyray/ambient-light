@@ -55,6 +55,15 @@ if (args.Length >= 2 && args[0] == "--dump-ring")
     td.Join();
     return;
 }
+// `--dump-page <前缀>`: 整页出图（重构前后像素对照）—— home/capture/audio/color/advanced/devices
+if (args.Length >= 2 && args[0] == "--dump-page")
+{
+    var tp = new Thread(() => UiLoadProbe.PageDiag.Dump(args[1]));
+    tp.SetApartmentState(ApartmentState.STA);
+    tp.Start();
+    tp.Join();
+    return;
+}
 var t = new Thread(Run);
 t.SetApartmentState(ApartmentState.STA);
 t.Start();
