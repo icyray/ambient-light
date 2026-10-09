@@ -63,6 +63,10 @@ public partial class SettingsPageCapture : Page
     private void ApplyChaseMode()
     {
         bool on = ChaseSmoothToggle.IsChecked == true;
+        // 打开总开关时**必须有一个默认档位** —— 否则会出现"两个单选都没选中, 但配置已经落在 1"的
+        // 状态: 行为生效了、界面上却看不出选了哪个 (用户实测反馈) → 默认 = 抑制闪光 ✓
+        if (on && ChaseModeGuardRadio.IsChecked != true && ChaseModeBothRadio.IsChecked != true)
+            ChaseModeGuardRadio.IsChecked = true;
         ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = on;   // 关着总开关时不可选
         ConfigStore.Device.ChaseSmoothMode =
             !on ? 0 : (ChaseModeBothRadio.IsChecked == true ? 2 : 1);
