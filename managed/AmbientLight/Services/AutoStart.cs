@@ -2,6 +2,7 @@
 // 便携友好, 不动注册表 (PROJECT_PLAN §2 既定决策, 厂商 Ansnake 同构做法)。
 // app.json 的 AutoStart 是唯一事实源; App 启动时按它自愈 (快捷方式丢失/残留)。
 using System.IO;
+using AmbientLight.Localization;
 
 namespace AmbientLight.Services;
 
@@ -31,7 +32,7 @@ public static class AutoStart
         {
             var exe = Environment.ProcessPath;
             if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
-                return "无法定位当前 exe";
+                return Loc.T("App.AutoStart.NoExe");
             // file:/// URI: 空格等特殊字符自动转义, 登录时经 ShellExecute 启动
             File.WriteAllText(ShortcutPath, $"[InternetShortcut]\nURL={new Uri(exe).AbsoluteUri}\n");
             return null;

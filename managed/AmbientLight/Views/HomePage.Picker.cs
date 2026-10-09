@@ -8,6 +8,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using AmbientLight.Controls;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 using Wpf.Ui.Controls;
 
@@ -54,7 +55,7 @@ public partial class HomePage : Page
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex!))
                 : Brushes.Transparent;
             btn.BorderBrush = ThemeBrush(has ? "ControlStrokeColorDefaultBrush" : "TextFillColorSecondaryBrush");
-            btn.ToolTip = has ? $"{hex} (右键清除)" : "自定义色槽 · 调出颜色后自动记住";
+            btn.ToolTip = has ? Loc.F("Home.Picker.ClearHint", hex) : Loc.T("Home.Picker.EmptySlot");
         }
         UpdatePresetSelection();
     }

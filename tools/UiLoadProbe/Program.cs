@@ -575,7 +575,7 @@ static void Run()
     var fxTpl = home.TryFindResource("FxTileTemplate");
     var fxTiles = fxPanel?.Children.OfType<System.Windows.Controls.RadioButton>().ToList() ?? [];
     // 磁贴数必须等于**MCU 模式数** (数据驱动), 不写死 11 —— 加一款特效不该让探针报警
-    int mcuCount = AmbientCore.Modes.Count(m => AmbientCore.IsMcuMode(m.Index));
+    int mcuCount = AmbientLight.Views.ModeCatalog.All.Count(AmbientCore.IsMcuMode);
     bool tilesOk = fxTpl is ControlTemplate && fxPanel is not null && fxTiles.Count == mcuCount
                    && fxTiles.All(t => ReferenceEquals(t.Template, fxTpl));
     Console.WriteLine((tilesOk ? "OK   " : "FAIL ") +
@@ -587,7 +587,8 @@ static void Run()
     // 磁贴里显示的必须是模式名 (数据驱动), 不是我自己编的文案
     var tileNames = fxTiles.Select(t => t.Content is Panel p
         ? string.Concat(p.Children.OfType<TextBlock>().Select(x => x.Text)) : "").ToList();
-    var expectNames = AmbientCore.Modes.Where(m => AmbientCore.IsMcuMode(m.Index)).Select(m => m.Name).ToList();
+    var expectNames = AmbientLight.Views.ModeCatalog.All.Where(AmbientCore.IsMcuMode)
+                                   .Select(AmbientLight.Views.ModeCatalog.Name).ToList();
     bool namesOk = tileNames.SequenceEqual(expectNames);
     Console.WriteLine((namesOk ? "OK   " : "FAIL ") +
                       $"磁贴文案 == 模式表里的名字 = {namesOk}" +
@@ -762,16 +763,27 @@ static void Run()
     bool noCpu = Enumerable.Range(0, 14).All(m => !AmbientLight.Views.HomePage.MetricKeysForMode(m, true).Contains("cpu"));
     Console.WriteLine((noCpu ? "OK   " : "FAIL ") + $"CPU 已从所有模式的指标集里移除 = {noCpu}");
     // 文案: **不断言具体措辞** (那是随手可改的产品文案), 只断言"每个指标键都配了专属标签" ——
-    // MetricLabel 的 default 分支会原样返回 key, 所以 label == key 就等于"漏配文案"(真 bug)。
+    // 文案源在 Strings.zh.xaml; Loc.T 缺键时返回 "Metric.<key>" 本身 → 以此判漏配 (真 bug)。
     var allMetricKeys = Enumerable.Range(0, 14)
         .SelectMany(m => AmbientLight.Views.HomePage.MetricKeysForMode(m, true))
         .Distinct().ToList();
-    var missingLabels = allMetricKeys.Where(k => AmbientLight.Views.HomePage.MetricLabel(k) == k).ToList();
+    var missingLabels = allMetricKeys
+        .Where(k => AmbientLight.Views.HomePage.MetricLabel(k) == "Metric." + k).ToList();
     Console.WriteLine((missingLabels.Count == 0 ? "OK   " : "FAIL ") +
                       $"指标文案齐备 = {missingLabels.Count == 0}" +
                       (missingLabels.Count > 0 ? $" (缺: {string.Join(", ", missingLabels)})" : "") +
                       "  · 当前措辞: " +
                       string.Join(" / ", allMetricKeys.Select(k => $"{k}={AmbientLight.Views.HomePage.MetricLabel(k)}")));
+    // 模式名/说明文案齐备 (14 个模式; 缺键会显示 key 本身)
+    int modeNameMissing = AmbientLight.Views.ModeCatalog.All
+        .Count(m => AmbientLight.Views.ModeCatalog.Name(m) == "Mode.Name." + m);
+    bool descMissing = AmbientLight.Views.ModeCatalog.All.Any(m =>
+        AmbientLight.Views.ModeCatalog.Desc(m).Length == 0);
+    Console.WriteLine((modeNameMissing == 0 && !descMissing ? "OK   " : "FAIL ") +
+                      $"模式名文案齐备 = {modeNameMissing == 0} (14 个), 说明非空 = {!descMissing}");
+    // 文案字典已合并 (Loc 冒烟: 常用按钮能解析出真值)
+    bool locMerged = AmbientLight.Localization.Loc.T("Common.GotIt") != "Common.GotIt";
+    Console.WriteLine((locMerged ? "OK   " : "FAIL ") + $"Strings.zh.xaml 已合并 (Loc 冒烟) = {locMerged}");
     // 双层结构: 栏数必须等于指标数 (数据驱动), 每栏 = 标签行 + 数值行, 数值初值不能是空/0
     // (0 会被读成"卡住了"); 等宽分栏。结构在 XAML 模板里 → 这里验"数据 → 模板 → 实际渲染"整条线。
     void CollectTextBlocks(DependencyObject d, List<TextBlock> into)

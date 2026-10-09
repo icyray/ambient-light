@@ -8,6 +8,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using AmbientLight.Controls;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 using Wpf.Ui.Controls;
 
@@ -36,19 +37,8 @@ public partial class HomePage : Page
         return ["wire"];
     }
 
-    /// <summary>指标标签 (5.3 i18n 文案源)</summary>
-    public static string MetricLabel(string key) => key switch
-    {
-        "proc" => "处理",
-        "wire" => "串口写入",
-        // 原叫"帧率"/「变化/s」: 它的物理含义是屏幕变化速率, 叫帧率会让人以为掉到 30 就是坏了
-        "fps" => "画面变化",
-        "audio" => "音量",
-        "leds" => "灯珠",
-        "bright" => "亮度",
-        "cmd" => "命令",
-        _ => key,
-    };
+    /// <summary>指标标签 (文案在 Strings.zh.xaml; 缺键时 Loc.T 返回 "Metric.<key>" 本身 —— 探针以此判漏配)</summary>
+    public static string MetricLabel(string key) => Loc.T("Metric." + key);
 
     private void UpdateMetrics(ACStatus st)
     {
@@ -130,11 +120,12 @@ public partial class HomePage : Page
             _lastRingSig = sig;
             var (mw, mh) = GetMonitorSize(dev.MonitorIndex);   // 预览按真实长宽比布局
             Ring.Configure(dev.LedCount, dev.Sides, dev.Direction, dev.LedRotate, mw, mh);
-            LayoutSummary.Text = $"{dev.LedCount} 灯 · {dev.Sides} 边";
+            LayoutSummary.Text = Loc.F("Ring.Summary", dev.LedCount, dev.Sides);
         }
         // 中心区只放**静态几何参数**: 展开这个折叠的人目的是核对灯序/边数/偏移, 要的就是几何事实。
-        string center = $"{dev.LedCount} 灯 · {dev.Sides} 边 · {(dev.Direction == 0 ? "逆时针" : "顺时针")} · " +
-                        $"灯序偏移 {dev.LedRotate:+0;-0;0}";
+        string center = Loc.F("Ring.Center", dev.LedCount, dev.Sides,
+                              Loc.T(dev.Direction == 0 ? "Ring.Ccw" : "Ring.Cw"),
+                              dev.LedRotate.ToString("+0;-0;0"));
         if (center != _lastCenter)
         {
             _lastCenter = center;
@@ -182,14 +173,14 @@ public partial class HomePage : Page
         _ => SymbolRegular.UsbPlug24,
     };
 
-    private static string DevTypeName(int t) => t switch
+    private static string DevTypeName(int t) => Loc.T(t switch
     {
-        AmbientCore.DevScreen => "屏幕灯带",
-        AmbientCore.DevFan => "ARGB 风扇",
-        AmbientCore.DevDesk => "桌面灯条",
-        AmbientCore.DevSound => "立柱氛围灯",
-        _ => "未知",
-    };
+        AmbientCore.DevScreen => "Dev.Type.Screen",
+        AmbientCore.DevFan => "Dev.Type.Fan",
+        AmbientCore.DevDesk => "Dev.Type.Desk",
+        AmbientCore.DevSound => "Dev.Type.Sound",
+        _ => "Dev.Type.Unknown",
+    });
 
     private void OnDevicesChanged() => _ = RefreshDevicesAsync();
 
@@ -220,14 +211,14 @@ public partial class HomePage : Page
             // 空态/提示文本是**动态状态** → 显隐仍归 code-behind (文本与结构在 XAML)
             bool any = items.Count > 0;
             MonitorsStateText.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
-            if (!any) MonitorsStateText.Text = "未枚举到显示器";
+            if (!any) MonitorsStateText.Text = Loc.T("Dev.Monitor.None");
             // 选择器不在这里重复做 (已在「采集」页) —— 这里只做"正在采集的是哪台"的识别
             MonitorsHintText.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         }
         catch (Exception ex)
         {
             MonitorsList.ItemsSource = null;
-            MonitorsStateText.Text = $"枚举失败: {ex.Message}";
+            MonitorsStateText.Text = Loc.F("Dev.Monitor.Failed", ex.Message);
             MonitorsStateText.Visibility = Visibility.Visible;
             MonitorsHintText.Visibility = Visibility.Collapsed;
         }
@@ -252,7 +243,7 @@ public partial class HomePage : Page
         return new MonitorRowItem
         {
             Number = index + 1,
-            ResolutionText = m.width > 0 && m.height > 0 ? $"{m.width}×{m.height}" : "分辨率未知",
+            ResolutionText = m.width > 0 && m.height > 0 ? $"{m.width}×{m.height}" : Loc.T("Dev.Monitor.UnknownRes"),
             AdapterText = m.Adapter,
             IsPrimary = m.primary != 0,
             Capturing = capturing,
@@ -324,14 +315,13 @@ public partial class HomePage : Page
 
     private async Task RefreshDevicesCoreAsync()
     {
-        ShowDevicesState("探测中… (打开串口握手, ~0.2s/台)", dim: true);
+        ShowDevicesState(Loc.T("Dev.List.Probing"), dim: true);
         try
         {
             var devices = await Task.Run(AmbientCore.GetDevices).ConfigureAwait(true);
             if (devices.Length == 0)
             {
-                ShowDevicesState("未发现灯带 (VID_2E3C & PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口。\n" +
-                                 "换芯片或 USB 转串口桥接的灯带, 可在「高级 → 连接」里手动指定端口。", dim: false);
+                ShowDevicesState(Loc.T("Dev.List.NotFound"), dim: false);
                 return;
             }
             // 会话快照取**一次** (原来是每行每 slot 各取一次 AC_GetStatusEx)。配对规则见 MatchSessionSlot。
@@ -359,7 +349,7 @@ public partial class HomePage : Page
         }
         catch (Exception ex)
         {
-            ShowDevicesState($"探测失败: {ex.Message}", dim: false);
+            ShowDevicesState(Loc.F("Dev.List.Failed", ex.Message), dim: false);
         }
     }
 
@@ -397,22 +387,22 @@ public partial class HomePage : Page
         {
             return state switch
             {
-                AmbientCore.StateStarting => ("连接中…", PillTone.Blue),
-                AmbientCore.StateRunning => ("运行中", PillTone.Green),
+                AmbientCore.StateStarting => (Loc.T("Dev.Pill.Linking"), PillTone.Blue),
+                AmbientCore.StateRunning => (Loc.T("Dev.Pill.Running"), PillTone.Green),
                 // 锁屏/熄屏: 串口还连着, 只是画面源不可用
-                AmbientCore.StateWaitDisp => ("屏幕不可用", PillTone.Gray),
+                AmbientCore.StateWaitDisp => (Loc.T("Dev.Pill.NoScreen"), PillTone.Gray),
                 // 拔线/端口消失: 会话会自动重连, 但此刻灯带确实不在位。
                 // 手动指定端口时换文案: 那不是"灯带被拔了", 而是"指定的口连不上"。
-                AmbientCore.StateDevLost => (manualPort ? "指定端口无应答" : "灯带不在位", PillTone.Amber),
-                AmbientCore.StateError => ("异常", PillTone.Red),
-                _ => ("已停止", PillTone.Gray),
+                AmbientCore.StateDevLost => (Loc.T(manualPort ? "Dev.Pill.NoResponse" : "Dev.Pill.NotPresent"), PillTone.Amber),
+                AmbientCore.StateError => (Loc.T("Dev.Pill.Error"), PillTone.Red),
+                _ => (Loc.T("Dev.Pill.Stopped"), PillTone.Gray),
             };
         }
-        if (portMissing) return ("端口不在位", PillTone.Amber);
-        if (likelyOurs) return ("连接中…", PillTone.Blue);
-        if (inUse) return ("端口被占用", PillTone.Amber);
-        if (devType < 0) return ("未应答", PillTone.Amber);
-        return ("就绪", PillTone.Gray);
+        if (portMissing) return (Loc.T("Dev.Pill.PortMissing"), PillTone.Amber);
+        if (likelyOurs) return (Loc.T("Dev.Pill.Linking"), PillTone.Blue);
+        if (inUse) return (Loc.T("Dev.Pill.PortBusy"), PillTone.Amber);
+        if (devType < 0) return (Loc.T("Dev.Pill.NoAnswer"), PillTone.Amber);
+        return (Loc.T("Dev.Pill.Ready"), PillTone.Gray);
     }
 
     /// <summary>设备行第二行的**端口**文案 —— 纯函数, 探针打真值表 (轮 34 补 5)。
@@ -439,7 +429,7 @@ public partial class HomePage : Page
         {
             bool same = enumPort.Length > 0
                 && string.Equals(cfg, enumPort, StringComparison.OrdinalIgnoreCase);
-            return ($"{cfg} (手动指定)", true, !same);
+            return (cfg + " " + Loc.T("Dev.Port.ManualMark"), true, !same);
         }
         string sess = sessionPort?.Trim() ?? "";
         if (sess.Length > 0) return (sess, false, false);
@@ -523,9 +513,9 @@ public partial class HomePage : Page
         var (pillBg, pillFg) = PillBrushes(pillTone);
 
         // 名称: 会话刚起 (类型未回填) / 自己正在起 (会话未登记) 两种"读取中"变体
-        string nameText = connecting ? $"{DevTypeName(devType)} · 读取中"
-                          : likelyOurs ? "读取中…"
-                          : $"{DevTypeName(devType)} · id {devId}";
+        string nameText = connecting ? Loc.F("Dev.Name.Reading", DevTypeName(devType))
+                          : likelyOurs ? Loc.T("Dev.Name.ReadingShort")
+                          : Loc.F("Dev.Name.WithId", DevTypeName(devType), devId);
 
         // 供电 = 灯带固件周期状态字节的 bit0 (MCU 回报, 见 PROJECT_PLAN §7.1)。
         // 语义是"该设备自己的供电是否正常": 厂商那些**真需要外接供电的型号**(桌面氛围灯/带电池的)
@@ -536,9 +526,9 @@ public partial class HomePage : Page
         // "连接瞬间 供电 USB → 供电 外接"那一下极快翻转。DEV_LOST 同理不显示 (残留值)。
         long statusByte = sess?.ledStatusByte ?? 0;
         string power = sessState == AmbientCore.StateRunning && (statusByte & 1) == 1
-            ? "供电 正常" : "";
+            ? Loc.T("Dev.Power.Normal") : "";
         // 只用查得到的配置, 不 GetOrCreate —— 光是"看一眼设备列表"不该给没见过的设备建配置文件
-        string leds = managedHere && hasCfg ? $"{ds!.LedCount} 灯" : "";
+        string leds = managedHere && hasCfg ? Loc.F("Dev.LedCount", ds!.LedCount) : "";
         // 端口显示**实际会用的那个** (轮 34 补 5): 以前无条件显示枚举端口, 于是在
         // "高级页给这台手动指定了别的口"时, 行里写着 COM5、点开启却去连 COM4 —— 界面在说谎。
         // ⚠️ 查配置**不能**加 managedHere 条件 (那曾是个真 bug): 手动指定端口的场合里,
@@ -565,7 +555,7 @@ public partial class HomePage : Page
             Line2Brush = warn ? ThemeBrush("SystemFillColorCautionBrush")
                               : ThemeBrush("TextFillColorSecondaryBrush"),
             Usable = usable,
-            ToggleText = slot >= 0 ? "关闭" : "开启",
+            ToggleText = Loc.T(slot >= 0 ? "Dev.Toggle.Close" : "Dev.Toggle.Open"),
             ToggleAppearance = slot >= 0 ? Wpf.Ui.Controls.ControlAppearance.Secondary
                                          : Wpf.Ui.Controls.ControlAppearance.Primary,
             ShowSelectButton = !selected,

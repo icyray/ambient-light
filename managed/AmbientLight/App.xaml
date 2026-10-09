@@ -21,6 +21,9 @@
                      (进度填充 + 禁用态, 上游 4.3.0 都没有), 靠"隐式样式后加载者优先"覆盖它。
                      说明与迁移指南见 Styles/SliderStyle.xaml 头部 + docs/SLIDER_TEMPLATE.md -->
                 <ResourceDictionary Source="Styles/SliderStyle.xaml" />
+                <!-- M5.3 i18n: 文案字典 (唯一文案源; C# 走 Loc.T/Loc.F, XAML 走 {DynamicResource}).
+                     5.3 加语言切换 = 换这本字典 + 广播重取 (与主题同款) -->
+                <ResourceDictionary Source="Localization/Strings.zh.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <!-- M5.2 文字色层级的用法约定 (别再自造"提示文字"刷子, 轮 34 补已收回):
                    · 正文/标题 → 继承 `CardForeground` (= `TextFillColorPrimary`)

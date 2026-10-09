@@ -8,6 +8,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using AmbientLight.Controls;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 using Wpf.Ui.Controls;
 
@@ -286,7 +287,7 @@ public partial class HomePage : Page
         {
             if (_block is { } b) return (b.Label, CautionColor(), CautionColor());
             if (state == AmbientCore.StateStopped)
-                return ("已停止",
+                return (Loc.T("Banner.State.Stopped"),
                         ThemeColor("TextFillColorTertiaryBrush", Rgb(0x9A, 0x9A, 0x9A)),
                         ThemeColor("TextFillColorSecondaryBrush", Rgb(0xC9, 0xC9, 0xC9)));
         }
@@ -353,15 +354,15 @@ public partial class HomePage : Page
 
     /// <summary>状态 → 胶囊文案。DEV_LOST 用"正在尝试重连"而不是"设备未连接":
     /// 核心此时每 2s 重试且会话还在, 说"关闭即打断重连"才讲得通 (轮 19)</summary>
-    private static string StateLabel(int state) => state switch
+    private static string StateLabel(int state) => Loc.T(state switch
     {
-        AmbientCore.StateRunning => "运行中",
-        AmbientCore.StateStarting => "启动中",
-        AmbientCore.StateWaitDisp => "等待画面",
-        AmbientCore.StateDevLost => "正在尝试重连",
-        AmbientCore.StateError => "错误",
-        _ => "已停止",
-    };
+        AmbientCore.StateRunning => "Banner.State.Running",
+        AmbientCore.StateStarting => "Banner.State.Starting",
+        AmbientCore.StateWaitDisp => "Banner.State.WaitDisp",
+        AmbientCore.StateDevLost => "Banner.State.Reconnecting",
+        AmbientCore.StateError => "Banner.State.Error",
+        _ => "Banner.State.Stopped",
+    });
 
     /// <summary>模式 → 光带色系 (追光=蓝 / 拾音=绿 / 纯色=紫 / 固件特效=中性白灰)。
     /// MCU 模式不参与取色也不律动, 故用白灰而不是琥珀 (琥珀留给"等待/警告"的状态色)</summary>
@@ -373,12 +374,4 @@ public partial class HomePage : Page
         _ => "Mono",
     };
 
-    /// <summary>模式一句话说明 (banner 副标题 / 模式卡副标题; 5.3 i18n 文案源)</summary>
-    private static string ModeDesc(int mode) => mode switch
-    {
-        0 => "跟随屏幕边缘取色, 实时同步画面",
-        1 => "跟随系统声音或麦克风律动",
-        11 => "整条灯带单色, 无需画面",
-        _ => "固件端特效, 主机只下发命令",
-    };
 }

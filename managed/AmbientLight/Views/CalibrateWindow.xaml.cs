@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 
 namespace AmbientLight.Views;
@@ -22,7 +23,14 @@ public partial class CalibrateWindow : Window
         [1, 2, 3, 0],
     ];
     private static readonly Color[] Palette = [Colors.Red, Colors.Green, Colors.Blue, Colors.Yellow];
-    private static readonly string[] ColorNames = ["红", "绿", "蓝", "黄"];
+    /// <summary>色名 (文案在 Strings.zh.xaml; 静态字段不能缓存 Loc 结果 → 用方法)。</summary>
+    private static string ColorName(int i) => Loc.T(i switch
+    {
+        0 => "Calib.Color.Red",
+        1 => "Calib.Color.Green",
+        2 => "Calib.Color.Blue",
+        _ => "Calib.Color.Yellow",
+    });
 
     private readonly int _slot;
     private readonly string _key;
@@ -58,9 +66,8 @@ public partial class CalibrateWindow : Window
         {
             // 轮 34 补: 原来用 MessageBox —— 系统样式弹窗跟 Fluent 界面两套观感
             // (而且不随主题变)。统一走主窗口的 ContentDialogHost。
-            _ = Controls.AppDialogs.ShowAsync("屏幕校准",
-                "当前设备的核心会话未运行。\n请先在主页打开灯带 (校准靠追光采集本屏画面, 会话必须运行中)。",
-                closeText: "知道了");
+            _ = Controls.AppDialogs.ShowAsync(Loc.T("Calib.Title"),
+                Loc.T("Calib.NeedSession"), closeText: Loc.T("Common.GotIt"));
             return;
         }
         var win = new CalibrateWindow(slot, key);
@@ -149,10 +156,10 @@ public partial class CalibrateWindow : Window
             string live = _blink ? " ●" : " ○";
             StatusText.Text = st.state switch
             {
-                AmbientCore.StateRunning => "会话运行中" + live,
-                AmbientCore.StateDevLost => "设备失联 (DEV_LOST): 灯带被拔出或端口被占用?" + live,
-                AmbientCore.StateWaitDisp => "画面暂不可用 (锁屏/熄屏)" + live,
-                _ => $"会话状态 {st.state}" + live,
+                AmbientCore.StateRunning => Loc.T("Calib.Status.Running") + live,
+                AmbientCore.StateDevLost => Loc.T("Calib.Status.DevLost") + live,
+                AmbientCore.StateWaitDisp => Loc.T("Calib.Status.WaitDisp") + live,
+                _ => Loc.F("Calib.Status.Other", st.state) + live,
             };
         }
         catch { }
@@ -167,8 +174,8 @@ public partial class CalibrateWindow : Window
         QuadTR.Background = new SolidColorBrush(Palette[s[1]]);
         QuadBL.Background = new SolidColorBrush(Palette[s[2]]);
         QuadBR.Background = new SolidColorBrush(Palette[s[3]]);
-        SchemeText.Text = $"配色方案 {_scheme + 1}/4 · 左上{ColorNames[s[0]]} 右上{ColorNames[s[1]]}" +
-                          $" 左下{ColorNames[s[2]]} 右下{ColorNames[s[3]]}";
+        SchemeText.Text = Loc.F("Calib.Scheme", _scheme + 1,
+                                ColorName(s[0]), ColorName(s[1]), ColorName(s[2]), ColorName(s[3]));
         // 分辨率 (核心枚举的目标显示器) — 同时供预览按真实长宽比布局
         int mw = 0, mh = 0;
         try
@@ -180,14 +187,15 @@ public partial class CalibrateWindow : Window
                 mw = core[i].width; mh = core[i].height;
                 // 与主页/采集页统一 (轮 28): 用 1 起的序号 + 分辨率 + 适配器,
                 // 不再显示 `\\.\DISPLAY5` 这种不友好的设备名
-                ResText.Text = $"校准屏 {i + 1} · {mw}×{mh} · {core[i].Adapter}" +
-                               (core[i].primary != 0 ? " (主屏)" : "");
+                ResText.Text = Loc.F("Calib.Screen", i + 1, mw, mh, core[i].Adapter) +
+                               (core[i].primary != 0 ? " " + Loc.T("Calib.Screen.Primary") : "");
             }
         }
         catch { }
         // 灯序偏移
         int maxRot = MaxRotate(dev.LedCount);
-        RotateText.Text = $"灯数 {dev.LedCount} · 灯序偏移 {dev.LedRotate:+0;-0;0} (±{maxRot}) — 按钮直接移动物理灯带";
+        RotateText.Text = Loc.F("Calib.Rotate.Line", dev.LedCount,
+                                dev.LedRotate.ToString("+0;-0;0"), maxRot);
         RotLeftBtn.IsEnabled = maxRot > 0 && dev.LedRotate > -maxRot;
         RotRightBtn.IsEnabled = maxRot > 0 && dev.LedRotate < maxRot;
         RotResetBtn.IsEnabled = maxRot > 0 && dev.LedRotate != 0;
@@ -198,7 +206,7 @@ public partial class CalibrateWindow : Window
         // (2026-10-08 用户设计稿替换了原来那行小字: "0 号"没信息量, 且文字说不清绕法)。
         // direction 0 = 逆时针 → 起点在右下角 (与核心段序一致)。
         Ring.SetOrientation(true, dev.Direction);
-        IndexText.Text = "LED 序号: " + Ring.DescribeIndices();
+        IndexText.Text = Loc.T("Calib.Index.Prefix") + " " + Ring.DescribeIndices();
     }
 
     private void OnRotateColors(object sender, RoutedEventArgs e)

@@ -44,36 +44,13 @@ public static unsafe partial class AmbientCore
     public const int MaxLeds = 180;                 // 固件定长帧上限
     public const int MaxAudioDevs = 16;             // 音频端点枚举上限
 
-    // ---- 模式表 (modeIndex → 名称, 与厂商 lang/zh 一致) ----
-    public static readonly (int Index, string Name, string Kind)[] Modes =
-    {
-        (0,  "屏幕追光", "主机渲染"),
-        (1,  "拾音律动", "主机拾音"),
-        (2,  "彩虹跳跃", "MCU"),
-        (3,  "海浪潮汐", "MCU"),
-        (4,  "电闪雷鸣", "MCU"),
-        (5,  "呼吸心跳", "MCU"),
-        (6,  "火焰燃烧", "MCU"),
-        (7,  "南极光彩", "MCU"),
-        (8,  "粒子碰撞", "MCU"),
-        (9,  "圣诞节日", "MCU"),
-        (10, "变幻莫测", "MCU"),
-        (11, "纯色灯光", "主机渲染"),
-        (12, "浓情夏日", "MCU"),
-        (13, "北极冰山", "MCU"),
-    };
+    // ---- 模式判定 (模式号 = 固件协议; 显示名/说明见 Views/ModeCatalog + Localization) ----
 
     /// <summary>MCU 特效模式 (3B 命令透传, 特效由固件渲染)</summary>
     public static bool IsMcuMode(int m) => (m >= 2 && m <= 10) || m == 12 || m == 13;
 
     /// <summary>主机渲染灯帧的模式 (ACStatus.ledRgb 有实时数据)</summary>
     public static bool IsHostFrameMode(int m) => m == 0 || m == 11;
-
-    public static string ModeName(int m)
-    {
-        foreach (var (i, name, _) in Modes) if (i == m) return name;
-        return $"未知 ({m})";
-    }
 
     // ---- 原生导出 ----
     [LibraryImport(Lib)]

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 using AmbientLight.Views;
 using Hardcodet.Wpf.TaskbarNotification;
@@ -54,7 +55,7 @@ public partial class App : Application
             WriteCrashLog("Dispatcher (UI 线程)", e.Exception, terminating: false);
             // ⚠️ 这里**故意**保留 MessageBox (不用 Controls/AppDialogs): 已经在异常路径上,
             // UI 线程状态未知, 再走 ContentDialog 有二次出错的风险。别顺手"统一"掉。
-            MessageBox.Show($"界面线程异常: {e.Exception.Message}\n{e.Exception.StackTrace}",
+            MessageBox.Show(Loc.F("App.Crash.UiException", e.Exception.Message, e.Exception.StackTrace),
                 "AmbientLight", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         };
@@ -162,8 +163,8 @@ public partial class App : Application
         if (slot < 0)
         {
             _ = Controls.AppDialogs.ShowAsync("AmbientLight",
-                $"设备数超过上限 ({Interop.AmbientCore.MaxDevices})。\n"
-                + "请先在主页关掉一台不再使用的设备再试。", closeText: "知道了");
+                Loc.F("App.Launch.TooMany", Interop.AmbientCore.MaxDevices),
+                closeText: Loc.T("Common.GotIt"));
             return false;
         }
         var cfg = ConfigStore.GetOrCreate(key).ToCoreConfig();
@@ -177,12 +178,13 @@ public partial class App : Application
         {
             string reason = rc switch
             {
-                Interop.AmbientCore.ErrInvalid => "配置参数无效",
-                Interop.AmbientCore.ErrAlreadyRunning => "该会话已在运行",
-                _ => $"错误码 {rc}",
+                Interop.AmbientCore.ErrInvalid => Loc.T("App.Launch.ErrInvalid"),
+                Interop.AmbientCore.ErrAlreadyRunning => Loc.T("App.Launch.ErrRunning"),
+                _ => Loc.F("App.Launch.ErrCode", rc),
             };
-            _ = Controls.AppDialogs.ShowAsync("启动失败",
-                $"启动 {key} 失败: {reason}\n{Interop.AmbientCore.LastDiagEx(slot)}", closeText: "知道了");
+            _ = Controls.AppDialogs.ShowAsync(Loc.T("App.Launch.FailedTitle"),
+                Loc.F("App.Launch.Failed", key, reason, Interop.AmbientCore.LastDiagEx(slot)),
+                closeText: Loc.T("Common.GotIt"));
             return false;
         }
         _slots[slot] = key;                    // await 之后回到 UI 线程 → 字典访问安全
@@ -269,7 +271,8 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            LastStartProblem = ("枚举失败", $"设备枚举失败: {ex.Message}");
+            LastStartProblem = (Loc.T("App.Start.EnumFailed"),
+                                Loc.F("App.Start.EnumFailed.Detail", ex.Message));
         }
         UpdateTrayToggle();
     }
@@ -277,23 +280,21 @@ public partial class App : Application
     /// <summary>一台会话都没建起来时, 把原因整理成 (胶囊短标签, InfoBar 详情)</summary>
     private static (string Label, string Detail) DescribeNoStart(Interop.ACDeviceInfo[] devices)
     {
+        string sep = Loc.T("Common.EnumSep");
         var busy = devices.Where(d => d.inUse == 1).Select(d => d.ComPort).ToArray();
         if (busy.Length > 0)
-            return ("端口被占用",
-                    $"端口 {string.Join("、", busy)} 已被占用, 无法开启。常见原因是 Ansnake 等工具正连着灯带 —— 关闭占用程序后再点「开启」。");
+            return (Loc.T("App.Start.Busy"),
+                    Loc.F("App.Start.Busy.Detail", string.Join(sep, busy)));
 
         var silent = devices.Where(d => d.devType < 0).Select(d => d.ComPort).ToArray();
         if (silent.Length > 0)
-            return ("设备未应答",
-                    $"发现端口 {string.Join("、", silent)}, 但握手无应答。检查 USB 连接与供电后再点「开启」重试。");
+            return (Loc.T("App.Start.NoAnswer"),
+                    Loc.F("App.Start.NoAnswer.Detail", string.Join(sep, silent)));
 
         if (devices.Length == 0)
-            return ("未发现灯带",
-                    "未发现灯带 (VID_2E3C & PID_5740)。检查 USB 连接、确认 Ansnake 未占用端口, 然后点「开启」重试。" +
-                    "若你的灯带是别的芯片或用 USB 转串口桥接, 可在「高级 → 连接」里手动指定端口。");
+            return (Loc.T("App.Start.NotFound"), Loc.T("App.Start.NotFound.Detail"));
 
-        return ("设备未启用",
-                "已发现可用灯带, 但该设备未勾选「启动时自动开启灯带」。可到高级设置勾选, 或在下方设备列表里单独点「开启」。");
+        return (Loc.T("App.Start.NotEnabled"), Loc.T("App.Start.NotEnabled.Detail"));
     }
 
     public bool StartCore()
@@ -413,7 +414,7 @@ public partial class App : Application
     private void UpdateTrayToggle()
     {
         if (_trayToggle != null)
-            _trayToggle.Header = CoreRunning ? "关闭氛围灯" : "开启氛围灯";
+            _trayToggle.Header = Loc.T(CoreRunning ? "App.Tray.TurnOff" : "App.Tray.TurnOn");
     }
 
     // ---- 托盘 ---------------------------------------------------------
@@ -427,13 +428,13 @@ public partial class App : Application
         };
 
         var menu = new ContextMenu();
-        _trayToggle = new MenuItem { Header = "开启氛围灯" };
+        _trayToggle = new MenuItem { Header = Loc.T("App.Tray.TurnOn") };
         _trayToggle.Click += (_, _) => ToggleCore();
-        var calibrate = new MenuItem { Header = "屏幕校准" };
+        var calibrate = new MenuItem { Header = Loc.T("App.Tray.Calibrate") };
         calibrate.Click += (_, _) => { ShowMainWindow(); Views.CalibrateWindow.TryOpen(); };
-        var settings = new MenuItem { Header = "设置" };
+        var settings = new MenuItem { Header = Loc.T("App.Tray.Settings") };
         settings.Click += (_, _) => ShowMainWindow();
-        var exit = new MenuItem { Header = "退出" };
+        var exit = new MenuItem { Header = Loc.T("App.Tray.Exit") };
         exit.Click += (_, _) => ExitApp();
         menu.Items.Add(_trayToggle);
         menu.Items.Add(calibrate);

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 using Wpf.Ui.Controls;
 
@@ -24,8 +25,8 @@ public partial class SettingsPageAdvanced : Page
     /// <summary>波特率下拉的显示文案 —— 与 `BaudChoices` **同序同长**。
     /// ⚠️ 轮 33 踩过: 只写了 BaudChoices 却忘了给 ComboBox 设 ItemsSource → 下拉是空的
     /// (空列表上设 SelectedIndex 不报错也不生效)。所以下面构造里显式绑定, 探针也断言"确实填上了"。</summary>
-    private static readonly string[] BaudLabels =
-        ["默认 (2000000)", "115200", "57600", "38400", "28800", "19200", "14400", "9600"];
+    private static string[] BuildBaudLabels() =>
+        [Loc.T("Adv.Baud.Default"), "115200", "57600", "38400", "28800", "19200", "14400", "9600"];
 
     // ---- 主题 (M5.2) ------------------------------------------------------
     /// <summary>主题下拉的值 (与显示文案**同序同长**)。
@@ -34,7 +35,8 @@ public partial class SettingsPageAdvanced : Page
     public static readonly ThemeChoice[] ThemeChoices =
         [ThemeChoice.System, ThemeChoice.Light, ThemeChoice.Dark];
 
-    private static readonly string[] ThemeLabels = ["跟随系统", "浅色", "深色"];
+    private static string[] BuildThemeLabels() =>
+        [Loc.T("Adv.Theme.System"), Loc.T("Adv.Theme.Light"), Loc.T("Adv.Theme.Dark")];
 
     /// <summary>端口下拉的一项。`Port = null` 表示"自动探测" (写回空串)。</summary>
     public sealed record PortItem(string? Port, string Label);
@@ -48,13 +50,13 @@ public partial class SettingsPageAdvanced : Page
     /// (实测 bug: 端口填 COM4, 主页开启却连到 COM5)。**手动指定后不再回落**, 握手失败就是失败。</summary>
     public static List<PortItem> BuildPortItems(string configured, IEnumerable<string> present)
     {
-        var list = new List<PortItem> { new(null, "自动检测") };
+        var list = new List<PortItem> { new(null, Loc.T("Adv.Port.Auto")) };
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in present)
             if (!string.IsNullOrWhiteSpace(p) && seen.Add(p))
                 list.Add(new PortItem(p, p));
         if (!string.IsNullOrWhiteSpace(configured) && seen.Add(configured))
-            list.Add(new PortItem(configured, $"{configured} (不在位)"));
+            list.Add(new PortItem(configured, configured + " " + Loc.T("Adv.Port.NotPresent")));
         return list;
     }
 
@@ -64,8 +66,8 @@ public partial class SettingsPageAdvanced : Page
     public SettingsPageAdvanced()
     {
         InitializeComponent();
-        BaudCombo.ItemsSource = BaudLabels;   // 静态内容 → 构造期就绑; 选中项由 ReloadFromConfig 定
-        ThemeCombo.ItemsSource = ThemeLabels; // 同上 (M5.2)
+        BaudCombo.ItemsSource = BuildBaudLabels();   // 静态内容 → 构造期就绑; 选中项由 ReloadFromConfig 定
+        ThemeCombo.ItemsSource = BuildThemeLabels(); // 同上 (M5.2)
         Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
         Loaded += OnLoaded;
     }
@@ -183,8 +185,8 @@ public partial class SettingsPageAdvanced : Page
             _loading = true;                        // 失败回滚开关显示
             AutoStartToggle.IsChecked = !on;
             _loading = false;
-            _ = Controls.AppDialogs.ShowAsync("开机自启",
-                $"设置开机自启失败: {err}", closeText: "知道了");
+            _ = Controls.AppDialogs.ShowAsync(Loc.T("App.AutoStart.FailedTitle"),
+                Loc.F("App.AutoStart.Fail", err), closeText: Loc.T("Common.GotIt"));
             return;
         }
         ConfigStore.App.AutoStart = on;
@@ -246,20 +248,17 @@ public partial class SettingsPageAdvanced : Page
     //   有新版 → 同一对话框里给出新版号 + Release 页面链接; 无新版 → "已是最新版本"。
     private async void OnCheckUpdate(object sender, RoutedEventArgs e)
     {
-        await Controls.AppDialogs.ShowAsync("版本更新",
-            $"当前版本 {CurrentVersion}。\n\n"
-            + "软件还没有发布到 GitHub Release, 暂时无法检查更新。"
-            + "发布之后, 这里会与仓库最新的 Release 版本号比对, 并给出下载入口。",
-            closeText: "知道了");
+        await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Update.Title"),
+            Loc.F("Adv.Update.Body", CurrentVersion), closeText: Loc.T("Common.GotIt"));
     }
 
     // ---- 恢复默认配置 (轮 21): 藏在「配置目录」折叠内。破坏性操作, 先确认再动手 ----
     private async void OnRestoreDefaults(object sender, RoutedEventArgs e)
     {
-        bool ok = await Controls.AppDialogs.ShowAsync("恢复默认配置",
-            "将把「设置」与「设备配置」全部重置为出厂默认值 —— 亮度、模式、端口、采集与拾音参数、"
-            + "灯序校准等都会被覆盖, 且无法撤销。\n\n确定要恢复吗?",
-            primaryText: "恢复默认", primaryDanger: true, closeText: "取消");
+        bool ok = await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Restore.Title"),
+            Loc.T("Adv.Restore.Body"),
+            primaryText: Loc.T("Adv.Restore.Confirm"), primaryDanger: true,
+            closeText: Loc.T("Common.Cancel"));
         if (!ok) return;
 
         ConfigStore.RestoreDefaults();

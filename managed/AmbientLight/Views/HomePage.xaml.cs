@@ -18,6 +18,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using AmbientLight.Controls;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 using Wpf.Ui.Controls;
 
@@ -26,8 +27,6 @@ namespace AmbientLight.Views;
 public partial class HomePage : Page
 {
     private bool _loaded;                       // 初值阶段忽略一切配置下发
-    private const string BrightnessDesc = "追光/纯色直接调光; 拾音律动作为最高亮度上限";
-    private const string McuBrightnessHint = "固件特效由灯带自己渲染, 亮度不可调";
     private int _lastPolledState = -1;
     private int _lastHeroMode = -1;             // banner 大字/说明只在模式变化时改写
     private long _lastBannerLook = long.MinValue;   // (state|mode) 组合, 变则刷新 banner 视觉
@@ -242,7 +241,7 @@ public partial class HomePage : Page
         // §2 折叠头右侧的「当前 XX」胶囊: 收起状态也能一眼看到正在用哪款特效
         bool mcu = AmbientCore.IsMcuMode(cur);
         FxCurrentPill.Visibility = mcu ? Visibility.Visible : Visibility.Collapsed;
-        if (mcu) FxCurrentText.Text = $"当前 {AmbientCore.ModeName(cur)}";
+        if (mcu) FxCurrentText.Text = Loc.F("Home.Fx.Current", ModeCatalog.Name(cur));
     }
 
     private void SetMode(int mode)
@@ -312,14 +311,14 @@ public partial class HomePage : Page
         if (BrightnessRow.IsEnabled != brightOk)
         {
             BrightnessRow.IsEnabled = brightOk;
-            BrightnessRow.Description = brightOk ? BrightnessDesc : McuBrightnessHint;
+            BrightnessRow.Description = Loc.T(brightOk ? "Home.Brightness.Desc" : "Home.Brightness.McuHint");
         }
 
         if (mode != _lastHeroMode)
         {
             _lastHeroMode = mode;
-            HeroTitle.Text = AmbientCore.ModeName(mode);
-            HeroSub.Text = ModeDesc(mode);
+            HeroTitle.Text = ModeCatalog.Name(mode);
+            HeroSub.Text = ModeCatalog.Desc(mode);
         }
 
         // banner 视觉 = f(状态, 模式, 开启失败原因): 任一变化就淡变过去 (首次直接就位)
@@ -341,13 +340,15 @@ public partial class HomePage : Page
         // 于是"端口还没释放"就能点开启。现在改成由轮询统一裁决:
         //   禁用 = 正在处理这次点击 || 启动任务在飞 || 队列里还有没跑完的生命周期调用 (收尾中)
         // 标签也顺便说实话: 收尾期间显示「关闭中…」(否则按钮写着"开启"却是灰的, 像卡死)。
-        ToggleBtn.Content = App.Instance.CoreRunning ? "关闭"
-            : App.Instance.LifecycleBusy ? "关闭中…" : "开启";
+        ToggleBtn.Content = Loc.T(App.Instance.CoreRunning ? "Home.Toggle.Close"
+            : App.Instance.LifecycleBusy ? "Home.Toggle.Closing" : "Home.Toggle.Open");
         ToggleBtn.IsEnabled = ToggleEnabled(_toggling, App.Instance.Starting, App.Instance.LifecycleBusy);
 
         PortText.Text = st.state == AmbientCore.StateStopped && !App.Instance.CoreRunning
-            ? "未连接设备"
-            : $"端口 {st.ComPort} · {DevTypeName(st.devType)} · 供电 {((st.ledStatusByte & 1) == 1 ? "外接" : "USB")} · {ConfigStore.Device.LedCount} 灯";
+            ? Loc.T("Home.Port.None")
+            : Loc.F("Home.Port.Line", st.ComPort, DevTypeName(st.devType),
+                    Loc.T((st.ledStatusByte & 1) == 1 ? "Home.Power.External" : "Home.Power.Usb"),
+                    ConfigStore.Device.LedCount);
 
         BannerFpsText.Text = $"{st.fps:F1} FPS";
         UpdateMetrics(st);
@@ -356,16 +357,17 @@ public partial class HomePage : Page
 
         var warns = new List<string>();
         if (st.monitorFallback == 1)
-            warns.Add($"配置的显示器不可用, 已回退主屏 (margin {{底,右,顶,左}} = {st.margins[0]},{st.margins[1]},{st.margins[2]},{st.margins[3]})");
+            warns.Add(Loc.F("Home.Warn.MonitorFallback",
+                            st.margins[0], st.margins[1], st.margins[2], st.margins[3]));
         if (st.allBlackFrames > 30)
-            warns.Add($"连续 {st.allBlackFrames} 帧全黑 (独占全屏或 MPO?), 画面可能不准");
+            warns.Add(Loc.F("Home.Warn.AllBlack", st.allBlackFrames));
 
         // 提示条优先显示"开启失败原因"(轮 18 ③): 它只在**没有会话**时出现, 与画面告警天然互斥
         bool blocked = _block.HasValue;
         bool showWarn = blocked || warns.Count > 0;
         if (showWarn)
         {
-            WarnBar.Title = blocked ? "无法开启灯带" : "画面提示";
+            WarnBar.Title = Loc.T(blocked ? "Home.Warn.Blocked" : "Home.Warn.Title");
             WarnBar.Message = blocked ? _block!.Value.Detail : string.Join("\n", warns);
         }
         WarnBar.IsOpen = showWarn;
