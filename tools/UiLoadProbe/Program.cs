@@ -1648,12 +1648,23 @@ static void Run()
                       $"None 模式 (色带轨道): 挂点关={!slNone.IsSelectionRangeEnabled} · " +
                       $"填充层收起={RangeHostOf(slNone)?.Visibility} = {noneMode}");
 
-    // ⑤ 禁用态: 轨道/拇指换禁用色 + 填充层收起 (填充与轨道同色会糊成一片 = 看着"缺一截" ✗)
+    // ⑤ 禁用态: 轨道/拇指换成禁用色, **进度填充要在** (只是变成灰的) —— 但填充色必须与**轨道底**
+    //    是不同的键! 早先两者都用 `ControlFillColorDisabledBrush` ⇒ 同色叠加, 只有填充那一段亮一档,
+    //    左端留一条暗条 = 用户报的"缺一截" ✗ (这条断言就是钉住那个坑的)
     var slDisabled = new Slider { Minimum = 0, Maximum = 100, Value = 50, Width = 200, IsEnabled = false };
     HostSlider(slDisabled);
-    bool disabledMode = RangeHostOf(slDisabled) is { Visibility: Visibility.Collapsed };
+    var dPart = PartOf(slDisabled);
+    var dTrack = slDisabled.Template?.FindName("TrackBackground", slDisabled) as System.Windows.Controls.Border;
+    var disabledFillKey = Application.Current.TryFindResource("TextFillColorDisabledBrush") as SolidColorBrush;
+    Color dFill = (dPart?.Fill as SolidColorBrush)?.Color ?? Colors.Transparent;
+    Color dTrackColor = (dTrack?.Background as SolidColorBrush)?.Color ?? Colors.Transparent;
+    bool disabledMode = RangeHostOf(slDisabled) is { Visibility: Visibility.Visible }
+                        && dPart is { ActualWidth: > 20 } && disabledFillKey is not null
+                        && dFill == disabledFillKey.Color
+                        && dFill != dTrackColor;
     Console.WriteLine((disabledMode ? "OK   " : "FAIL ") +
-                      $"禁用态: 填充层收起={RangeHostOf(slDisabled)?.Visibility} = {disabledMode}");
+                      $"禁用态: 填充层={RangeHostOf(slDisabled)?.Visibility} 填充={dFill} (期望=拇指禁用色 " +
+                      $"{disabledFillKey?.Color}) · 轨道底={dTrackColor} (两者必须不同, 否则又会「缺一截」) = {disabledMode}");
 
     // ⑥ **重新模板化后不能掉状态**: 换宿主 (等价于主题切换重建模板) 后, None 的收起必须还在 ——
     //    前三轮那套"代码钩子设 Visibility"就是在这里丢掉的 (用户看到的"仍被盖" ✗)

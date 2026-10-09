@@ -78,7 +78,7 @@ internal static class SliderDiag
         brightRow.IsEnabled = false;
         host.UpdateLayout();
         Console.WriteLine($"[3] 亮度行禁用: Slider.IsEnabled={brightSlider.IsEnabled} 填充层={Describe(RangeHostOf(brightSlider))}" +
-                          $" (期望 Collapsed)");
+                          $" (期望 Visible: 灰色的进度条)");
 
         // ---- 出图 + 沿线扫像素 ----
         ShotInPlace(brightRow, $"{pathPrefix}_bright_disabled.png", "亮度行 (禁用)");

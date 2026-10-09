@@ -21,6 +21,8 @@
            `SliderSkin.Fill="Track"` (默认) —— 从**最小值**到拇指 (贴左边缘);
            `SliderSkin.Fill="Anchor"`          —— 从**中性值**向两侧 (增益/倍率类), 需 `SliderSkin.Anchor`;
            `SliderSkin.Fill="None"`            —— **不画** (轨道本身就是色带, 如纯色拾色器的色调/饱和度)。
+         填充色 = **拇指中心色** (`SliderThumbBackground`), 禁用时两边一起换成禁用色 (`TextFillColorDisabledBrush`)
+         → 天然随主题变, 不需要另维护一套深浅色刷子 ✓
          ⚠️ 维护约定:
            1. 引上游资源一律 `DynamicResource` (换主题时 WPF-UI 会整个替换主题字典,
               `StaticResource` 会钉住旧实例 —— 本项目踩过);
@@ -115,15 +117,20 @@
                 <Setter TargetName="SelectionRangeHost" Property="Visibility" Value="Collapsed" />
             </Trigger>
 
-            <!-- ③ 禁用态 (上游缺这一档): 轨道底 / 拇指换禁用色, 并把进度填充**整条收起来** ——
-                 填充与轨道同色时两者糊成一片, 看着就像进度条"缺了一截"✗
-                 (禁用信息由拇指位置 + 旁边的数值文字表达, 够了) -->
+            <!-- ③ 禁用态 (上游缺这一档): 轨道底 / 拇指 / 进度填充一起换成**禁用色** ——
+                 漏掉任何一种, 禁用滑块都会拖着一截彩色进度条, 看着像"还能动" ✗。
+                 ⚠️ 填充的禁用色必须与**轨道底**是不同的键: 早先两者都用 `ControlFillColorDisabledBrush`
+                 ⇒ 同色叠加, 只有填充那一段 (`x ≥ 半个拇指`) 亮一档, 左端留一条暗条 = 用户报的"缺一截" ✗。
+                 这里沿用"**填充色 = 拇指中心色**"这条既有规则: 禁用时拇指是 `TextFillColorDisabledBrush`,
+                 填充就用它 (中灰, 与轨道底差 8.5 倍亮度 → 进度一眼可读, 且深浅主题各自成立) ✓
+                 (注: 滑块**不禁用**却设了 `Fill=None` 时, 填充由上面 ② 整层收起, 与此无关) -->
             <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="TrackBackground" Property="Background"
                         Value="{DynamicResource ControlFillColorDisabledBrush}" />
                 <Setter TargetName="Thumb" Property="Foreground"
                         Value="{DynamicResource TextFillColorDisabledBrush}" />
-                <Setter TargetName="SelectionRangeHost" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="PART_SelectionRange" Property="Fill"
+                        Value="{DynamicResource TextFillColorDisabledBrush}" />
             </Trigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
