@@ -1620,6 +1620,17 @@ static void Run()
     Console.WriteLine((anchorMode ? "OK   " : "FAIL ") +
                       $"Anchor 模式: Track 填充已让位(={noTrackBar}) · " +
                       $"官方挂点开={slAnchor.IsSelectionRangeEnabled} = {anchorMode}");
+    // ★ 关键: **非 Anchor 模式绝不能开官方挂点** —— WPF 的默认值是 True ✗,
+    //   没显式置假时 Track/None/禁用 都会多一条内缩 10px 的填充 (用户实测"最左边缺一个口" ✗)
+    var slNoneMode = new Slider { Minimum = 0, Maximum = 100, Value = 50 };
+    AmbientLight.Controls.SliderSkin.SetFill(slNoneMode, AmbientLight.Controls.SliderFill.None);
+    bool noneNoPart = !slNoneMode.IsSelectionRangeEnabled;
+    var slTrackMode = new Slider { Minimum = 0, Maximum = 100, Value = 50 };
+    bool trackNoPart = !slTrackMode.IsSelectionRangeEnabled;
+    Console.WriteLine((noneNoPart && trackNoPart ? "OK   " : "FAIL ") +
+                      $"Track/None 模式不开官方挂点 (Track={!slTrackMode.IsSelectionRangeEnabled} · " +
+                      $"None={!slNoneMode.IsSelectionRangeEnabled}) —— 它是内缩 10px 的, 开了就会缺一个口 ✗");
+
     // ④ Converter 真值表 (纯函数): Start 取 min、End 取 max —— "往左拖"才不会算出负宽度(什么都不画)
     var conv = new AmbientLight.Controls.SliderAnchorConverter();
     var cases = new (double Value, double Anchor, double Min, double WantStart, double WantEnd)[]

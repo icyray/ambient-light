@@ -137,6 +137,11 @@
         <Setter Property="FocusVisualStyle" Value="{DynamicResource DefaultControlFocusVisualStyle}" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="OverridesDefaultStyle" Value="True" />
+        <!-- ⚠️ **必须显式置假**: WPF 里 `IsSelectionRangeEnabled` 的默认值就是 **True** ✗ ——
+             早期只"在 Anchor 时置真"、没置假 → 于是 Track/None/禁用 全都多画了一条**内缩半个拇指**的
+             官方填充 (Track 那条被我们的贴边填充盖住所以看不出来; None 与禁用态就暴露成
+             "最左边缺一个口" ✗)。只有 Anchor 模式才由下面的 DataTrigger 打开 ✓ -->
+        <Setter Property="IsSelectionRangeEnabled" Value="False" />
         <Setter Property="SelectionStart">
             <Setter.Value>
                 <MultiBinding Converter="{StaticResource SliderAnchorConverter}" ConverterParameter="start">
