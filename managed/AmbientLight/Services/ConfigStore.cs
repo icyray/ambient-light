@@ -31,8 +31,21 @@ public sealed class DeviceSettings
     public int Sides { get; set; } = 4;
     public int Direction { get; set; } = 0;
     public int LedRotate { get; set; } = 0;      // 灯序偏移 (M4 校准, 核心钳 ±灯数12%)
-    public int ChaseFlashGuard { get; set; } = 0;     // v1.6: 追光 抑制闪光 (默认关)
-    public int ChaseTemporalSmooth { get; set; } = 0; // v1.6: 追光 时域柔和 (默认关, 有拖影)
+    /// <summary>把 v1.6 早期的"两个正交开关"迁移成等效档位 —— **纯函数**, 探针打真值表。
+    /// (那版本地配置从未发布过; 迁移只为让用户不必重设一遍。)</summary>
+    public static void MigrateLegacySmooth(DeviceSettings d)
+    {
+        if (d.ChaseSmoothMode == 0 && (d.ChaseFlashGuard != 0 || d.ChaseTemporalSmooth != 0))
+            d.ChaseSmoothMode = d.ChaseTemporalSmooth != 0 ? 2 : 1;
+    }
+
+    /// <summary>v1.6 追光柔化平滑档: 0=关(默认) / 1=抑制闪光 / 2=抑制闪光+时域柔和。
+    /// 刻意做成**包含关系的档位**而不是两个正交开关 —— 用户提出的口径:
+    /// 别让用户在两个"外观难以分辨"的组合里做选择; 而 2 在行为上严格包含 1 ✓</summary>
+    public int ChaseSmoothMode { get; set; } = 0;
+    // 兼容: v1.6 早期本地配置里是两个正交开关 (未发布过) —— 只在 Load 时读一次做迁移, 不写回核心
+    public int ChaseFlashGuard { get; set; } = 0;
+    public int ChaseTemporalSmooth { get; set; } = 0;
     public int CaptureRange { get; set; } = 15;
     public int DepthOverride { get; set; } = 0;
     public int Taps { get; set; } = 8;
@@ -78,8 +91,7 @@ public sealed class DeviceSettings
         c.sides = Sides;
         c.direction = Direction;
         c.ledRotate = LedRotate;
-        c.chaseFlashGuard = ChaseFlashGuard;
-        c.chaseTemporalSmooth = ChaseTemporalSmooth;
+        c.chaseSmoothMode = ChaseSmoothMode;
         c.captureRange = CaptureRange;
         c.depthOverride = DepthOverride;
         c.taps = Taps;
@@ -127,8 +139,7 @@ public sealed class DeviceSettings
         Sides = c.sides;
         Direction = c.direction;
         LedRotate = c.ledRotate;
-        ChaseFlashGuard = c.chaseFlashGuard;
-        ChaseTemporalSmooth = c.chaseTemporalSmooth;
+        ChaseSmoothMode = c.chaseSmoothMode;
         CaptureRange = c.captureRange;
         DepthOverride = c.depthOverride;
         Taps = c.taps;
@@ -236,7 +247,11 @@ public static class ConfigStore
             {
                 var key = Path.GetFileNameWithoutExtension(f)["device_".Length..];
                 var ds = LoadJson<DeviceSettings>(f);
-                if (ds != null && key.Length > 0) Devices[key] = ds;
+                if (ds != null && key.Length > 0)
+                {
+                    DeviceSettings.MigrateLegacySmooth(ds);   // v1.6 早期"两个正交开关"→ 等效档位
+                    Devices[key] = ds;
+                }
             }
         }
         SelectedKey = string.IsNullOrWhiteSpace(App.SelectedDevice) ? "0_1" : App.SelectedDevice;

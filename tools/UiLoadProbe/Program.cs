@@ -1436,24 +1436,33 @@ static void Run()
     Console.WriteLine((brightTable ? "OK   " : "FAIL ") +
                       $"亮度可用性真值表 (追光/拾音/纯色 可用 · MCU 全系禁用) = {brightTable}");
 
-    // ② 追光两开关的配置往返 (DeviceSettings ↔ ACConfig): 少一处赋值就是"UI 改了没用"
-    var devProbe = new AmbientLight.Services.DeviceSettings
+    // ② 柔化平滑**档位** (0=关 / 1=抑制闪光 / 2=抑制闪光+时域柔和) 的配置往返
+    bool roundTrip = true;
+    foreach (int m in new[] { 0, 1, 2 })
     {
-        ChaseFlashGuard = 1, ChaseTemporalSmooth = 1,
+        var d2 = new AmbientLight.Services.DeviceSettings { ChaseSmoothMode = m };
+        var c2 = d2.ToCoreConfig();
+        var b2 = new AmbientLight.Services.DeviceSettings();
+        b2.FromCoreConfig(c2);
+        roundTrip &= c2.chaseSmoothMode == m && b2.ChaseSmoothMode == m;
+    }
+    Console.WriteLine((roundTrip ? "OK   " : "FAIL ") + $"柔化平滑档位往返 0/1/2 = {roundTrip}");
+    // 默认必须是"关" (用户口径: 默认保持原来的高刷跟屏感)
+    bool defOff = new AmbientLight.Services.DeviceSettings().ChaseSmoothMode == 0
+                  && AmbientLight.Interop.ACConfig.CreateDefault().chaseSmoothMode == 0;
+    Console.WriteLine((defOff ? "OK   " : "FAIL ") + $"档位默认关 = {defOff}");
+    // ③ 兼容迁移 (纯函数): v1.6 早期"两个正交开关"→ 等效档位 —— 四个组合打真值表
+    var mig = new (int Guard, int Smooth, int Want)[]
+    {
+        (1, 0, 1), (0, 1, 2), (1, 1, 2), (0, 0, 0),
     };
-    var cfgProbe = devProbe.ToCoreConfig();
-    bool toCore = cfgProbe.chaseFlashGuard == 1 && cfgProbe.chaseTemporalSmooth == 1;
-    var back = new AmbientLight.Services.DeviceSettings();
-    back.FromCoreConfig(cfgProbe);
-    bool fromCore = back.ChaseFlashGuard == 1 && back.ChaseTemporalSmooth == 1;
-    Console.WriteLine((toCore && fromCore ? "OK   " : "FAIL ") +
-                      $"追光两开关配置往返 (ToCoreConfig={toCore} / FromCoreConfig={fromCore})");
-    // 默认值必须是"关" (用户口径: 默认保持原来的高刷跟屏感)
-    bool defOff = new AmbientLight.Services.DeviceSettings().ChaseFlashGuard == 0
-                  && new AmbientLight.Services.DeviceSettings().ChaseTemporalSmooth == 0
-                  && AmbientLight.Interop.ACConfig.CreateDefault().chaseFlashGuard == 0
-                  && AmbientLight.Interop.ACConfig.CreateDefault().chaseTemporalSmooth == 0;
-    Console.WriteLine((defOff ? "OK   " : "FAIL ") + $"两开关默认都是关 = {defOff}");
+    bool migOk = mig.All(x =>
+    {
+        var d3 = new AmbientLight.Services.DeviceSettings { ChaseFlashGuard = x.Guard, ChaseTemporalSmooth = x.Smooth };
+        AmbientLight.Services.DeviceSettings.MigrateLegacySmooth(d3);
+        return d3.ChaseSmoothMode == x.Want;
+    });
+    Console.WriteLine((migOk ? "OK   " : "FAIL ") + $"'两个开关'→档位 迁移真值表 (4 组) = {migOk}");
 
     Console.WriteLine();
     Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");

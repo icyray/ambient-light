@@ -168,15 +168,27 @@
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel>
-                <controls:SettingRow Margin="0" Icon="{ui:SymbolIcon ArrowSync24}"
-                                     Title="抑制闪光"
-                                     Description="整帧亮度的突变限幅 —— 治镜头切换/闪白; 颜色跟随仍然即时">
-                    <ui:ToggleSwitch x:Name="ChaseFlashGuardToggle" Click="OnChaseFlashGuardChanged" />
+                <!-- 总开关 + 二选一 (档位 0/1/2 与 ACConfig.chaseSmoothMode 一一对应)。
+                     为什么要二选一而不是两个独立开关: "单时域柔和"与"两者都开"在外观上几乎分辨不出,
+                     不该让用户在这种组合里做选择; 而"抑制闪光+时域柔和"在行为上**严格包含**"抑制闪光"
+                     (均值被同一套更严的限幅接管, 再加逐灯柔化) → 于是只需要一个决定: 跟手优先 还是 更柔 ✓ -->
+                <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
+                                     Title="启用柔化平滑"
+                                     Description="关闭 = 保持原来的高刷跟屏感 (游戏推荐)">
+                    <ui:ToggleSwitch x:Name="ChaseSmoothToggle" Click="OnChaseSmoothToggled" />
                 </controls:SettingRow>
-                <controls:SettingRow Margin="0" Icon="{ui:SymbolIcon ArrowMinimize24}"
-                                     Title="时域柔和"
-                                     Description="逐灯颜色平滑 —— 治快速摇镜的逐灯跳变; 更柔但有轻微拖影">
-                    <ui:ToggleSwitch x:Name="ChaseTemporalSmoothToggle" Click="OnChaseTemporalSmoothChanged" />
+                <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
+                                     Title="抑制闪光"
+                                     Description="整帧亮度的突变限幅 —— 治镜头切换/闪白; 颜色跟随仍然即时 (更跟手)">
+                    <!-- 用标准 RadioButton: WPF-UI 4.3 的 xmlns 里没有 ui:RadioButton (它给标准控件套隐式样式) -->
+                    <RadioButton x:Name="ChaseModeGuardRadio" GroupName="ChaseSmooth"
+                                 Click="OnChaseModeChanged" />
+                </controls:SettingRow>
+                <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowMinimize24}"
+                                     Title="抑制闪光 + 时域柔和"
+                                     Description="再叠逐灯颜色平滑 (治快速摇镜的逐灯跳变) —— 更柔, 但有一点拖影">
+                    <RadioButton x:Name="ChaseModeBothRadio" GroupName="ChaseSmooth"
+                                 Click="OnChaseModeChanged" />
                 </controls:SettingRow>
             </StackPanel>
         </ui:CardExpander>

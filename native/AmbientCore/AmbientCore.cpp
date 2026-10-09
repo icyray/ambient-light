@@ -49,7 +49,7 @@ namespace {
 static const PROPERTYKEY kPKEY_Name = { { 0xa45c254e, 0xdf1c, 0x4efd,
                                           { 0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0 } }, 14 };
 
-constexpr uint32_t kVersion = (1u << 16) | (6u << 8) | 0u;   // 1.6.0 (ACConfig 增补 chaseFlashGuard/chaseTemporalSmooth)
+constexpr uint32_t kVersion = (1u << 16) | (6u << 8) | 0u;   // 1.6.0 (ACConfig 增补 chaseSmoothMode)
 
 // ================= 淡入淡出 / 平滑参数 (要微调就改这一块) =================
 // 观感含义: 淡入 = 灯"亮起来"的过程, 淡出 = 灯"灭下去"的过程。调大 = 更慢更柔, 调小 = 更干脆。
@@ -177,8 +177,7 @@ ACConfig DefaultConfig()
     c.audioAgc = 1;
     c.audioFollowVolume = 0;
     c.audioSoft = 0.5;
-    c.chaseFlashGuard = 0;      // v1.6: 追光时域平滑默认**关** (保持原样的高刷跟屏感)
-    c.chaseTemporalSmooth = 0;
+    c.chaseSmoothMode = 0;      // v1.6: 追光柔化平滑默认**关** (保持原样的高刷跟屏感)
     return c;
 }
 
@@ -878,8 +877,8 @@ void CoreLoopInner(Sess* g)
                 nc.ledRotate != applied.ledRotate;   // 灯序偏移也走取色区重建 (校准窗实时生效)
             if (capValid && layoutChanged) cap.UpdateLayout(MakeCaptureParams(nc));
             // 灯数/边数变了 → 平滑缓冲长度不再对应; 两个开关翻转也要重新吸附
-            if (layoutChanged || nc.chaseTemporalSmooth != applied.chaseTemporalSmooth ||
-                nc.chaseFlashGuard != applied.chaseFlashGuard) InvalidateChaseSmooth();
+            if (layoutChanged || nc.chaseSmoothMode != applied.chaseSmoothMode)
+                InvalidateChaseSmooth();
             // cols 必须与新灯数同步, 否则 Step 的 memcpy 越界写堆 (曾致 CLR 堆损坏)
             cols.resize((size_t)std::min(nc.ledCount, serial::kMaxLedCount) + 4);
             if (nc.modeIndex != applied.modeIndex) {
@@ -1156,7 +1155,9 @@ void CoreLoopInner(Sess* g)
                 // ---- S4: 追光时域平滑 (两个每设备开关; 都只作用于"写出去的字节", 不动颜色链) ----
                 size_t chN = (size_t)EffLeds(applied) * 3;
                 double chNow = Millis();
-                if (applied.chaseTemporalSmooth && chN > 0) {
+                const bool chaseGuard = applied.chaseSmoothMode >= 1;    // 1 = 抑制闪光
+                const bool chaseSmooth = applied.chaseSmoothMode >= 2;   // 2 = 再加时域柔和
+                if (chaseSmooth && chN > 0) {
                     // ① 时域柔和: 逐灯逐通道一阶低通 (τ = kChaseSmoothTauMs)。治"局部颜色跳变",
                     //    代价是轻微拖影 + 一点延迟 → 游戏用户建议关 (UI 文案也这么写)。
                     if (chaseBuf.size() < chN) { chaseBuf.assign(chN, 0.0f); chaseInit = false; }
@@ -1174,7 +1175,7 @@ void CoreLoopInner(Sess* g)
                         }
                     }
                 }
-                if (applied.chaseFlashGuard && chN > 0) {
+                if (chaseGuard && chN > 0) {
                     // ② 抑制闪光: 整帧**平均亮度**的突变限幅 (每帧最多走 kChaseFlashGuard × 255)。
                     //    专治镜头切换/闪白: 颜色跟随仍然即时, 只有"整体亮度"被抹平 ✓
                     double sum = 0;

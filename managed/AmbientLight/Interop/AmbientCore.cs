@@ -258,8 +258,7 @@ public unsafe struct ACConfig
     public fixed byte audioDevId[64];           // 麦克风源目标输入端点, 空=跟随默认
     public fixed byte audioOutDevId[64];        // 回环源目标输出端点, 空=跟随默认
     public int ledRotate;                       // v1.4: 灯序偏移 (核心再钳 ±灯数12%), 默认 0
-    public int chaseFlashGuard;                 // v1.6: 1=画面突变时抑制闪光 (整帧亮度突变限幅), 默认 0
-    public int chaseTemporalSmooth;             // v1.6: 1=时域柔和 (逐灯逐通道指数平均), 默认 0
+    public int chaseSmoothMode;                 // v1.6: 追光柔化平滑档: 0=关(默认)/1=抑制闪光/2=+时域柔和
     public fixed uint reserved[8];
 
     public string ComPort
@@ -366,8 +365,7 @@ public unsafe struct ACConfig
         audioFollowVolume = 0,
         audioSoft = 0.5,
         ledRotate = 0,
-        chaseFlashGuard = 0,
-        chaseTemporalSmooth = 0,
+        chaseSmoothMode = 0,
     };
 }
 

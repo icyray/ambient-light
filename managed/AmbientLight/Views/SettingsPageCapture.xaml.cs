@@ -38,42 +38,46 @@ public partial class SettingsPageCapture : Page
         FpsCapCombo.SelectedIndex = fps < 0 ? 0 : fps;
         BlackBarsToggle.IsChecked = dev.BlackBars;
         BlackBarLevelSlider.Value = Math.Clamp(dev.BlackBarLevel, 0, 20);
-        ChaseFlashGuardToggle.IsChecked = dev.ChaseFlashGuard != 0;
-        ChaseTemporalSmoothToggle.IsChecked = dev.ChaseTemporalSmooth != 0;
+        int chaseMode = Math.Clamp(dev.ChaseSmoothMode, 0, 2);
+        ChaseSmoothToggle.IsChecked = chaseMode != 0;
+        ChaseModeGuardRadio.IsChecked = chaseMode == 1;
+        ChaseModeBothRadio.IsChecked = chaseMode == 2;
+        ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = chaseMode != 0;
         RefreshChaseSummary();
         RefreshMonitors(select: dev.MonitorIndex);
     }
 
-    // v1.6 追光时域平滑 (每设备): 两个开关都只写配置, 由核心在**写帧前**作用于字节
-    private void OnChaseFlashGuardChanged(object sender, RoutedEventArgs e)
+    // v1.6 追光柔化平滑 (每设备): UI 是"总开关 + 二选一", 落到一个档位字段 (0/1/2)。
+    // 核心在**写帧前**作用于字节 (输出层柔化, 不动颜色链)。
+    private void OnChaseSmoothToggled(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
-        ConfigStore.Device.ChaseFlashGuard = ChaseFlashGuardToggle.IsChecked == true ? 1 : 0;
+        ApplyChaseMode();
+    }
+
+    private void OnChaseModeChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        ApplyChaseMode();
+    }
+
+    private void ApplyChaseMode()
+    {
+        bool on = ChaseSmoothToggle.IsChecked == true;
+        ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = on;   // 关着总开关时不可选
+        ConfigStore.Device.ChaseSmoothMode =
+            !on ? 0 : (ChaseModeBothRadio.IsChecked == true ? 2 : 1);
         RefreshChaseSummary();
         App.Instance.ApplyConfigDebounced();
     }
 
-    private void OnChaseTemporalSmoothChanged(object sender, RoutedEventArgs e)
+    /// <summary>折叠组摘要 (也是"当前档位"的唯一表述): 关 / 抑制闪光 / 抑制闪光+时域柔和</summary>
+    private void RefreshChaseSummary() => ChaseSummary.Text = ConfigStore.Device.ChaseSmoothMode switch
     {
-        if (_loading) return;
-        ConfigStore.Device.ChaseTemporalSmooth = ChaseTemporalSmoothToggle.IsChecked == true ? 1 : 0;
-        RefreshChaseSummary();
-        App.Instance.ApplyConfigDebounced();
-    }
-
-    /// <summary>折叠组的摘要: 关 / 抑制闪光 / 时域柔和 / 两者都开 (两项**不互斥** —— 治不同病灶)</summary>
-    private void RefreshChaseSummary()
-    {
-        bool guard = ChaseFlashGuardToggle.IsChecked == true;
-        bool smooth = ChaseTemporalSmoothToggle.IsChecked == true;
-        ChaseSummary.Text = (guard, smooth) switch
-        {
-            (true, true) => "两项都开",
-            (true, false) => "抑制闪光",
-            (false, true) => "时域柔和",
-            _ => "关",
-        };
-    }
+        1 => "抑制闪光",
+        2 => "抑制闪光+时域柔和",
+        _ => "关",
+    };
 
     private void RefreshMonitors(int select)
     {
