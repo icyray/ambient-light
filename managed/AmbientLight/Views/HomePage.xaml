@@ -463,15 +463,104 @@
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel Margin="16,12,16,16">
-                <!-- 预设色板 + 自定义槽 (轮 29): 12 个预设, 中间一条竖分割线, 右边 5 个自定义槽
-                     (自动记住你调出来的颜色, 右键清除单个槽)。选中 = 强调色圆环。 -->
-                <ItemsControl x:Name="PresetStrip" Margin="0,0,0,4">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
+                <!-- 预设色板 + 自定义槽: 12 个预设 → 竖分割线 → 5 个自定义槽
+                     (自动记住调出来的颜色, 右键清除单个槽)。选中 = 强调色圆环。
+                     色块模板 = PresetSwatchTemplate (自绘圆点; 默认 Button 模板的悬停会铺灰)。
+                     ⚠️ 自定义槽**不要**在 XAML 里写 Tag —— code-behind 靠"收集时有无 Tag"分拣
+                     预设/自定义 (之后 RefreshCustomSlots 会往空槽写 Tag)。 -->
+                <WrapPanel x:Name="PresetStrip" Margin="0,0,0,4">
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FFE1D6" ToolTip="暖白 #FFE1D6" Tag="#FFE1D6"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FFF6E0" ToolTip="米白 #FFF6E0" Tag="#FFF6E0"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FFFFFF" ToolTip="纯白 #FFFFFF" Tag="#FFFFFF"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#C9E4FF" ToolTip="冷白 #C9E4FF" Tag="#C9E4FF"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FF3B30" ToolTip="红 #FF3B30" Tag="#FF3B30"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FF9500" ToolTip="橙 #FF9500" Tag="#FF9500"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FFCC00" ToolTip="黄 #FFCC00" Tag="#FFCC00"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#34C759" ToolTip="绿 #34C759" Tag="#34C759"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#5AC8FA" ToolTip="青 #5AC8FA" Tag="#5AC8FA"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#007AFF" ToolTip="蓝 #007AFF" Tag="#007AFF"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#AF52DE" ToolTip="紫 #AF52DE" Tag="#AF52DE"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FF2D55" ToolTip="粉 #FF2D55" Tag="#FF2D55"
+                            Click="OnPresetClick" />
+
+                    <!-- 预设与自定义之间的竖向分割线 -->
+                    <Rectangle Width="1" Height="30" Margin="6,0,10,6"
+                               Fill="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
+                    <!-- 自定义色槽 ×5 (内容/描边由 RefreshCustomSlots 按记忆填充; 右键清除) -->
+                    <Button x:Name="CustomSlot0" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="自定义色槽 · 调出颜色后自动记住"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                    <Button x:Name="CustomSlot1" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="自定义色槽 · 调出颜色后自动记住"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                    <Button x:Name="CustomSlot2" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="自定义色槽 · 调出颜色后自动记住"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                    <Button x:Name="CustomSlot3" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="自定义色槽 · 调出颜色后自动记住"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                    <Button x:Name="CustomSlot4" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="自定义色槽 · 调出颜色后自动记住"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                </WrapPanel>
 
                 <!-- 色相 H: 彩虹轨道。滑块自身的轨道用局部资源刷覆盖成透明, 渐变交给下层 Border 承担
                      (WPF-UI 4.3.0 模板里轨道是 Border#TrackBackground, Background = SliderTrackFill)。 -->

@@ -613,9 +613,9 @@ static void Run()
                       $"实际轨道 Border#TrackBackground.Background = {trackBorder?.Background} (期望透明)");
     Console.WriteLine();
     Console.WriteLine("---- §3 预设色板 (自绘圆形 + 覆写悬停 + 预设/自定义分区) ----");
-    var presetStrip = home.FindName("PresetStrip") as ItemsControl;
+    var presetStrip = home.FindName("PresetStrip") as Panel;   // 已改为 XAML 静态子元素 (WrapPanel)
     var presetTpl = home.TryFindResource("PresetSwatchTemplate");
-    var presetBtns = presetStrip?.Items.OfType<Button>().ToList() ?? [];
+    var presetBtns = presetStrip?.Children.OfType<Button>().ToList() ?? [];
     // 只断言**机制与规则**, 不断言条数/几何数值 —— 用户加个预设、调个尺寸不该让探针报警。
     //   ① 每个色块都用自绘模板: 否则退回默认 Button 模板, 悬停会把色块铺成灰色 (轮 27 真实 bug);
     //   ② 预设与自定义之间有竖向分割线 (轮 29 要求的"分区");
@@ -623,7 +623,7 @@ static void Run()
     bool swatchTplOk = presetTpl is ControlTemplate
                        && presetBtns.Count > 0
                        && presetBtns.All(b => ReferenceEquals(b.Template, presetTpl));
-    bool hasDivider = presetStrip?.Items.OfType<System.Windows.Shapes.Rectangle>().Any() == true;
+    bool hasDivider = presetStrip?.Children.OfType<System.Windows.Shapes.Rectangle>().Any() == true;
     Console.WriteLine((swatchTplOk ? "OK   " : "FAIL ") +
                       $"色板 {presetBtns.Count} 个色块全部使用 PresetSwatchTemplate = {swatchTplOk}");
     Console.WriteLine((hasDivider ? "OK   " : "FAIL ") +

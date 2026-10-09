@@ -18,72 +18,22 @@ public partial class HomePage : Page
     // ---- §3 纯色灯光拾色器: H + S 即完整 HSV (V = 主页「亮度」行; ConfigStore.Brightness 是
     //      颜色链之后真正的线性调光乘数)。拖动时以 (H,S) 为真值源, 只在初值/HEX/预设时反推 ——
     //      否则 8bit 往返会让色相旋钮自己抖 (HEX 每通道只有 8bit, 反推 H 会跳)。 ----
-    private static readonly (string Hex, string Name)[] Presets =
-    {
-        ("#FFE1D6", "暖白"), ("#FFF6E0", "米白"), ("#FFFFFF", "纯白"), ("#C9E4FF", "冷白"),
-        ("#FF3B30", "红"),   ("#FF9500", "橙"),   ("#FFCC00", "黄"),   ("#34C759", "绿"),
-        ("#5AC8FA", "青"),   ("#007AFF", "蓝"),   ("#AF52DE", "紫"),   ("#FF2D55", "粉"),
-    };
-
-    private const int CustomSlotCount = 5;            // 自定义色槽数量 (轮 29)
+    private const int CustomSlotCount = 5;            // 自定义色槽数量
     private const double CustomColorDelayMs = 1000;    // 颜色停手多久才算"定了"并记入自定义槽
+    private readonly List<System.Windows.Controls.Button> _presetBtns = [];
     private readonly List<System.Windows.Controls.Button> _customBtns = [];
     private DispatcherTimer? _customColorTimer;
 
-    private void BuildPresets()
+    /// <summary>收集 XAML 静态声明的预设色块与自定义槽 (只做一次)。
+    /// 分拣判据: 收集时**预设的 Tag 已是颜色** (XAML 里声明), 自定义槽没有 Tag ——
+    /// 之后 RefreshCustomSlots 会往空槽写 Tag, 所以必须在这个时点分拣 (见 HomePage.xaml 的注释)。</summary>
+    private void CollectPresetButtons()
     {
-        var tpl = (ControlTemplate)FindResource("PresetSwatchTemplate");
-        foreach (var (hex, name) in Presets)
+        if (_presetBtns.Count > 0) return;
+        foreach (var b in PresetStrip.Children.OfType<System.Windows.Controls.Button>())
         {
-            var btn = new System.Windows.Controls.Button
-            {
-                Width = 30,
-                Height = 30,
-                Margin = new Thickness(0, 0, 6, 6),
-                // 自绘圆点模板: 默认 Button 模板的悬停会把整个色块铺成灰色 (轮 27 用户反馈)
-                Template = tpl,
-                BorderThickness = new Thickness(2),
-                // 未选中给一圈深灰描边 (而不是透明) —— 否则圆环位置看着像"空出来的缝"
-                BorderBrush = ThemeBrush("ControlStrokeColorDefaultBrush"),
-                Background = new System.Windows.Media.SolidColorBrush(
-                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)),
-                ToolTip = $"{name} {hex}",
-                Tag = hex,
-                Cursor = Cursors.Hand,
-            };
-            btn.Click += OnPresetClick;
-            PresetStrip.Items.Add(btn);
-        }
-
-        // 预设与自定义之间一条竖线 (轮 29 用户要求: "预设与自定义用个竖向分割线")
-        var divider = new System.Windows.Shapes.Rectangle
-        {
-            Width = 1,
-            Height = 30,
-            Margin = new Thickness(6, 0, 10, 6),
-            Fill = ThemeBrush("ControlStrokeColorDefaultBrush"),
-        };
-        PresetStrip.Items.Add(divider);
-
-        // 自定义色槽: 自动记住调出来的颜色 (最新在前, 最多 CustomSlotCount 个); 右键清空单个槽
-        for (int i = 0; i < CustomSlotCount; i++)
-        {
-            var btn = new System.Windows.Controls.Button
-            {
-                Width = 30,
-                Height = 30,
-                Margin = new Thickness(0, 0, 6, 6),
-                Template = tpl,
-                BorderThickness = new Thickness(2),
-                BorderBrush = ThemeBrush("ControlStrokeColorDefaultBrush"),
-                Background = Brushes.Transparent,
-                Tag = null,
-                Cursor = Cursors.Hand,
-            };
-            btn.Click += OnPresetClick;                 // 同一套逻辑: Tag 为空时什么也不做
-            btn.MouseRightButtonUp += OnCustomSlotClear;
-            _customBtns.Add(btn);
-            PresetStrip.Items.Add(btn);
+            if (b.Tag is string) _presetBtns.Add(b);
+            else _customBtns.Add(b);
         }
         RefreshCustomSlots();
     }
@@ -115,7 +65,8 @@ public partial class HomePage : Page
     private void RememberCustomColor(string hex)
     {
         if (string.IsNullOrWhiteSpace(hex)) return;
-        if (Presets.Any(p => string.Equals(p.Hex, hex, StringComparison.OrdinalIgnoreCase))) return;
+        // 预设色不重复记入自定义槽 (预设本身就在列表里, 再记一遍没意义)
+        if (_presetBtns.Any(b => string.Equals(b.Tag as string, hex, StringComparison.OrdinalIgnoreCase))) return;
         var list = ConfigStore.App.CustomColors;
         list.RemoveAll(c => string.Equals(c, hex, StringComparison.OrdinalIgnoreCase));
         list.Insert(0, hex);
@@ -237,7 +188,7 @@ public partial class HomePage : Page
     private void UpdatePresetSelection()
     {
         string cur = ConfigStore.Device.SolidColor;
-        foreach (var b in PresetStrip.Items.OfType<System.Windows.Controls.Button>())
+        foreach (var b in PresetStrip.Children.OfType<System.Windows.Controls.Button>())
         {
             bool sel = string.Equals((string?)b.Tag, cur, StringComparison.OrdinalIgnoreCase);
             b.BorderBrush = sel ? ThemeBrush("AccentFillColorDefaultBrush")

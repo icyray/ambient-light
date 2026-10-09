@@ -84,7 +84,7 @@ public partial class HomePage : Page
     {
         InitializeComponent();
         Controls.WheelScroll.Attach(this);      // 滚轮滚动由外层滚动器承担
-        BuildPresets();
+        CollectPresetButtons();
         EnsureGlowBrush();                 // 常驻画刷 (颜色做动画, 不重建)
 
         HeroTitle.Foreground = _titleBrush;
@@ -155,7 +155,7 @@ public partial class HomePage : Page
             ApplyBannerLook(_lastPolledState < 0 ? AmbientCore.StateStopped : _lastPolledState,
                             ConfigStore.Device.ModeIndex, animate: false);
             // (模式区不用重建: 磁贴图标/说明文字随 XAML 走 DynamicResource, 换主题自动跟)
-            BuildPresets();                       // 自定义色槽的选中圈取的是 AccentFillColorDefaultBrush
+            RefreshCustomSlots();                 // 自定义槽的描边/选中圈 (强调色) 重取
             RefreshMonitors();
             _ = RefreshDevicesAsync();            // 设备行的语义胶囊随深/浅换套
         });
