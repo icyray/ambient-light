@@ -109,7 +109,7 @@ public partial class HomePage : Page
     }
 
     // ---- §7 布局预览 (折叠) -----------------------------------------
-    private void UpdateRing(ACStatus st, int m0, int m1, int m2, int m3)
+    private void UpdateRing(ACStatus st)
     {
         var dev = ConfigStore.Device;
         long sig = dev.ModeIndex | ((long)dev.LedCount << 5) | ((long)dev.Sides << 15)

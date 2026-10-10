@@ -355,12 +355,11 @@ public partial class HomePage : Page
         BannerFpsText.Text = $"{st.fps:F1} FPS";
         UpdateMetrics(st);
         UpdateGlow(st);
-        UpdateRing(st, st.margins[0], st.margins[1], st.margins[2], st.margins[3]);
+        UpdateRing(st);
 
         var warns = new List<string>();
         if (st.monitorFallback == 1)
-            warns.Add(Loc.F("Home.Warn.MonitorFallback",
-                            st.margins[0], st.margins[1], st.margins[2], st.margins[3]));
+            warns.Add(Loc.T("Home.Warn.MonitorFallback"));
         if (st.allBlackFrames > 30)
             warns.Add(Loc.F("Home.Warn.AllBlack", st.allBlackFrames));
 
