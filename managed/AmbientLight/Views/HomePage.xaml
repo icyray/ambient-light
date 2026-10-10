@@ -549,7 +549,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Mode.Name.11}" FontSize="14" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="{DynamicResource Home.Picker.Sub}" />
                     <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Orientation="Horizontal"
@@ -740,7 +740,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Home.Fx.Title}" FontSize="14" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="{DynamicResource Home.Fx.Sub}" />
                     <Border x:Name="FxCurrentPill" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
@@ -871,7 +871,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Home.Layout.Title}" FontSize="14" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="{DynamicResource Home.Layout.Sub}" />
                     <TextBlock x:Name="LayoutSummary" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
