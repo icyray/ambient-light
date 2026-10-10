@@ -347,7 +347,8 @@ public partial class HomePage : Page
             ? Loc.T("Home.Port.None")
             : string.Join(" · ", new[]
               {
-                  Loc.F("Home.Port.Prefix", st.ComPort, DevTypeName(st.devType)),
+                  st.ComPort,
+                  DevTypeName(st.devType),
                   PowerText(st.state, st.ledStatusByte),
                   Loc.F("Dev.LedCount", ConfigStore.Device.LedCount),
               }.Where(s => s.Length > 0));
