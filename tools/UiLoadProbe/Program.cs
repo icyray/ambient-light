@@ -848,6 +848,14 @@ static void Run()
     // 文案字典已合并 (Loc 冒烟: 常用按钮能解析出真值)
     bool locMerged = AmbientLight.Localization.Loc.T("Common.GotIt") != "Common.GotIt";
     Console.WriteLine((locMerged ? "OK   " : "FAIL ") + $"Strings.zh.xaml 已合并 (Loc 冒烟) = {locMerged}");
+    // 多行文案必须含**真换行**: 值里的 &#10; 若忘了配 xml:space="preserve" 会被 XAML 归一化成
+    // 空格 (静默失效 —— 对话框里两段话挤成一行)。实测与复现工具 .workbuddy/tmp/nl-probe。
+    var multilineKeys = new[] { "Dev.List.NotFound", "App.Launch.TooMany", "App.Launch.Failed",
+                                "App.Crash.UiException", "Adv.Update.Body", "Adv.Restore.Body", "Calib.NeedSession" };
+    var nlBad = multilineKeys.Where(k => !AmbientLight.Localization.Loc.T(k).Contains('\n')).ToList();
+    Console.WriteLine((nlBad.Count == 0 ? "OK   " : "FAIL ") +
+                      $"多行文案含真换行 {multilineKeys.Length} 条 (&#10; 配 xml:space=preserve): " +
+                      (nlBad.Count == 0 ? "全部 ✓" : string.Join(", ", nlBad)));
     // 双层结构: 栏数必须等于指标数 (数据驱动), 每栏 = 标签行 + 数值行, 数值初值不能是空/0
     // (0 会被读成"卡住了"); 等宽分栏。结构在 XAML 模板里 → 这里验"数据 → 模板 → 实际渲染"整条线。
     void CollectTextBlocks(DependencyObject d, List<TextBlock> into)

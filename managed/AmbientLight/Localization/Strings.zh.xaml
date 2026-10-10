@@ -6,7 +6,8 @@
          XAML 走 {DynamicResource 键})。
          规则:
            1) 键稳定、值可改 —— 顺文案 / 翻译只动本文件 (5.3 加 Strings.en.xaml), 不动代码;
-           2) 值不带首尾空白 (空格在调用处拼); 换行写 &#10;;
+           2) 值不带首尾空白 (空格在调用处拼); 换行写 &#10; —— **且元素上必须加 xml:space="preserve"**
+              (否则 XAML 会把 &#10; 归一化成空格; 实测与复现工具 .workbuddy/tmp/nl-probe);
            3) {0}/{1} 是 string.Format 占位; 字面大括号写 {{ }} (string.Format 会还原);
            4) 键名约定: `Metric.*` 与 MetricKeysForMode 的键一一对应 (探针按前缀判漏配);
               `Mode.Name.<n>` / `Mode.Desc.<n>` 由 ModeCatalog 消费; 其余按区域分组。
@@ -92,7 +93,7 @@
     <sys:String x:Key="Dev.Pill.Current">当前</sys:String>
     <sys:String x:Key="Dev.Select">设为当前</sys:String>
     <sys:String x:Key="Dev.List.Probing">探测中… (打开串口握手, ~0.2s/台)</sys:String>
-    <sys:String x:Key="Dev.List.NotFound">未发现灯带 (VID_2E3C &amp; PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口。&#10;换芯片或 USB 转串口桥接的灯带, 可在「高级 → 连接」里手动指定端口。</sys:String>
+    <sys:String x:Key="Dev.List.NotFound" xml:space="preserve">未发现灯带 (VID_2E3C &amp; PID_5740); 检查 USB 连接, 并确认 Ansnake 未占用端口。&#10;换芯片或 USB 转串口桥接的灯带, 可在「高级 → 连接」里手动指定端口。</sys:String>
     <sys:String x:Key="Dev.List.Failed">探测失败: {0}</sys:String>
     <sys:String x:Key="Dev.Monitor.None">未枚举到显示器</sys:String>
     <sys:String x:Key="Dev.Monitor.Failed">枚举失败: {0}</sys:String>
@@ -172,9 +173,9 @@
     <sys:String x:Key="App.Tray.Calibrate">屏幕校准</sys:String>
     <sys:String x:Key="App.Tray.Settings">设置</sys:String>
     <sys:String x:Key="App.Tray.Exit">退出</sys:String>
-    <sys:String x:Key="App.Launch.TooMany">设备数超过上限 ({0})。&#10;请先在主页关掉一台不再使用的设备再试。</sys:String>
+    <sys:String x:Key="App.Launch.TooMany" xml:space="preserve">设备数超过上限 ({0})。&#10;请先在主页关掉一台不再使用的设备再试。</sys:String>
     <sys:String x:Key="App.Launch.FailedTitle">启动失败</sys:String>
-    <sys:String x:Key="App.Launch.Failed">启动 {0} 失败: {1}&#10;{2}</sys:String>
+    <sys:String x:Key="App.Launch.Failed" xml:space="preserve">启动 {0} 失败: {1}&#10;{2}</sys:String>
     <sys:String x:Key="App.Launch.ErrInvalid">配置参数无效</sys:String>
     <sys:String x:Key="App.Launch.ErrRunning">该会话已在运行</sys:String>
     <sys:String x:Key="App.Launch.ErrCode">错误码 {0}</sys:String>
@@ -188,7 +189,7 @@
     <sys:String x:Key="App.Start.NotFound.Detail">未发现灯带 (VID_2E3C &amp; PID_5740)。检查 USB 连接、确认 Ansnake 未占用端口, 然后点「开启」重试。若你的灯带是别的芯片或用 USB 转串口桥接, 可在「高级 → 连接」里手动指定端口。</sys:String>
     <sys:String x:Key="App.Start.NotEnabled">设备未启用</sys:String>
     <sys:String x:Key="App.Start.NotEnabled.Detail">已发现可用灯带, 但该设备未勾选「启动时自动开启灯带」。可到高级设置勾选, 或在下方设备列表里单独点「开启」。</sys:String>
-    <sys:String x:Key="App.Crash.UiException">界面线程异常: {0}&#10;{1}</sys:String>
+    <sys:String x:Key="App.Crash.UiException" xml:space="preserve">界面线程异常: {0}&#10;{1}</sys:String>
     <sys:String x:Key="App.AutoStart.FailedTitle">开机自启</sys:String>
     <sys:String x:Key="App.AutoStart.Fail">设置开机自启失败: {0}</sys:String>
     <sys:String x:Key="App.AutoStart.NoExe">无法定位当前 exe</sys:String>
@@ -207,9 +208,9 @@
     <sys:String x:Key="Adv.Port.Auto">自动检测</sys:String>
     <sys:String x:Key="Adv.Port.NotPresent">(不在位)</sys:String>
     <sys:String x:Key="Adv.Update.Title">版本更新</sys:String>
-    <sys:String x:Key="Adv.Update.Body">当前版本 {0}。&#10;&#10;软件还没有发布到 GitHub Release, 暂时无法检查更新。发布之后, 这里会与仓库最新的 Release 版本号比对, 并给出下载入口。</sys:String>
+    <sys:String x:Key="Adv.Update.Body" xml:space="preserve">当前版本 {0}。&#10;&#10;软件还没有发布到 GitHub Release, 暂时无法检查更新。发布之后, 这里会与仓库最新的 Release 版本号比对, 并给出下载入口。</sys:String>
     <sys:String x:Key="Adv.Restore.Title">恢复默认配置</sys:String>
-    <sys:String x:Key="Adv.Restore.Body">将把「设置」与「设备配置」全部重置为出厂默认值 —— 亮度、模式、端口、采集与拾音参数、灯序校准等都会被覆盖, 且无法撤销。&#10;&#10;确定要恢复吗?</sys:String>
+    <sys:String x:Key="Adv.Restore.Body" xml:space="preserve">将把「设置」与「设备配置」全部重置为出厂默认值 —— 亮度、模式、端口、采集与拾音参数、灯序校准等都会被覆盖, 且无法撤销。&#10;&#10;确定要恢复吗?</sys:String>
     <sys:String x:Key="Adv.Restore.Confirm">恢复默认</sys:String>
     <sys:String x:Key="Adv.Group.Fix">画面修正</sys:String>
     <sys:String x:Key="Adv.MinBright.Title">LED 最小亮度</sys:String>
@@ -349,7 +350,7 @@
     <sys:String x:Key="Calib.Color.Blue">蓝</sys:String>
     <sys:String x:Key="Calib.Color.Yellow">黄</sys:String>
     <sys:String x:Key="Calib.Title">屏幕校准</sys:String>
-    <sys:String x:Key="Calib.NeedSession">当前设备的核心会话未运行。&#10;请先在主页打开灯带 (校准靠追光采集本屏画面, 会话必须运行中)。</sys:String>
+    <sys:String x:Key="Calib.NeedSession" xml:space="preserve">当前设备的核心会话未运行。&#10;请先在主页打开灯带 (校准靠追光采集本屏画面, 会话必须运行中)。</sys:String>
     <sys:String x:Key="Calib.Status.Running">会话运行中</sys:String>
     <sys:String x:Key="Calib.Status.DevLost">设备失联 (DEV_LOST): 灯带被拔出或端口被占用?</sys:String>
     <sys:String x:Key="Calib.Status.WaitDisp">画面暂不可用 (锁屏/熄屏)</sys:String>
