@@ -183,7 +183,8 @@ public partial class App : Application
                 _ => Loc.F("App.Launch.ErrCode", rc),
             };
             _ = Controls.AppDialogs.ShowAsync(Loc.T("App.Launch.FailedTitle"),
-                Loc.F("App.Launch.Failed", key, reason, Interop.AmbientCore.LastDiagEx(slot)),
+                Loc.F("App.Launch.Failed", key, reason,
+                      Views.DiagText.Translate(Interop.AmbientCore.LastDiagEx(slot))),
                 closeText: Loc.T("Common.GotIt"));
             return false;
         }

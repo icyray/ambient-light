@@ -856,6 +856,28 @@ static void Run()
     Console.WriteLine((nlBad.Count == 0 ? "OK   " : "FAIL ") +
                       $"多行文案含真换行 {multilineKeys.Length} 条 (&#10; 配 xml:space=preserve): " +
                       (nlBad.Count == 0 ? "全部 ✓" : string.Join(", ", nlBad)));
+    // 核心诊断映射: native 英文原文 → 字典中文 (Views/DiagText, 纯函数真值表)。
+    // 命中的必须**真翻译** (输出 != 原文); 未收录的原文必须**原样透传** (宁显英文, 不吞信息)。
+    var diagCases = new (string Raw, string Want)[]
+    {
+        ("serial write failed on COM5, reconnecting",
+            AmbientLight.Localization.Loc.F("Diag.SerialWriteFailed", "COM5")),
+        ("device lost: no usable port (VID_2E3C&PID_5740)",
+            AmbientLight.Localization.Loc.T("Diag.NoUsablePort")),
+        ("capture build failed (D3D/resources), slow retry",
+            AmbientLight.Localization.Loc.T("Diag.CaptureFailed")),
+        ("core thread crashed, see log/ambientcore.log",
+            AmbientLight.Localization.Loc.T("Diag.CoreCrashed")),
+    };
+    var diagBad = diagCases.Where(c => AmbientLight.Views.DiagText.Translate(c.Raw) != c.Want)
+                           .Select(c => c.Raw).ToList();
+    bool diagTranslated = diagCases.All(c => AmbientLight.Views.DiagText.Translate(c.Raw) != c.Raw);
+    bool diagPass = AmbientLight.Views.DiagText.Translate("future unknown message") == "future unknown message"
+                    && AmbientLight.Views.DiagText.Translate("") == "";
+    bool diagOk = diagBad.Count == 0 && diagTranslated && diagPass;
+    Console.WriteLine((diagOk ? "OK   " : "FAIL ") +
+                      $"核心诊断映射 {diagCases.Length} 条 (native → 字典, 命中即翻译) + 未知透传: " +
+                      (diagOk ? "全部 ✓" : $"错配 {string.Join(", ", diagBad)} / 翻译 {diagTranslated} / 透传 {diagPass}"));
     // 双层结构: 栏数必须等于指标数 (数据驱动), 每栏 = 标签行 + 数值行, 数值初值不能是空/0
     // (0 会被读成"卡住了"); 等宽分栏。结构在 XAML 模板里 → 这里验"数据 → 模板 → 实际渲染"整条线。
     void CollectTextBlocks(DependencyObject d, List<TextBlock> into)

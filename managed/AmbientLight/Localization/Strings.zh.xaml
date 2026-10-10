@@ -99,6 +99,12 @@
     <sys:String x:Key="Dev.Monitor.Failed">枚举失败: {0}</sys:String>
     <sys:String x:Key="Dev.Monitor.UnknownRes">分辨率未知</sys:String>
 
+    <!-- ===== 核心诊断 (native 英文文案 → 字典映射; 映射表见 Views/DiagText.cs) ===== -->
+    <sys:String x:Key="Diag.SerialWriteFailed">串口 {0} 写入失败，正在尝试重连</sys:String>
+    <sys:String x:Key="Diag.NoUsablePort">设备失联: 未发现可用端口</sys:String>
+    <sys:String x:Key="Diag.CaptureFailed">画面采集初始化失败 (D3D/资源)，将慢速重试</sys:String>
+    <sys:String x:Key="Diag.CoreCrashed">核心线程崩溃，详见 log/ambientcore.log</sys:String>
+
     <!-- ===== banner 状态胶囊 ===== -->
     <sys:String x:Key="Banner.State.Running">运行中</sys:String>
     <sys:String x:Key="Banner.State.Starting">启动中</sys:String>

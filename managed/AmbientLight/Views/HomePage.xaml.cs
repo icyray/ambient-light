@@ -375,7 +375,7 @@ public partial class HomePage : Page
 
         // 诊断只在"确实有问题"的态显示: 已停止/启动中 时核心的 LastDiag 往往是上一次的残留
         // ("device lost: no usable port" 之类), 快速连点开关时会闪出红色报错
-        string diag = AmbientCore.LastDiag();
+        string diag = DiagText.Translate(AmbientCore.LastDiag());
         bool showDiag = !string.IsNullOrEmpty(diag) && st.state is AmbientCore.StateError
                                                                    or AmbientCore.StateDevLost
                                                                    or AmbientCore.StateWaitDisp;
