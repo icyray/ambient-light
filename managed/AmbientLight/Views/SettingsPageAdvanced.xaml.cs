@@ -102,7 +102,7 @@ public partial class SettingsPageAdvanced : Page
 
         string appVer = CurrentVersion;
         uint core = AmbientCore.Version();
-        VersionText.Text = $"AmbientLight {appVer} · AmbientCore v{(core >> 16) & 0xFF}.{(core >> 8) & 0xFF}.{core & 0xFF}";
+        VersionText.Text = $"AmbientLight {appVer} · AmbientCore {(core >> 16) & 0xFF}.{(core >> 8) & 0xFF}.{core & 0xFF}";
         _loading = false;
     }
 
