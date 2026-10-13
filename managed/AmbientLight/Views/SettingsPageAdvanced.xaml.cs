@@ -263,11 +263,15 @@ public partial class SettingsPageAdvanced : Page
         ThemeService.Apply(choice);
     }
 
-    /// <summary>语言 (M5.3): **先应用、成功才写配置**。
+    /// <summary>语言 (M5.3): **先写配置, 再应用**; 装不上目标字典就整体回滚。
     /// 应用会换掉文案资源字典 → 各页面靠 {DynamicResource} 自动跟着变 (零跳变);
     /// 页内 code-behind 一次性赋值的文案由各页的 LanguageChanged 订阅 + App 重写托盘菜单补齐。
-    /// ⚠️ 装不上目标字典时 (社区加了语言却忘了把文件编进去之类) **不写配置、把下拉退回去** ——
-    /// 否则界面还停在旧语言、配置已是新语言, 下次启动又变回去。</summary>
+    ///
+    /// ⚠️ **顺序不能反** (2026-10-13 用户报的 bug): `LanguageService.Apply` 会**同步**触发本页自己的
+    /// `LanguageChanged` 订阅 —— 那里要重建下拉项并 `ReloadFromConfig()`, 而它是按
+    /// `ConfigStore.App.Lang` 算选中项的。若先 Apply 后写配置, 重建时读到的还是旧值 →
+    /// 用户选完"English", 下拉自己弹回「跟随系统」(或停在原项), **切出去再回来才对** (那时配置已写好)。
+    /// 主题那半边本来就是这个顺序 (ConfigStore → Apply)。</summary>
     private void OnLangChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading) return;
@@ -276,15 +280,17 @@ public partial class SettingsPageAdvanced : Page
         var choice = LangChoices[i];
         string key = LanguageService.ToKey(choice);
         if (key == ConfigStore.App.Lang) return;       // 没变就别白换一次字典
-        if (!LanguageService.Apply(choice))            // 失败 → 回退下拉 (配置不写)
-        {
-            _loading = true;
-            LangCombo.SelectedIndex = Array.IndexOf(LangChoices, LanguageService.Parse(ConfigStore.App.Lang));
-            _loading = false;
-            return;
-        }
+        string prev = ConfigStore.App.Lang;
         ConfigStore.App.Lang = key;
         ConfigStore.SaveApp();
+        if (LanguageService.Apply(choice)) return;
+        // 装不上目标字典 (社区加了语言却忘了把文件编进去之类): 配置与下拉一起退回去 ——
+        // 否则界面还停在旧语言、配置已是新语言, 下次启动又变回去。
+        ConfigStore.App.Lang = prev;
+        ConfigStore.SaveApp();
+        _loading = true;
+        LangCombo.SelectedIndex = Array.IndexOf(LangChoices, LanguageService.Parse(prev));
+        _loading = false;
     }
 
     // ---- 配置目录 --------------------------------------------------------

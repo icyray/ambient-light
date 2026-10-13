@@ -1703,6 +1703,38 @@ static void Run()
                           $"配置 lang=\"{c.Key}\" ({c.Desc}) → 下拉选中 {langCombo?.SelectedIndex} (期望 {idx})");
     }
     AmbientLight.Services.ConfigStore.App.Lang = langKeyBefore;
+    // ★ 回归: **模拟用户在下拉里点选** —— 直接设 SelectedIndex 会真的走一遍 OnLangChanged
+    //   (写配置 → Apply → 本页 LanguageChanged 订阅重建项 + ReloadFromConfig)。断言"选完之后
+    //   显示的就是用户选的那一项"。曾经的 bug (用户 2026-10-13 报): 先 Apply 后写配置, 而 Apply
+    //   **同步**触发本页重建、重建按**旧**配置算选中项 → 选完自己弹回「跟随系统」或停在原项,
+    //   切出去再回来才正常。这类"只有真走事件才现形"的坑, 纯函数真值表一条都抓不到。
+    {
+        AmbientLight.Services.ConfigStore.App.Lang = "system";
+        AmbientLight.Services.LanguageService.Apply(AmbientLight.Services.LangChoice.System);
+        advPage.BuildForProbe();                      // 起始态 = 选中「跟随系统」
+        int pickedBad = -1, picked = 0;
+        var choicesForPick = AmbientLight.Views.SettingsPageAdvanced.LangChoices;
+        for (int i = 0; langCombo is not null && i < choicesForPick.Length; i++)
+        {
+            langCombo.SelectedIndex = i;              // ← 等价于用户点选 (触发 SelectionChanged)
+            picked++;
+            if (langCombo.SelectedIndex != i
+                || AmbientLight.Services.ConfigStore.App.Lang
+                   != AmbientLight.Services.LanguageService.ToKey(choicesForPick[i]))
+            {
+                pickedBad = i;
+                break;
+            }
+        }
+        Console.WriteLine((pickedBad < 0 ? "OK   " : "FAIL ") +
+                          $"模拟用户逐个点选语言: 选完显示的就是所选项、配置同步 ({picked} 次, 未回弹) " +
+                          $"= {pickedBad < 0}" +
+                          (pickedBad >= 0 ? $" 第 {pickedBad} 项回弹成 {langCombo?.SelectedIndex}" : ""));
+        AmbientLight.Services.ConfigStore.App.Lang = langKeyBefore;
+        AmbientLight.Services.LanguageService.Apply(
+            AmbientLight.Services.LanguageService.Parse(langKeyBefore));
+        advPage.BuildForProbe();
+    }
     // **每种语言各建一次页面**: ① endonym 必须原样出现 (语言自己的名字不随界面语言变);
     // ② 「跟随系统」项必须与当时那本字典同源 (照抄 Loc.T, 不写死措辞)。
     var perLangBad = new List<string>();
