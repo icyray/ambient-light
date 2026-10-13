@@ -490,7 +490,8 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{DynamicResource Mode.Name.0}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource Mode.Name.0}" FontSize="14"
+                                   TextWrapping="Wrap" FontWeight="SemiBold" />
                         <TextBlock Text="{DynamicResource Mode.Desc.0}" FontSize="12"
                                    TextWrapping="Wrap" Margin="0,3,0,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -513,7 +514,8 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{DynamicResource Mode.Name.1}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource Mode.Name.1}" FontSize="14"
+                                   TextWrapping="Wrap" FontWeight="SemiBold" />
                         <TextBlock Text="{DynamicResource Mode.Desc.1}" FontSize="12"
                                    TextWrapping="Wrap" Margin="0,3,0,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -536,7 +538,8 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{DynamicResource Mode.Name.11}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource Mode.Name.11}" FontSize="14"
+                                   TextWrapping="Wrap" FontWeight="SemiBold" />
                         <TextBlock Text="{DynamicResource Mode.Desc.11}" FontSize="12"
                                    TextWrapping="Wrap" Margin="0,3,0,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
