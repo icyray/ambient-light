@@ -26,10 +26,13 @@ namespace UiLoadProbe;
 
 internal static class PageDiag
 {
-    private const double PageWidth = 880;      // 与 MainWindow 默认宽度一致
+    /// <summary>出图宽度。默认 = MainWindow 默认宽度 880; 可用第 4 个参数出**窄窗**图
+    /// (窗口 MinWidth=600) —— 这次就是靠它确认"模式卡说明只在窄窗下才折行"。</summary>
+    private static double PageWidth = 880;
 
-    public static void Dump(string prefix, string? lang = null)
+    public static void Dump(string prefix, string? lang = null, double width = 880)
     {
+        PageWidth = width > 0 ? width : 880;
         var app = new AmbientLight.App();
         app.InitializeComponent();
         // M5.3 语言: 与 App.OnStartup 同序 —— 建页面**之前**先把字典摆对, 页面构造期取到的就是目标语言。
@@ -63,7 +66,34 @@ internal static class PageDiag
             return p;
         });
         ShotDevices(prefix);
+        ShotCalibrate(prefix);
         Console.WriteLine("PageDiag 完成。");
+    }
+
+    /// <summary>校准窗的**中央面板**（以前不在出图集里 → 它的排版只能靠肉眼开真窗口看）。
+    /// 它是 Window（私有构造 + 需要会话）→ 用反射造出来, 只把 Content 摘出来按固定尺寸渲染。
+    /// 动过它的按钮/文案时看这张图, 比读 XAML 靠谱 —— 本次就是靠它发现"4 个按钮在等宽四列里
+    /// 遇到英文长文案会不会挤"。</summary>
+    private static void ShotCalibrate(string prefix)
+    {
+        try
+        {
+            var ctor = typeof(AmbientLight.Views.CalibrateWindow).GetConstructor(
+                BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(int), typeof(string) }, null);
+            var win = (Window)ctor!.Invoke(new object[] { 0, "0_1" });
+            var root = (FrameworkElement)win.Content;
+            win.Content = null;                      // 别让窗口跟着一起渲染 (它按显示器铺满)
+            var host = new ContentControl { Content = root, Width = 1280 };
+            host.Measure(new Size(1280, 720));
+            host.Arrange(new Rect(0, 0, 1280, 720));
+            host.UpdateLayout();
+            Shot(host, 1280, 720, $"{prefix}_calibrate.png", "calibrate (中央面板 + 四色底)");
+            win.Close();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"    ⚠️ calibrate 出图失败: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     /// <summary>渲染一个 Page 的完整内容（摘出 Content 托管 → 布局 → 出图）。</summary>

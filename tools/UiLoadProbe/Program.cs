@@ -58,10 +58,12 @@ if (args.Length >= 2 && args[0] == "--dump-ring")
     td.Join();
     return;
 }
-// `--dump-page <前缀> [zh|en]`: 整页出图（重构前后像素对照）—— home/capture/audio/color/advanced/devices
+// `--dump-page <前缀> [zh|en] [宽度]`: 整页出图（重构前后像素对照; 宽度默认 880, 传 600 = 窄窗）
+//   —— home/capture/audio/color/advanced/devices/calibrate
 if (args.Length >= 2 && args[0] == "--dump-page")
 {
-    var tp = new Thread(() => UiLoadProbe.PageDiag.Dump(args[1], args.Length >= 3 ? args[2] : null));
+    var tp = new Thread(() => UiLoadProbe.PageDiag.Dump(args[1], args.Length >= 3 ? args[2] : null,
+        args.Length >= 4 && double.TryParse(args[3], out var w) ? w : 880));
     tp.SetApartmentState(ApartmentState.STA);
     tp.Start();
     tp.Join();
