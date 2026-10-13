@@ -1,4 +1,4 @@
-// AppDialogs.cs — 统一对话框 (轮 34 补)
+// AppDialogs.cs — 统一对话框
 //
 // 为什么不要用 `MessageBox`: 它是系统样式的 Win32 弹窗, 跟 Fluent 界面两套观感
 // (而且不随主题变)。应用里的"提示 / 警告 / 确认"一律走这里 → 主窗口的 ContentDialogHost。
@@ -6,6 +6,7 @@
 // ⚠️ 唯一的例外是**崩溃兜底**(App.xaml.cs 的 DispatcherUnhandledException) —— 那条路径上
 // UI 线程已经在异常里, 再走 ContentDialog 有二次出错的风险, 所以那里保留 MessageBox。
 using System.Windows;
+using AmbientLight.Localization;
 using Wpf.Ui.Controls;
 
 namespace AmbientLight.Controls;
@@ -32,7 +33,7 @@ public static class AppDialogs
         {
             Title = title,
             Content = content,
-            CloseButtonText = string.IsNullOrEmpty(closeText) ? "关闭" : closeText,
+            CloseButtonText = string.IsNullOrEmpty(closeText) ? Loc.T("Common.Close") : closeText,
             // 默认焦点一律放「关闭 / 取消」: 主按钮都是"删除/重置/恢复"这类动作,
             // 回车不该替用户确认。
             DefaultButton = ContentDialogButton.Close,

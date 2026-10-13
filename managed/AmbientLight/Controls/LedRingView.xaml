@@ -21,7 +21,7 @@
                  只有窗口拉到最小高度时矩形会缩到 ~150px，那时文字会轻微溢出（底色同深浅，仍可读）。
                  文字色由 code-behind 按 Surface 赋（见 LedRingView.xaml.cs 的 ApplySurface）。 -->
             <StackPanel x:Name="HintBlock" MaxWidth="300">
-                <TextBlock x:Name="HintTitle" Text="LED 预览" FontWeight="SemiBold" FontSize="12"
+                <TextBlock x:Name="HintTitle" Text="{DynamicResource Ring.Preview}" FontWeight="SemiBold" FontSize="12"
                            HorizontalAlignment="Center" />
                 <TextBlock x:Name="HintText" Text="" FontSize="11" Visibility="Collapsed"
                            TextWrapping="Wrap" TextAlignment="Center" Margin="0,2,0,0" />
@@ -29,7 +29,7 @@
                 <!-- 校准向导的"安装示意"（起点徽标 + 绕向箭头）**不在这里** ——
                      它画在灯环画布上（`LedRingView.RebuildGuide`）：起点徽标贴在 0 号灯那个
                      **角**上、绕向用一条环线 + 箭头表示，整层随 Viewbox 缩放、与灯珠同坐标。
-                     旧版是这里的一行小字（"起点 0 号" + `↺ 逆时针`），2026-10-08 按用户设计稿替换：
+                     旧版是这里的一行小字 ("起点 0 号" + `↺ 逆时针`), 已改为画在灯环画布上的示意:
                      ① "0 号"这个数字没有信息量（起点恒为 0 号灯）；
                      ② 文字说不清"灯带怎么绕" —— 画出来才直观。 -->
             </StackPanel>

@@ -8,13 +8,13 @@
     <StackPanel Margin="16,12,16,16">
 
         <!-- 画面修正 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="画面修正" />
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon LightbulbFilament24}" Title="LED 最小亮度"
-                             Description="RGB 全部低于该灰度时抬升, 避免灯带彻底熄灭">
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.Fix}" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon LightbulbFilament24}" Title="{DynamicResource Adv.MinBright.Title}"
+                             Description="{DynamicResource Adv.MinBright.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="MinBrightnessValue" Text="1" MinWidth="32" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
-                <Slider x:Name="MinBrightnessSlider" Width="200" Minimum="1" Maximum="25" Value="1"
+                <Slider x:Name="MinBrightnessSlider" Width="200" Minimum="0" Maximum="25" Value="1"
                         controls:SliderJump.Enabled="True"
                         VerticalAlignment="Center" ValueChanged="OnMinBrightnessChanged" />
             </StackPanel>
@@ -30,10 +30,10 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="低灰保真修正 (colorfix)" FontSize="14" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Adv.Colorfix.Title}" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,8,0"
-                               Text="暗灰色被放大成蓝绿色时开启, 按绝对色度门限钳为中性灰" />
+                               Text="{DynamicResource Adv.Colorfix.Desc}" />
                     <ui:ToggleSwitch x:Name="ColorfixToggle" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                      Margin="0,0,10,0" Click="OnColorfixChanged" />
                 </Grid>
@@ -45,10 +45,10 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="35,0,16,0">
-                        <TextBlock Text="色度噪声门限 (sfloor)" FontSize="14" />
+                        <TextBlock Text="{DynamicResource Adv.Sfloor.Title}" FontSize="14" />
                         <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,8,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="8bit max-min 低于该门限视为采样噪声 (0-255, 默认 24)" />
+                                   Text="{DynamicResource Adv.Sfloor.Desc}" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock x:Name="SfloorValue" Text="24" MinWidth="32" TextAlignment="Right"
@@ -62,28 +62,28 @@
         </ui:CardExpander>
 
         <!-- 屏幕与电源 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="屏幕与电源" />
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon WeatherMoon24}" Title="熄屏策略"
-                             Description="锁屏/熄屏/切换显示器时灯带的显示策略">
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.Misc}" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon WeatherMoon24}" Title="{DynamicResource Adv.WaitDisp.Title}"
+                             Description="{DynamicResource Adv.WaitDisp.Desc}">
             <ComboBox x:Name="WaitDispCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnWaitDispChanged">
-                <ComboBoxItem Content="熄灭" />
-                <ComboBoxItem Content="最暗" />
-                <ComboBoxItem Content="保持最后画面" />
+                <ComboBoxItem Content="{DynamicResource Adv.WaitDisp.Blank}" />
+                <ComboBoxItem Content="{DynamicResource Adv.WaitDisp.Dim}" />
+                <ComboBoxItem Content="{DynamicResource Adv.WaitDisp.Hold}" />
             </ComboBox>
         </controls:SettingRow>
-        <!-- 全屏校准向导已于轮 28 移到「采集」页 (紧挨灯序偏移 —— 那才是它的使用场景) -->
+        <!-- 全屏校准向导已移到「采集」页 (紧挨灯序偏移 —— 那才是它的使用场景) -->
 
         <!-- 连接 (§8.3): 手动指定端口 / 波特率 —— 换芯片、USB 转串口桥接、两根同型灯带,
              或"端口被别的程序占着"时用。默认全是自动, 不动就不会有副作用。 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="连接" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.Conn}" />
         <!-- ⚠️ 端口是**每设备**配置 (改的是主页当前选中的那台), 不是全局设置 ——
              说明文案必须写清作用域, 否则用户会以为"我在高级里设过一次, 所有设备都该用它"。 -->
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon UsbPlug24}" Title="端口"
-                             Description="仅对当前选中的设备生效; 自动检测按 VID_2E3C &amp; PID_5740 找并跟随端口变化, 手动指定后只认该端口 (握手失败即失败)">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon UsbPlug24}" Title="{DynamicResource Adv.Port.Title}"
+                             Description="{DynamicResource Adv.Port.Desc}">
             <StackPanel Orientation="Horizontal">
                 <ui:Button x:Name="RefreshPortsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
-                           ToolTip="重新枚举" Margin="8,0,8,0" VerticalAlignment="Center"
+                           ToolTip="{DynamicResource Common.ReEnumerate}" Margin="8,0,8,0" VerticalAlignment="Center"
                            Click="OnRefreshPorts">
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -92,56 +92,56 @@
                           VerticalAlignment="Center" SelectionChanged="OnPortChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="波特率"
-                             Description="USB CDC 虚拟串口下通常不生效 (设备端不看), 保留给桥接/旧固件">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="{DynamicResource Adv.Baud.Title}"
+                             Description="{DynamicResource Adv.Baud.Desc}">
             <ComboBox x:Name="BaudCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnBaudChanged" />
         </controls:SettingRow>
 
         <!-- 界面 (M5.1 §4: banner 底边辉光的实验开关 —— 功耗/手感不对时可随手关掉,
              退回纯渐变 banner; 5.2 主题 / 5.3 语言等界面项后续也落在这里) -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="界面" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.Ui}" />
         <!-- M5.2 主题: 即时热切换 (走 FluentWindow/WPF-UI 官方管线, 不重启)。
              文案「跟随系统」= 随 Windows 的深/浅色**与强调色**变化自动跟随。 -->
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DarkTheme24}" Title="主题"
-                             Description="跟随系统时随 Windows 深浅色与强调色变化即时切换">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DarkTheme24}" Title="{DynamicResource Adv.Theme.Title}"
+                             Description="{DynamicResource Adv.Theme.Desc}">
             <ComboBox x:Name="ThemeCombo" Width="120" VerticalAlignment="Center"
                       SelectionChanged="OnThemeChanged" />
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBrush24}" Title="banner 辉光"
-                             Description="主页顶栏底边按灯带实况显示模糊辉光; 关闭后回到纯渐变">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBrush24}" Title="{DynamicResource Adv.Glow.Title}"
+                             Description="{DynamicResource Adv.Glow.Desc}">
             <ui:ToggleSwitch x:Name="BannerGlowToggle" Click="OnBannerGlowChanged" />
         </controls:SettingRow>
 
         <!-- 启动 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="启动" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.Start}" />
         <controls:SettingRow x:Name="AutoStartRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon Rocket24}"
-                             Title="开机自启" Description="登录 Windows 后自动运行">
+                             Title="{DynamicResource Adv.AutoStart.Title}" Description="{DynamicResource Adv.AutoStart.Desc}">
             <ui:ToggleSwitch x:Name="AutoStartToggle" Click="OnAutoStartChanged" />
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Lightbulb24}" Title="启动时自动开启灯带"
-                             Description="应用启动后立即连接并恢复上次模式; 连接中断时自动重连">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Lightbulb24}" Title="{DynamicResource Adv.AutoCore.Title}"
+                             Description="{DynamicResource Adv.AutoCore.Desc}">
             <ui:ToggleSwitch x:Name="AutoStartCoreToggle" Click="OnAutoStartCoreChanged" />
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowMinimize24}" Title="启动时收进托盘"
-                             Description="启动后不显示主窗口, 仅托盘图标">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowMinimize24}" Title="{DynamicResource Adv.Minimize.Title}"
+                             Description="{DynamicResource Adv.Minimize.Desc}">
             <ui:ToggleSwitch x:Name="StartMinimizedToggle" Click="OnStartMinimizedChanged" />
         </controls:SettingRow>
 
         <!-- 关于 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="关于" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.About}" />
 
-        <!-- 版本更新 (轮 21): UI 先就位, 检查逻辑待软件发布到 GitHub Release 后接入
+        <!-- 版本更新: UI 先就位, 检查逻辑待软件发布到 GitHub Release 后接入
              (拉 /repos/<owner>/<repo>/releases/latest 的 tag_name 与当前版本比对)。
-             轮 22: 按用户要求去掉说明文案, 版本号看页脚那一行。 -->
+             说明文案已去掉, 版本号看页脚那一行。 -->
         <controls:SettingRow x:Name="UpdateRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
-                             Title="版本更新">
-            <ui:Button Content="检查更新" Appearance="Secondary" VerticalAlignment="Center"
+                             Title="{DynamicResource Adv.Update.Title}">
+            <ui:Button Content="{DynamicResource Adv.Update.Check}" Appearance="Secondary" VerticalAlignment="Center"
                        Click="OnCheckUpdate" />
         </controls:SettingRow>
 
         <!-- 配置目录 (可折叠: 折叠内是"恢复默认配置"这种破坏性操作, 收起来减少误触)。
-             轮 22: 去掉说明文案 (原说明里的路径现在只在「打开」后可见)。 -->
+             说明文案已去掉 (原说明里的路径现在只在「打开」后可见)。 -->
         <ui:CardExpander Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderOpen24}" ContentPadding="0">
             <ui:CardExpander.Header>
                 <Grid>
@@ -149,8 +149,8 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="配置目录" FontSize="14" VerticalAlignment="Center" />
-                    <ui:Button Grid.Column="1" Margin="8,0,10,0" Content="打开" Appearance="Secondary"
+                    <TextBlock Grid.Column="0" Text="{DynamicResource Adv.ConfigDir.Title}" FontSize="14" VerticalAlignment="Center" />
+                    <ui:Button Grid.Column="1" Margin="8,0,10,0" Content="{DynamicResource Adv.ConfigDir.Open}" Appearance="Secondary"
                                VerticalAlignment="Center" Click="OnOpenConfigDir" />
                 </Grid>
             </ui:CardExpander.Header>
@@ -161,12 +161,12 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="35,0,16,0">
-                        <TextBlock Text="恢复默认配置" FontSize="14" />
+                        <TextBlock Text="{DynamicResource Adv.Restore.Title}" FontSize="14" />
                         <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,8,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="把设置与设备配置全部重置为出厂默认 (亮度/模式/端口/采集/拾音/灯序等), 不可撤销" />
+                                   Text="{DynamicResource Adv.Restore.Hint}" />
                     </StackPanel>
-                    <ui:Button x:Name="RestoreDefaultsBtn" Grid.Column="1" Content="恢复默认…"
+                    <ui:Button x:Name="RestoreDefaultsBtn" Grid.Column="1" Content="{DynamicResource Adv.Restore.Button}"
                                VerticalAlignment="Center" Click="OnRestoreDefaults" />
                 </Grid>
             </StackPanel>

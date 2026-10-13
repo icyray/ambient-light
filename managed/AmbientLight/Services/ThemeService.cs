@@ -207,7 +207,7 @@ public static class ThemeService
 
     /// <summary>应用主题 (用户改设置 / 启动 / 跟随系统变化都走这里)。
     /// 不再写任何"应用自己的刷子": 说明文字用 WPF-UI 的 `TextFillColorSecondaryBrush`
-    /// (轮 34 补收回了自造的 AppTextHintBrush, 避免自己造轮子)。</summary>
+    /// (曾自造的 AppTextHintBrush 已收回, 避免重复造轮子)。</summary>
     public static void Apply(ThemeChoice choice)
     {
         var theme = ResolveNow(choice);
@@ -219,7 +219,7 @@ public static class ThemeService
     /// 完全相同 (同一个来源色、同一个变体算法), 这样"改系统强调色"与"切主题"刷出来的观感一致。
     /// 系统强调色本身走 WinRT UISettings.Accent (取不到才回退 DWM 色化色) —— 我们不提供应用内自选强调色。
     ///
-    /// ⚠️ 两点都是查 4.3.0 源码 + 探针实测得来 (轮 34 补):
+    /// ⚠️ 两点都是查 4.3.0 源码 + 探针实测得来:
     /// ① **触发**: 强调色变化发的是 `WM_DWMCOLORIZATIONCOLORCHANGED`, **`SystemEvents` 收不到**这条消息
     ///    (WPF-UI 自己的 SystemThemeWatcher 也专门监听了它, 就是为强调色) → 跟不上的真正原因是
     ///    "没人叫醒我们", 见 <see cref="WindowProc"/>。现象就是"自绘控件变了, WPF-UI 的按钮/滑块

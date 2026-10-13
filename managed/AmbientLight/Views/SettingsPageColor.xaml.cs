@@ -1,5 +1,5 @@
 // SettingsPageColor.xaml.cs — 颜色链参数。变更经 ApplyConfigDebounced 热更+落盘。
-// 纯色拾色器已迁至 HomePage (M5.1 用户反馈⑪), 本页只剩颜色链。
+// 纯色拾色器已迁至 HomePage (M5.1), 本页只剩颜色链。
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;

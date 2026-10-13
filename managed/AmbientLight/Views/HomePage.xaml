@@ -3,19 +3,20 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:AmbientLight.Controls">
-    <!-- 轮 26 (M5.1 主页构件重设计, 依据 docs/M5.1_HOME_REDESIGN_PLAN.md §2~§7):
+    <!-- 主页结构 (M5.1 主页构件重设计, 依据 docs/M5.1_HOME_REDESIGN_PLAN.md §2~§7):
          §4 banner 底边辉光 (LightsLayer 内的 GlowBand: Blur + 上透下实 OpacityMask, 圆角自持);
          §2 固件特效改图标磁贴网格 (FxTileTemplate), 折叠头右侧「当前 XX」胶囊;
          §3 纯色拾色器改 HSV (H/S 两根, V = 主页「亮度」行; 删 RGB 滑块);
          §5 运行指标压成一行状态条, 指标集随模式换 (指标须"不适用 = —", 不显示 0.0);
          §6 设备信息结构化 (类型图标 + 名称 + 语义胶囊 + 第二行小字; 「当前」= 左侧 3px 强调条);
          §7 几何环收进折叠「布局预览」, 中心只放静态几何参数。
-         轮 19: DEV_LOST/ERROR 时 banner **不点亮** (渐变 = "确实驱动上了灯带");
-            提示条只用 InfoBar 自己的 IsOpen, 不叠 AnimatedVisibility (模板自己设 Collapsed, 动画无效)。
-         轮 18: MCU 光带改中性白灰; 设备列表刷新按钮纯图标; 开启失败不进入假"开启"态。
-         轮 17: 去掉抖动噪点层; 光层 Rectangle 必须自带 RadiusX/RadiusY=7 (WPF Border 不裁子元素)。
-         轮 16: 模式卡选中色用 AccentFillColorDefaultBrush (SystemAccentColorPrimaryBrush 是写死的 #0067c0);
-            选中底色铺满整卡 (Padding 挂在 ContentPresenter 上); 亮度行紧贴 banner。 -->
+         注意 (均为实测约束):
+           · DEV_LOST/ERROR 时 banner **不点亮** (渐变 = "确实驱动上了灯带");
+             提示条只用 InfoBar 自己的 IsOpen, 不叠 AnimatedVisibility (模板自己设 Collapsed, 动画无效)。
+           · MCU 光带 = 中性白灰; 设备列表刷新按钮纯图标; 开启失败不进入假"开启"态。
+           · 光层 Rectangle 必须自带 RadiusX/RadiusY=7 (WPF Border 不裁子元素)。
+           · 模式卡选中色用 AccentFillColorDefaultBrush (SystemAccentColorPrimaryBrush 是写死的 #0067c0);
+             选中底色铺满整卡 (Padding 挂在 ContentPresenter 上); 亮度行紧贴 banner。 -->
     <Page.Resources>
         <!-- 模式卡模板: 选中 = 强调色 1px 描边 + 淡强调色底 (铺满, Tint 层 14%) + 右上对勾 -->
         <ControlTemplate x:Key="ModeCardTemplate" TargetType="RadioButton">
@@ -54,7 +55,7 @@
 
         <!-- 固件特效磁贴模板 (§2): 与模式卡同一套视觉语言 (强调描边 + 14% 淡强调底 + 右上对勾),
              但尺寸更紧凑 —— 24px 图标 + 名称, 最小宽 152 / 高 56。
-             轮 28: ContentPresenter 加 HorizontalAlignment="Center" —— "居中"指的是**磁贴内的
+             ContentPresenter 的 HorizontalAlignment="Center" —— "居中"指的是**磁贴内的
              内容**居中 (图标+文字原来贴左边); 磁贴组本身的对齐方式不动。 -->
         <ControlTemplate x:Key="FxTileTemplate" TargetType="RadioButton">
             <Border x:Name="Root" Background="{DynamicResource ControlFillColorDefaultBrush}"
@@ -90,15 +91,154 @@
             </ControlTemplate.Triggers>
         </ControlTemplate>
 
-        <!-- 只留图标的按钮模板已提到 App.xaml (轮 29: 采集页/拾音页也要用同一个) -->
+        <!-- 模式区样式与图标底 (控件本体在下方 PrimaryModeGrid/FxPanel 静态声明, 这里只放"长什么样"):
+             · ⚠️ 必须 BasedOn 隐式的 RadioButton 样式: WPF 里**显式样式会整体替换隐式样式** ——
+               不 BasedOn 的话会静默丢掉主题的字色/字体 (白字变黑字), 而且只在出图上肉眼可见;
+             · GroupName 也在这里统一 (卡片组 / 磁贴组互不干扰)。
+             图标底渐变 = 同色系"亮→深" (追光蓝 / 拾音绿 / 纯色紫), 与旧代码
+             `new LinearGradientBrush(from, to, 50.0)` 的实际端点一致 (WPF 折算: Start=(0,0),
+             End=(cos50°, sin50°) —— 是"左上→右下"的向下方, 别按数学系的角度改。 -->
+        <Style x:Key="ModeCardStyle" TargetType="RadioButton"
+               BasedOn="{StaticResource {x:Type RadioButton}}">
+            <Setter Property="Template" Value="{StaticResource ModeCardTemplate}" />
+            <Setter Property="GroupName" Value="PrimaryModes" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="MinHeight" Value="96" />
+        </Style>
+        <Style x:Key="FxTileStyle" TargetType="RadioButton"
+               BasedOn="{StaticResource {x:Type RadioButton}}">
+            <Setter Property="Template" Value="{StaticResource FxTileTemplate}" />
+            <Setter Property="GroupName" Value="FxTiles" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Width" Value="152" />
+            <Setter Property="Height" Value="56" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+        </Style>
 
-        <!-- 预设色板单个色块 (轮 27, 轮 28 修同心, 轮 29 去掉"原始/生效色"行):
+        <LinearGradientBrush x:Key="ModeTileChaseBrush" StartPoint="0,0" EndPoint="0.642788,0.766044">
+            <GradientStop Offset="0" Color="#FF46CCFC" />
+            <GradientStop Offset="1" Color="#FF2E80D7" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ModeTileAudioBrush" StartPoint="0,0" EndPoint="0.642788,0.766044">
+            <GradientStop Offset="0" Color="#FF61EDD4" />
+            <GradientStop Offset="1" Color="#FF0DA2AA" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ModeTileSolidBrush" StartPoint="0,0" EndPoint="0.642788,0.766044">
+            <GradientStop Offset="0" Color="#FFCA9FF1" />
+            <GradientStop Offset="1" Color="#FF8F68C9" />
+        </LinearGradientBrush>
+
+        <!-- 布尔 → Visibility (显示器行的「主屏 / 正在采集」标记用; WPF 自带转换器) -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- 显示器行模板 (由 MonitorsList 逐行渲染):
+             · 编号徽标 = 自绘正圆 (库里的 NumberCircle1..9 实测渲染不出数字; 强调色底 + 反白数字);
+             · 分辨率主信息色、适配器次要色 (它只是"哪块卡带出来的");
+             · 「正在采集」的配色由数据项携带 (ThemePalette 纯函数, 随主题深浅)。 -->
+        <DataTemplate x:Key="MonitorRowTemplate">
+            <Grid Margin="0,4,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border Grid.Column="0" Width="16" Height="16" CornerRadius="8" VerticalAlignment="Center"
+                        Background="{DynamicResource AccentFillColorDefaultBrush}">
+                    <TextBlock Text="{Binding Number}" FontSize="10" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                </Border>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                            Margin="10,0,8,0">
+                    <TextBlock Text="{Binding ResolutionText}" FontSize="12.5" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Text="{Binding AdapterText}" FontSize="11.5" Margin="10,0,8,0"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border CornerRadius="9" Padding="7,1,7,1" VerticalAlignment="Center"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            Visibility="{Binding IsPrimary, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{DynamicResource Cap.Monitor.PrimaryMark}" FontSize="10.5"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Border>
+                    <Border CornerRadius="9" Padding="7,1,7,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                            Background="{Binding CaptureBg}"
+                            Visibility="{Binding Capturing, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{DynamicResource Home.Monitor.Capturing}" FontSize="10.5" Foreground="{Binding CaptureFg}" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- 设备行模板 (每台一行, §6): 类型图标 + 名称 + 语义胶囊 + 右侧动作; COM/供电/灯数下沉第二行。
+             「当前」设备用左侧 3px 强调条 + 强调色胶囊标出。
+             语义规则 (胶囊/端口/配对) 全在 code-behind 的纯函数里 —— 本模板只负责摆结构。 -->
+        <DataTemplate x:Key="DeviceRowTemplate">
+            <Grid Margin="0,5,0,5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <!-- 当前条 (未选中收起; 列宽固定 3px, 显隐不引起布局跳动) -->
+                <Border Grid.Column="0" Width="3" CornerRadius="2" Margin="0,2,0,2"
+                        Background="{DynamicResource AccentFillColorDefaultBrush}"
+                        Visibility="{Binding Selected, Converter={StaticResource BoolToVis}}" />
+                <!-- 类型图标: 独立一列、两行整体垂直居中 -->
+                <ui:SymbolIcon Grid.Column="1" Symbol="{Binding Icon}" FontSize="18"
+                               VerticalAlignment="Center" Margin="10,0,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <StackPanel Grid.Column="2" Margin="10,0,12,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding NameText}" FontSize="13" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                        <!-- 「当前」胶囊: 强调色**底**上的字必须用 TextOnAccentFillColorPrimaryBrush
+                             (用 AccentTextFillColorPrimaryBrush = 强调色写强调色, 看不见字) -->
+                        <Border CornerRadius="9" Padding="7,1,7,1" Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                Visibility="{Binding Selected, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{DynamicResource Dev.Pill.Current}" FontSize="10.5"
+                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                        </Border>
+                        <!-- 语义胶囊 (配色由数据项携带; 文案/色调口径见 DevicePill) -->
+                        <Border CornerRadius="9" Padding="7,1,7,1" Margin="8,0,0,0"
+                                VerticalAlignment="Center" Background="{Binding PillBg}">
+                            <TextBlock Text="{Binding PillLabel}" FontSize="10.5"
+                                       Foreground="{Binding PillFg}" />
+                        </Border>
+                    </StackPanel>
+                    <!-- 第二行小字 (空则不占位); 警示色由数据项给 (端口不一致/不在位时) -->
+                    <TextBlock Text="{Binding Line2Text}" FontSize="11" Margin="0,4,0,0"
+                               Foreground="{Binding Line2Brush}"
+                               Visibility="{Binding HasLine2, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button Content="{Binding ToggleText}" Appearance="{Binding ToggleAppearance}"
+                               Margin="0,0,6,0" IsEnabled="{Binding Usable}" MinWidth="64"
+                               Click="OnDeviceToggleClick" />
+                    <ui:Button Content="{DynamicResource Dev.Select}" Appearance="Secondary" MinWidth="76"
+                               IsEnabled="{Binding Usable}"
+                               Visibility="{Binding ShowSelectButton, Converter={StaticResource BoolToVis}}"
+                               Click="OnDeviceSelectClick" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- 只留图标的按钮模板已提到 App.xaml (采集页/拾音页共用同一个) -->
+
+        <!-- 预设色板单个色块 (已去掉"原始/生效色"行):
              必须是**圆形**, 悬停**不能**套用 Button 默认模板的灰色高亮。
              几何 (全部非负 Margin 居中 → 天然同心):
                实心圆   Margin=4   → 半径 11
                选中圈   Margin=3   → 半径 12, 粗 2 → 覆盖 11~13 (内沿 11 = 实心圆外沿, 无缝)
                悬停圈   Margin=1.5 → 半径 13.5, 粗 1 → 覆盖 13~14 (内沿 13 = 选中圈外沿, 也无缝)
-             (上一版实心圆 Margin=3、圈 Margin=0, 中间空出 2px 深色环, 看着就是"圆和圆环不同心"。)
+             (若实心圆 Margin=3、圈 Margin=0, 中间会空出 2px 深色环, 看着就是"圆和圆环不同心"。)
              按钮的 BorderBrush 只在选中/未选中之间换色 —— 未选中给一个深灰描边, 免得出现"空圈"。 -->
         <ControlTemplate x:Key="PresetSwatchTemplate" TargetType="Button">
             <Grid Width="30" Height="30" Background="Transparent">
@@ -126,7 +266,7 @@
         </LinearGradientBrush>
 
         <!-- banner 深色渐变底: 多段 + 低对比 (段数多本身不消带; 小跨度 + 长缓坡已足够平滑,
-             轮 17 已去掉抖动噪点层 —— 无时域抖动时静态噪点只会让画面发脏) -->
+             已去掉抖动噪点层 —— 无时域抖动时静态噪点只会让画面发脏) -->
         <LinearGradientBrush x:Key="BannerBaseBrush" StartPoint="0,0.08" EndPoint="1,0.92">
             <GradientStop Offset="0" Color="#FF0A2337" />
             <GradientStop Offset="0.35" Color="#FF10222D" />
@@ -241,7 +381,7 @@
                                Fill="{StaticResource BannerStreakBlueBrush}" />
                     <Rectangle x:Name="StreakB" RadiusX="7" RadiusY="7"
                                Fill="{StaticResource BannerStreakBlueBrush}" Opacity="0" />
-                    <!-- §4 底边辉光带 (轮 27 重做): 形状(中心亮→两边衰减)与颜色只跟**模式**有关,
+                    <!-- §4 底边辉光带: 形状(中心亮→两边衰减)与颜色只跟**模式**有关,
                          所以画刷是静态的、由 code-behind 按模式换; 每次只改 Opacity (= 数值大小)。
                          这样视觉上是 WPF 动画插值出的 60fps, 不再每帧重建 64 段画刷 (那正是卡顿来源)。
                          **不亮的地方是透明的 (alpha=0), 不是黑色** —— 辉光是"叠加上去"的, 不能压成黑带。
@@ -272,15 +412,15 @@
                             <StackPanel Orientation="Horizontal">
                                 <Ellipse x:Name="StateDot" Width="6" Height="6"
                                          VerticalAlignment="Center" />
-                                <TextBlock x:Name="StatePillText" Text="已停止" FontSize="11"
+                                <TextBlock x:Name="StatePillText" Text="{DynamicResource Banner.State.Stopped}" FontSize="11"
                                            Margin="6,0,0,0" VerticalAlignment="Center" />
                             </StackPanel>
                         </Border>
-                        <TextBlock x:Name="HeroTitle" Text="追光" FontSize="24" FontWeight="SemiBold"
+                        <TextBlock x:Name="HeroTitle" Text="{DynamicResource Home.Hero.Placeholder}" FontSize="24" FontWeight="SemiBold"
                                    Margin="0,10,0,0" />
-                        <TextBlock x:Name="HeroSub" Text="跟随屏幕边缘取色, 实时同步画面" FontSize="13"
+                        <TextBlock x:Name="HeroSub" Text="{DynamicResource Mode.Desc.0}" FontSize="13"
                                    Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
-                        <TextBlock x:Name="PortText" Text="未连接设备" FontSize="12"
+                        <TextBlock x:Name="PortText" Text="{DynamicResource Home.Port.None}" FontSize="12"
                                    Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                     <Grid Grid.Column="1" Margin="16,0,0,0">
@@ -288,7 +428,7 @@
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <ui:Button x:Name="ToggleBtn" Appearance="Primary" Content="开启"
+                        <ui:Button x:Name="ToggleBtn" Appearance="Primary" Content="{DynamicResource Home.Toggle.Open}"
                                    Padding="24,8" Click="OnToggle" HorizontalAlignment="Stretch" />
                         <TextBlock x:Name="BannerFpsText" Grid.Row="1" Text="0.0 FPS" FontSize="11"
                                    HorizontalAlignment="Right" VerticalAlignment="Bottom" />
@@ -299,18 +439,18 @@
 
         <!-- 提示 (原 WarnText/DiagText): IsClosable=False —— 条件消失时自动收起,
              免得用户手动关掉后又被 4Hz 轮询重新打开。
-             轮 19: **不加 AnimatedVisibility** —— InfoBar 模板是用 IsOpen 直接切 Visibility(Collapsed)
+             **不加 AnimatedVisibility**: InfoBar 模板是用 IsOpen 直接切 Visibility(Collapsed)
              的, Collapsed 的元素整个退出布局, 高度动画就没有任何可见效果; 两者只能取其一,
-             用户选择保留 IsOpen 的原生行为 (瞬时显隐)。见 PROGRESS 轮 19。 -->
-        <ui:InfoBar x:Name="WarnBar" Margin="0,0,0,4" Severity="Warning" Title="画面提示"
+             保留 IsOpen 的原生行为 (瞬时显隐)。 -->
+        <ui:InfoBar x:Name="WarnBar" Margin="0,0,0,4" Severity="Warning" Title="{DynamicResource Home.Warn.Title}"
                     IsOpen="False" IsClosable="False" />
-        <ui:InfoBar x:Name="DiagBar" Margin="0,0,0,4" Severity="Error" Title="核心诊断"
+        <ui:InfoBar x:Name="DiagBar" Margin="0,0,0,4" Severity="Error" Title="{DynamicResource Home.Diag.Title}"
                     IsOpen="False" IsClosable="False" />
 
         <!-- 亮度 (常用功能 → 紧贴 banner)。§3: 这一行同时就是纯色拾色器的 V (明度) —— 不再另设第三根滑块 -->
         <controls:SettingRow x:Name="BrightnessRow" Margin="0,0,0,4"
-                             Icon="{ui:SymbolIcon BrightnessHigh24}" Title="亮度"
-                             Description="追光/纯色直接调光; 拾音律动作为最高亮度上限">
+                             Icon="{ui:SymbolIcon BrightnessHigh24}" Title="{DynamicResource Home.Brightness.Title}"
+                             Description="{DynamicResource Home.Brightness.Desc}">
             <StackPanel Orientation="Horizontal">
                 <!-- 轨道点击/拖动由 SliderJump 附加行为接管; ValueChanged 不能在 XAML
                      接线: InitializeComponent 设初值时会在读取配置前触发, 把默认值
@@ -323,8 +463,9 @@
             </StackPanel>
         </controls:SettingRow>
 
-        <!-- 模式: 三张主模式卡 (等宽三列 + 8px 间隙; 内容由 code-behind 组装) -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="模式" />
+        <!-- 模式: 三张主模式卡 (等宽三列 + 8px 间隙; 控件本体静态声明, 样式见 ModeCardStyle)。
+             Tag = 模式号, 供 code-behind 收集后同步选中态; 点选统一走 Checked=OnModeChecked。 -->
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Home.Section.Mode}" />
         <Grid x:Name="PrimaryModeGrid" Margin="0,0,0,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -333,6 +474,63 @@
                 <ColumnDefinition Width="8" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+
+            <!-- 追光 (mode 0): 44px 圆角渐变图标 + 标题 + 一句功能说明 -->
+            <RadioButton Grid.Column="0" Style="{StaticResource ModeCardStyle}" Tag="0"
+                         Checked="OnModeChecked">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="44" Height="44" CornerRadius="8" VerticalAlignment="Center"
+                            Margin="0,0,12,0" Background="{StaticResource ModeTileChaseBrush}">
+                        <ui:SymbolIcon Symbol="WeatherSunny24" FontSize="24" Filled="True"
+                                       Foreground="#FFFFFFFF"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Mode.Name.0}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource Mode.Desc.0}" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </RadioButton>
+
+            <!-- 拾音 (mode 1) -->
+            <RadioButton Grid.Column="2" Style="{StaticResource ModeCardStyle}" Tag="1"
+                         Checked="OnModeChecked">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="44" Height="44" CornerRadius="8" VerticalAlignment="Center"
+                            Margin="0,0,12,0" Background="{StaticResource ModeTileAudioBrush}">
+                        <ui:SymbolIcon Symbol="SoundWaveCircle24" FontSize="24" Filled="True"
+                                       Foreground="#FFFFFFFF"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Mode.Name.1}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource Mode.Desc.1}" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </RadioButton>
+
+            <!-- 纯色 (mode 11) -->
+            <RadioButton Grid.Column="4" Style="{StaticResource ModeCardStyle}" Tag="11"
+                         Checked="OnModeChecked">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="44" Height="44" CornerRadius="8" VerticalAlignment="Center"
+                            Margin="0,0,12,0" Background="{StaticResource ModeTileSolidBrush}">
+                        <ui:SymbolIcon Symbol="Color24" FontSize="24" Filled="True"
+                                       Foreground="#FFFFFFFF"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Mode.Name.11}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource Mode.Desc.11}" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </RadioButton>
         </Grid>
 
         <!-- §3 纯色灯光拾色器: 仅「纯色灯光」模式时显示 (AnimatedVisibility), 且显示时默认折叠 —
@@ -350,10 +548,10 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="纯色灯光" FontSize="14" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Mode.Name.11}" FontSize="14" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="当前模式的灯光颜色 — 原始色 (未含亮度)" />
+                               Text="{DynamicResource Home.Picker.Sub}" />
                     <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Orientation="Horizontal"
                                 VerticalAlignment="Center" Margin="8,0,4,0">
                         <Border x:Name="SolidPreview" Width="32" Height="32" CornerRadius="6"
@@ -366,26 +564,116 @@
                 </Grid>
             </ui:CardExpander.Header>
             <StackPanel Margin="16,12,16,16">
-                <!-- 预设色板 + 自定义槽 (轮 29): 12 个预设, 中间一条竖分割线, 右边 5 个自定义槽
-                     (自动记住你调出来的颜色, 右键清除单个槽)。选中 = 强调色圆环。 -->
-                <ItemsControl x:Name="PresetStrip" Margin="0,0,0,4">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
+                <!-- 预设色板 + 自定义槽: 12 个预设 → 竖分割线 → 5 个自定义槽
+                     (自动记住调出来的颜色, 右键清除单个槽)。选中 = 强调色圆环。
+                     色块模板 = PresetSwatchTemplate (自绘圆点; 默认 Button 模板的悬停会铺灰)。
+                     ⚠️ 自定义槽**不要**在 XAML 里写 Tag —— code-behind 靠"收集时有无 Tag"分拣
+                     预设/自定义 (之后 RefreshCustomSlots 会往空槽写 Tag)。 -->
+                <WrapPanel x:Name="PresetStrip" Margin="0,0,0,4">
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FFE1D6" ToolTip="{DynamicResource Home.Picker.Tip.WarmWhite}" Tag="#FFE1D6"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FFF6E0" ToolTip="{DynamicResource Home.Picker.Tip.Cream}" Tag="#FFF6E0"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FFFFFF" ToolTip="{DynamicResource Home.Picker.Tip.White}" Tag="#FFFFFF"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#C9E4FF" ToolTip="{DynamicResource Home.Picker.Tip.CoolWhite}" Tag="#C9E4FF"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FF3B30" ToolTip="{DynamicResource Home.Picker.Tip.Red}" Tag="#FF3B30"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FF9500" ToolTip="{DynamicResource Home.Picker.Tip.Orange}" Tag="#FF9500"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FFCC00" ToolTip="{DynamicResource Home.Picker.Tip.Yellow}" Tag="#FFCC00"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#34C759" ToolTip="{DynamicResource Home.Picker.Tip.Green}" Tag="#34C759"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#5AC8FA" ToolTip="{DynamicResource Home.Picker.Tip.Cyan}" Tag="#5AC8FA"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#007AFF" ToolTip="{DynamicResource Home.Picker.Tip.Blue}" Tag="#007AFF"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#AF52DE" ToolTip="{DynamicResource Home.Picker.Tip.Purple}" Tag="#AF52DE"
+                            Click="OnPresetClick" />
+                    <Button Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="#FF2D55" ToolTip="{DynamicResource Home.Picker.Tip.Pink}" Tag="#FF2D55"
+                            Click="OnPresetClick" />
+
+                    <!-- 预设与自定义之间的竖向分割线 -->
+                    <Rectangle Width="1" Height="30" Margin="6,0,10,6"
+                               Fill="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
+                    <!-- 自定义色槽 ×5 (内容/描边由 RefreshCustomSlots 按记忆填充; 右键清除) -->
+                    <Button x:Name="CustomSlot0" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="{DynamicResource Home.Picker.EmptySlot}"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                    <Button x:Name="CustomSlot1" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="{DynamicResource Home.Picker.EmptySlot}"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                    <Button x:Name="CustomSlot2" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="{DynamicResource Home.Picker.EmptySlot}"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                    <Button x:Name="CustomSlot3" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="{DynamicResource Home.Picker.EmptySlot}"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                    <Button x:Name="CustomSlot4" Width="30" Height="30" Margin="0,0,6,6" Cursor="Hand"
+                            Template="{StaticResource PresetSwatchTemplate}"
+                            BorderThickness="2" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            Background="Transparent" ToolTip="{DynamicResource Home.Picker.EmptySlot}"
+                            Click="OnPresetClick" MouseRightButtonUp="OnCustomSlotClear" />
+                </WrapPanel>
 
                 <!-- 色相 H: 彩虹轨道。滑块自身的轨道用局部资源刷覆盖成透明, 渐变交给下层 Border 承担
                      (WPF-UI 4.3.0 模板里轨道是 Border#TrackBackground, Background = SliderTrackFill)。 -->
-                <Grid x:Name="HueRow" Margin="0,10,0,0">                    <Grid.ColumnDefinitions>
+                <Grid x:Name="HueRow" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Width="16" Height="16" CornerRadius="8" Background="{StaticResource HueRainbowBrush}"/>
-                        <TextBlock Text="色相" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource Home.Picker.Hue}" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="HValueText" Grid.Column="1" Text="24" MinWidth="36"
                                TextAlignment="Right" Margin="8,0,12,0" VerticalAlignment="Center" />
@@ -393,7 +681,7 @@
                         <Border x:Name="HueTrackBar" Height="4" CornerRadius="2"
                                 VerticalAlignment="Center" Background="{StaticResource HueRainbowBrush}" />
                         <!-- Fill=None: 这个滑块的"轨道"是它自己画的彩虹色带 (HueTrackBar),
-                             所以不画进度填充 —— 否则会把渐变换盖掉 (用户实测反馈) ✓ -->
+                             所以不画进度填充 —— 否则会把渐变换盖掉 ✓ -->
                         <Slider x:Name="HueSlider" Minimum="0" Maximum="360" Value="24"
                                 LargeChange="0" controls:SliderJump.Enabled="True"
                                 controls:SliderSkin.Fill="None"
@@ -415,7 +703,7 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Border x:Name="SatSwatch" Width="16" Height="16" CornerRadius="8" Background="#FFFF3B30"/>
-                        <TextBlock Text="饱和度" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource Home.Picker.Sat}" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
                     </StackPanel>
                     <TextBlock x:Name="SValueText" Grid.Column="1" Text="22" MinWidth="36"
                                TextAlignment="Right" Margin="8,0,12,0" VerticalAlignment="Center" />
@@ -451,39 +739,122 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="固件特效" FontSize="14" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Home.Fx.Title}" FontSize="14" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="11 款 · 由灯带固件渲染, 主机仅发命令 (无预览)" />
+                               Text="{DynamicResource Home.Fx.Sub}" />
                     <Border x:Name="FxCurrentPill" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                             CornerRadius="10" Padding="8,2" Margin="8,0,4,0"
                             VerticalAlignment="Center" Visibility="Collapsed"
                             Background="{DynamicResource AccentFillColorDefaultBrush}">
                         <!-- ⚠️ 强调色**底**上的文字要用 TextOnAccentFillColorPrimaryBrush;
                              用 AccentTextFillColorPrimaryBrush 会变成"强调色写强调色"→ 看不见字
-                             (轮 27 用户报的"不明橙色胶囊"就是这个)。 -->
+                             (曾经的"不明橙色胶囊"就是这个)。 -->
                         <TextBlock x:Name="FxCurrentText" FontSize="11"
                                    Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                     </Border>
                 </Grid>
             </ui:CardExpander.Header>
-            <ItemsControl x:Name="FxPanel" Margin="16,12,16,8">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <!-- 轮 28: 回到上一版 —— 磁贴**组**的对齐方式不动 (上一轮误把"磁贴内内容居中"
-                             改成了"磁贴组居中", 而 WrapPanel 的 DesiredSize 本来就占满可用宽度,
-                             Center 实际是空操作, 只会让人以为改错了地方)。 -->
-                        <WrapPanel />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-            </ItemsControl>
+            <WrapPanel x:Name="FxPanel" Margin="16,12,16,8">
+                <!-- 固件特效磁贴 (静态声明; 与固件模式表一一对应 —— 探针断言"磁贴数 == MCU 模式数",
+                     加新款特效时这里要同步). 图标只表达"是哪一款", 不暗示配色 (固件自己渲染配色)。
+                     Tag = 模式号; 点选统一走 Checked=OnModeChecked。 -->
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="2" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.2}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="ColorFill24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.2}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="3" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.3}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Water24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.3}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="4" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.4}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Flash24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.4}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="5" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.5}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Heart24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.5}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="6" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.6}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Fire24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.6}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="7" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.7}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="WeatherSnowflake24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.7}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="8" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.8}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Molecule24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.8}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="9" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.9}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Gift24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.9}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="10" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.10}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Wand24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.10}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="12" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.12}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="Beach24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.12}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource FxTileStyle}" Tag="13" Checked="OnModeChecked"
+                             ToolTip="{DynamicResource Home.Fx.Tip.13}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="WeatherSnow24" FontSize="20" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{DynamicResource Mode.Name.13}" FontSize="12.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </RadioButton>
+            </WrapPanel>
         </ui:CardExpander>
 
-        <!-- §5 运行指标 (轮 27 双层 / 轮 29 关闭时自动动画收起)。
+        <!-- §5 运行指标 (双层; 关闭时自动动画收起)。
              收起用 AnimatedVisibility (与拾音页「输入/输出设备」同一套机制): 灯带没开的时候
              这块整个高度收掉, 不留一行占位; 开起来再动画展开。
              指标集随模式换 (MetricKeysForMode 纯函数); 不做健康着色。 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="调试信息" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Home.Section.Metrics}" />
         <!-- §7 布局预览 (折叠): 几何环保留 M4 的真实比例几何, 但日常收起不参与 4Hz 重绘;
              中心区只放**静态几何参数** —— 展开它的人目的是核对灯序/边数/偏移, 要的就是几何事实。
              起点序号与绕向箭头移进校准向导中心区 (Views/CalibrateWindow.xaml)。 -->
@@ -499,10 +870,10 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="布局预览" FontSize="14" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Home.Layout.Title}" FontSize="14" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="按真实长宽比核对灯序与边数" />
+                               Text="{DynamicResource Home.Layout.Sub}" />
                     <TextBlock x:Name="LayoutSummary" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                FontSize="12" Margin="8,0,10,0" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -513,36 +884,75 @@
         </ui:CardExpander>
         <ui:Card x:Name="MetricsCard" Padding="16,10" Margin="0,0,0,4"
                  controls:AnimatedVisibility.Expanded="False">
-            <Grid x:Name="MetricsGrid" />
+            <Grid>
+                <!-- 指标格: 等宽分栏 (UniformGrid 单行), 每格 = 标签上 / 数值下;
+                     数值经 {Binding Value} 刷新 (MetricCell 是 INPC 数据项)。
+                     指标集随模式换 (MetricKeysForMode 纯函数)。 -->
+                <ItemsControl x:Name="MetricsPanel" Visibility="Collapsed">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Rows="1" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Label}" FontSize="11"
+                                           HorizontalAlignment="Center" TextAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding Value}" FontSize="14" FontWeight="SemiBold"
+                                           Margin="0,2,0,0" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- 未开启 (无指标集) 时的一行灰字占位 (不铺 0.0: 0 会被读成"卡住了") -->
+                <TextBlock x:Name="MetricsEmptyText" Text="{DynamicResource Home.Metrics.Empty}" FontSize="12"
+                           HorizontalAlignment="Center" Visibility="Collapsed"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Grid>
         </ui:Card>
 
         <!-- §6 设备 / 显示器 (结构化行) -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="设备" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Home.Section.Device}" />
         <ui:Card>
             <StackPanel>
                 <Grid>
-                    <TextBlock Text="连接设备" FontWeight="SemiBold" />
-                    <!-- 只要图标, 不要按钮样式 (轮 18 ②) -->
+                    <TextBlock Text="{DynamicResource Home.Dev.Header}" FontWeight="SemiBold" />
+                    <!-- 只要图标, 不要按钮样式 -->
                     <ui:Button x:Name="RefreshDevicesBtn" Template="{StaticResource IconOnlyButtonTemplate}"
-                               ToolTip="刷新"
+                               ToolTip="{DynamicResource Common.Refresh}"
                                HorizontalAlignment="Right" Click="OnRefreshDevices">
                         <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18" Margin="8,2"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </ui:Button>
                 </Grid>
-                <StackPanel x:Name="DevicesPanel" Margin="0,8,0,0" />
+                <StackPanel x:Name="DevicesPanel" Margin="0,8,0,0">
+                    <ItemsControl x:Name="DevicesList" ItemTemplate="{StaticResource DeviceRowTemplate}" />
+                    <TextBlock x:Name="DevicesStateText" FontSize="12" TextWrapping="Wrap"
+                               Visibility="Collapsed" />
+                </StackPanel>
                 <Separator Margin="0,10" />
                 <Grid>
-                    <TextBlock Text="显示器" FontWeight="SemiBold" />
+                    <TextBlock Text="{DynamicResource Home.Monitor.Title}" FontWeight="SemiBold" />
                     <ui:Button x:Name="RefreshMonitorsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
-                               ToolTip="重新枚举"
+                               ToolTip="{DynamicResource Common.ReEnumerate}"
                                HorizontalAlignment="Right" Click="OnRefreshMonitorsClick">
                         <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18" Margin="8,0"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </ui:Button>
                 </Grid>
-                <!-- 显示器改成按真实长宽比画的缩略矩形 + 语义标记; 采集在此处不可切换 (选择器在「采集」页) -->
-                <StackPanel x:Name="MonitorsPanel" Margin="0,8,0,0" />
+                <!-- 显示器行 (模板 MonitorRowTemplate); 采集目标不在此切换 (选择器在「采集」页)。
+                     行列表与状态/提示文本是**动态内容**, 由 code-behind 填/控制显隐。 -->
+                <StackPanel x:Name="MonitorsPanel" Margin="0,8,0,0">
+                    <ItemsControl x:Name="MonitorsList" ItemTemplate="{StaticResource MonitorRowTemplate}" />
+                    <TextBlock x:Name="MonitorsStateText" FontSize="12" Visibility="Collapsed"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="MonitorsHintText" Text="{DynamicResource Home.Monitor.Hint}" FontSize="12"
+                               Margin="0,4,0,0" Visibility="Collapsed"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
             </StackPanel>
         </ui:Card>
 

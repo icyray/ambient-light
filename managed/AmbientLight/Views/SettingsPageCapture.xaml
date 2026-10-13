@@ -10,13 +10,13 @@
     <StackPanel Margin="16,12,16,16">
 
         <!-- 屏幕与灯带 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="屏幕与灯带" />
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}" Title="显示器"
-                             Description="追光画面来源; 拓扑变化后自动回退主屏">
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Cap.Group.Screen}" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}" Title="{DynamicResource Cap.Monitor.Title}"
+                             Description="{DynamicResource Cap.Monitor.Desc}">
             <StackPanel Orientation="Horizontal">
-                <!-- 只要图标, 不要按钮样式 (轮 29 用户要求, 与主页刷新一致) -->
+                <!-- 只要图标, 不要按钮样式 (与主页刷新一致) -->
                 <ui:Button x:Name="RefreshMonitorsBtn" Template="{StaticResource IconOnlyButtonTemplate}"
-                           ToolTip="重新枚举" Margin="8,0,8,0"
+                           ToolTip="{DynamicResource Common.ReEnumerate}" Margin="8,0,8,0"
                            VerticalAlignment="Center" Click="OnRefreshMonitors">
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -25,46 +25,46 @@
                           SelectionChanged="OnMonitorChanged" VerticalAlignment="Center" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Lightbulb24}" Title="灯数"
-                             Description="固件上限 180; 横竖边按屏幕宽高比自动分配">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Lightbulb24}" Title="{DynamicResource Cap.LedCount.Title}"
+                             Description="{DynamicResource Cap.LedCount.Desc}">
             <ui:NumberBox x:Name="LedCountBox" Minimum="1" Maximum="180" Value="60"
                           SmallChange="1" MaxDecimalPlaces="0" Width="160"
                           VerticalAlignment="Center" />
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BorderAll24}" Title="灯带边数"
-                             Description="环绕屏幕取色的边">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BorderAll24}" Title="{DynamicResource Cap.Sides.Title}"
+                             Description="{DynamicResource Cap.Sides.Desc}">
             <ComboBox x:Name="SidesCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnSidesChanged">
-                <ComboBoxItem Content="左右 (2 边)" />
-                <ComboBoxItem Content="左右上 (3 边)" />
-                <ComboBoxItem Content="左右上下 (4 边)" />
+                <ComboBoxItem Content="{DynamicResource Cap.Sides.2}" />
+                <ComboBoxItem Content="{DynamicResource Cap.Sides.3}" />
+                <ComboBoxItem Content="{DynamicResource Cap.Sides.4}" />
             </ComboBox>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRotateClockwise24}" Title="起始方向"
-                             Description="第 0 颗灯所在角与绕向">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRotateClockwise24}" Title="{DynamicResource Cap.Direction.Title}"
+                             Description="{DynamicResource Cap.Direction.Desc}">
             <ComboBox x:Name="DirectionCombo" Width="160" VerticalAlignment="Center"
                       SelectionChanged="OnDirectionChanged">
-                <ComboBoxItem Content="逆时针 (右下起)" />
-                <ComboBoxItem Content="顺时针 (左下起)" />
+                <ComboBoxItem Content="{DynamicResource Cap.Direction.Ccw}" />
+                <ComboBoxItem Content="{DynamicResource Cap.Direction.Cw}" />
             </ComboBox>
         </controls:SettingRow>
-        <controls:SettingRow x:Name="RotateRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSwap24}" Title="灯序偏移"
-                             Description="校正灯带物理起点与协议起点的错位">
+        <controls:SettingRow x:Name="RotateRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSwap24}" Title="{DynamicResource Cap.Rotate.Title}"
+                             Description="{DynamicResource Cap.Rotate.Default}">
             <ui:NumberBox x:Name="RotateBox" Minimum="-7" Maximum="7" Value="0"
                           SmallChange="1" MaxDecimalPlaces="0" Width="160"
                           VerticalAlignment="Center" ValueChanged="OnRotateChanged" />
         </controls:SettingRow>
-        <!-- 全屏校准向导 (轮 28 从「高级」页移来): 紧挨灯序偏移 —— 它就是用来"试出"偏移值的,
+        <!-- 全屏校准向导 (从「高级」页移来): 紧挨灯序偏移 —— 它就是用来"试出"偏移值的,
              放这里才和它的用法在一起。 -->
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Target24}" Title="全屏校准向导"
-                             Description="在目标屏铺四色大图, 移动物理灯带的颜色起点对齐四色分界">
-            <ui:Button Content="打开向导…" Appearance="Primary" Click="OnCalibrate" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Target24}" Title="{DynamicResource Cap.Calib.Title}"
+                             Description="{DynamicResource Cap.Calib.Desc}">
+            <ui:Button Content="{DynamicResource Cap.Calib.Open}" Appearance="Primary" Click="OnCalibrate" />
         </controls:SettingRow>
 
         <!-- 追光 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="追光" />
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Gauge24}" Title="追光范围"
-                             Description="取色带深度; 越大则远离边缘的画面也参与取色">
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Cap.Group.Chase}" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Gauge24}" Title="{DynamicResource Cap.Range.Title}"
+                             Description="{DynamicResource Cap.Range.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="CaptureRangeValue" Text="15" MinWidth="32" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -73,21 +73,21 @@
                         VerticalAlignment="Center" ValueChanged="OnCaptureRangeChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DataLine24}" Title="追光平滑"
-                             Description="相邻灯共享采样点 (步长 3/4/5 px), 更平滑但失去细节">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DataLine24}" Title="{DynamicResource Cap.Smooth.Title}"
+                             Description="{DynamicResource Cap.Smooth.Desc}">
             <ComboBox x:Name="SmoothingCombo" Width="120" VerticalAlignment="Center"
                       SelectionChanged="OnSmoothingChanged">
-                <ComboBoxItem Content="关闭" />
-                <ComboBoxItem Content="平滑" />
-                <ComboBoxItem Content="更平滑" />
-                <ComboBoxItem Content="最平滑" />
+                <ComboBoxItem Content="{DynamicResource Common.Close}" />
+                <ComboBoxItem Content="{DynamicResource Cap.Smooth.1}" />
+                <ComboBoxItem Content="{DynamicResource Cap.Smooth.2}" />
+                <ComboBoxItem Content="{DynamicResource Cap.Smooth.3}" />
             </ComboBox>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="刷新率上限"
-                             Description="限制核心处理帧率, 降低 CPU/串口占用">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="{DynamicResource Cap.Fps.Title}"
+                             Description="{DynamicResource Cap.Fps.Desc}">
             <ComboBox x:Name="FpsCapCombo" Width="120" VerticalAlignment="Center"
                       SelectionChanged="OnFpsCapChanged">
-                <ComboBoxItem Content="不限" />
+                <ComboBoxItem Content="{DynamicResource Cap.Fps.Unlimited}" />
                 <ComboBoxItem Content="240 fps" />
                 <ComboBoxItem Content="165 fps" />
                 <ComboBoxItem Content="144 fps" />
@@ -99,7 +99,7 @@
         </controls:SettingRow>
 
         <!-- 黑边 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="黑边" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Cap.Group.BlackBar}" />
         <ui:CardExpander Margin="0,0,0,4" Icon="{ui:SymbolIcon Crop24}" ContentPadding="0">
             <ui:CardExpander.Header>
                 <Grid>
@@ -111,10 +111,10 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="黑边自适应" FontSize="14" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Cap.BlackBar.Title}" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="画面有黑边 (电影/宽屏) 时自动收缩取色边框" />
+                               Text="{DynamicResource Cap.BlackBar.Desc}" />
                     <ui:ToggleSwitch x:Name="BlackBarsToggle" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                      Margin="0,0,10,0" IsChecked="True" Click="OnBlackBarsChanged" />
                 </Grid>
@@ -126,10 +126,10 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="35,0,16,0">
-                        <TextBlock Text="黑边判定等级" FontSize="14" />
+                        <TextBlock Text="{DynamicResource Cap.BlackBar.Level}" FontSize="14" />
                         <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,8,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="越高越保守 (不易误判暗场景), 越低越激进" />
+                                   Text="{DynamicResource Cap.BlackBar.LevelDesc}" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock x:Name="BlackBarLevelValue" Text="3" MinWidth="32" TextAlignment="Right"
@@ -146,7 +146,7 @@
              ⚠️ 两项**不是互斥**: 「抑制闪光」限的是整帧平均亮度的**突变率**(硬限幅 12%/帧, 专治一两帧的
              白尖峰); 「时域柔和」是逐灯逐通道低通(首帧能走 21%、之后绵长, 专治快速摇镜的逐灯跳变)。
              两者治不同病灶 → 都开是互补, 不是重复。 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="柔化平滑" />
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Cap.Soften.Title}" />
         <ui:CardExpander Margin="0,0,0,4" Icon="{ui:SymbolIcon DataLine24}" ContentPadding="0">
             <ui:CardExpander.Header>
                 <Grid>
@@ -158,11 +158,11 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="柔化平滑" FontSize="14" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Cap.Soften.Title}" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
                                TextWrapping="Wrap" Margin="0,2,8,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="观影可开、游戏建议关 (会牺牲一点跟屏感)" />
+                               Text="{DynamicResource Cap.Soften.Desc}" />
                     <ui:ToggleSwitch x:Name="ChaseSmoothToggle"  Grid.Row="0" Grid.RowSpan="2"
                                      Grid.Column="1" Margin="0,0,10,0" Click="OnChaseSmoothToggled" />
                 </Grid>
@@ -187,10 +187,10 @@
                             Click="OnChaseModeChanged" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="抑制闪光" FontSize="14" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{DynamicResource Cap.Soften.A.Title}" FontSize="14" />
                         <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Margin="0,2,8,0"
                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                            Text="整帧亮度的突变限幅 —— 治镜头切换/闪白; 颜色跟随仍然即时 (更跟手)" />
+                            Text="{DynamicResource Cap.Soften.A.Desc}" />
                     </StackPanel>
                 </Grid>
                 <Separator Margin="8,2" />
@@ -209,10 +209,10 @@
                             Click="OnChaseModeChanged"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="抑制闪光 + 时域柔和" FontSize="14" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{DynamicResource Cap.Soften.B.Title}" FontSize="14" />
                         <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Margin="0,2,8,0"
                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                            Text="再叠逐灯颜色平滑 (治快速摇镜的逐灯跳变) —— 更柔, 但有一点拖影" />
+                            Text="{DynamicResource Cap.Soften.B.Desc}" />
                     </StackPanel>
                 </Grid>
             </StackPanel>

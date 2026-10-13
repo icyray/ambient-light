@@ -15,7 +15,7 @@ public sealed class AppOptions
     /// <summary>主题 (M5.2): "dark"(默认) / "light" / "system"(跟随系统)。
     /// 未知值一律按 system 处理 (见 ThemeService.Parse, 永不抛)。</summary>
     public string Theme { get; set; } = "dark";
-    /// <summary>拾色器的自定义色槽 (轮 29): 记住最近调出来的颜色, 最新的在前, 最多 5 个。
+    /// <summary>拾色器的自定义色槽: 记住最近调出来的颜色, 最新的在前, 最多 5 个。
     /// 只存非预设色 —— 预设本身就在列表里, 再记一遍没意义。</summary>
     public List<string> CustomColors { get; set; } = [];
 }
@@ -258,7 +258,7 @@ public static class ConfigStore
         GetOrCreate(SelectedKey);           // 首次运行: 保证至少有一个默认设备
     }
 
-    /// <summary>恢复出厂默认 (轮 21): 删掉配置目录里的 app.json / device_*.json 后重新 Load
+    /// <summary>恢复出厂默认: 删掉配置目录里的 app.json / device_*.json 后重新 Load
     /// (缺文件即默认值), 并立刻按默认值落盘。
     /// **破坏性操作 —— 调用方必须先用 ContentDialog 确认** (高级页「恢复默认配置」)。
     /// 只删自己写的两种文件, 不碰目录里的其它东西。</summary>

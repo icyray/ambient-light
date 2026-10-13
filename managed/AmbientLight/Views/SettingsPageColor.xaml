@@ -10,9 +10,9 @@
     <StackPanel Margin="16,12,16,16">
 
         <!-- 色彩调整 -->
-        <TextBlock Style="{StaticResource GroupLabel}" Text="色彩调整" />
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBucket24}" Title="饱和度"
-                             Description="画面色彩鲜艳程度">
+        <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Color.Group}" />
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBucket24}" Title="{DynamicResource Color.Vib.Title}"
+                             Description="{DynamicResource Color.Vib.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="VibranceValue" Text="9.0" MinWidth="32" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -21,8 +21,8 @@
                         VerticalAlignment="Center" ValueChanged="OnVibranceChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ColorLine24}" Title="色相强度"
-                             Description="整体色相偏移; 1.00 为原色, 调大色相偏红, 调小偏黄绿">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ColorLine24}" Title="{DynamicResource Color.Hue.Title}"
+                             Description="{DynamicResource Color.Hue.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="HueValue" Text="1.00" MinWidth="32" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -34,8 +34,8 @@
                         VerticalAlignment="Center" ValueChanged="OnHueChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BrightnessLow24}" Title="明暗强度 (伽马)"
-                             Description="画面明暗向灯带的映射曲线">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BrightnessLow24}" Title="{DynamicResource Color.Gamma.Title}"
+                             Description="{DynamicResource Color.Gamma.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="GammaValue" Text="0.65" MinWidth="32" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -44,8 +44,8 @@
                         VerticalAlignment="Center" ValueChanged="OnGammaChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Filter24}" Title="最低颜色亮度 (cut)"
-                             Description="RGB 全部低于该级别的颜色不显示 (压黑)">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Filter24}" Title="{DynamicResource Color.Cut.Title}"
+                             Description="{DynamicResource Color.Cut.Desc}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="ColorCutValue" Text="1" MinWidth="32" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
@@ -54,8 +54,8 @@
                         VerticalAlignment="Center" ValueChanged="OnColorCutChanged" />
             </StackPanel>
         </controls:SettingRow>
-        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRepeatAll24}" Title="灯珠色序"
-                             Description="颜色不符时逐个尝试 (灯珠接线序差异)">
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRepeatAll24}" Title="{DynamicResource Color.Output.Title}"
+                             Description="{DynamicResource Color.Output.Desc}">
             <ComboBox x:Name="OutputCombo" Width="120" VerticalAlignment="Center"
                       SelectionChanged="OnOutputChanged">
                 <ComboBoxItem Content="RGB" />
@@ -77,10 +77,10 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="LED 色彩平衡" FontSize="14" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Color.Balance.Title}" FontSize="14" />
                     <TextBlock Grid.Row="1" Grid.Column="0" FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="分通道增益, 白场偏色时微调 (高级)" />
+                               Text="{DynamicResource Color.Balance.Desc}" />
                     <TextBlock x:Name="GainSummaryText" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                                Text="×1.00 ×1.00 ×1.00" FontSize="12" Margin="8,0,10,0"
                                VerticalAlignment="Center" />

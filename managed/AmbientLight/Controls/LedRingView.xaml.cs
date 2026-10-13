@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using AmbientLight.Localization;
 
 namespace AmbientLight.Controls;
 
@@ -183,7 +184,7 @@ public partial class LedRingView : UserControl
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(8, 2, 8, 2),
             Background = Frozen(gc.BadgeBg),
-            Child = new TextBlock { Text = "起点", FontSize = 12, Foreground = Frozen(gc.BadgeFg) },
+            Child = new TextBlock { Text = Loc.T("Ring.StartMark"), FontSize = 12, Foreground = Frozen(gc.BadgeFg) },
         };
         badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var size = badge.DesiredSize;
@@ -380,8 +381,8 @@ public partial class LedRingView : UserControl
             return $"{name} {idx.Min()}-{idx.Max()}";
         }
         var parts = new[] {
-            (Range(_top, "顶"), 1), (Range(_right, "右"), 2),
-            (Range(_bottom, "底"), 3), (Range(_left, "左"), 4),
+            (Range(_top, Loc.T("Ring.Side.Top")), 1), (Range(_right, Loc.T("Ring.Side.Right")), 2),
+            (Range(_bottom, Loc.T("Ring.Side.Bottom")), 3), (Range(_left, Loc.T("Ring.Side.Left")), 4),
         }.Where(p => p.Item1 != null).OrderBy(p => p.Item2).Select(p => p.Item1);
         return string.Join(" · ", parts);
     }

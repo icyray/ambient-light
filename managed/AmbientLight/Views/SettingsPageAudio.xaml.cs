@@ -3,6 +3,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 
 namespace AmbientLight.Views;
@@ -70,13 +71,14 @@ public partial class SettingsPageAudio : Page
 
     private void RefreshDevCombo(ComboBox combo, bool capture, string currentId)
     {
-        var items = new List<AudioDevItem> { new("", "系统默认") };
+        var items = new List<AudioDevItem> { new("", Loc.T("Audio.DefaultDevice")) };
         try
         {
             foreach (var d in AmbientCore.GetAudioEndPoints(capture))
             {
                 if (string.IsNullOrEmpty(d.Id)) continue;
-                items.Add(new AudioDevItem(d.Id, d.Name + (d.isDefault != 0 ? "  (系统默认)" : "")));
+                items.Add(new AudioDevItem(d.Id, d.Name +
+                    (d.isDefault != 0 ? "  " + Loc.T("Audio.DefaultMark") : "")));
             }
         }
         catch { /* 枚举失败仍保留"系统默认" */ }
@@ -114,9 +116,9 @@ public partial class SettingsPageAudio : Page
         string dev = st.AudioDev;
         VolumeRow.Description = st.audioOk switch
         {
-            1 => $"音源: {dev}",
-            2 => "音源重建中 (默认输出设备变化/暂不可用)…",
-            _ => "开启拾音模式后显示音源与电平",
+            1 => Loc.F("Audio.SourceLine", dev),
+            2 => Loc.T("Audio.Rebuilding"),
+            _ => Loc.T("Audio.Idle"),
         };
     }
 

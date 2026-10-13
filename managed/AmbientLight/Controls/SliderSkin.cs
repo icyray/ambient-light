@@ -54,7 +54,7 @@ public static class SliderSkin
 
 /// <summary>把 (当前值, 中性值, 最小值) 折算成官方填充的 `SelectionStart` / `SelectionEnd`。
 /// 为什么必须折算: `PART_SelectionRange` 的宽度 = `(End - Start) × 每单位像素` ——
-/// **End &lt; Start 时宽度为负 → 什么都不画** (用户实测: 增益滑块"往左"那一半没画出来 ✗)。
+/// **End &lt; Start 时宽度为负 → 什么都不画** (踩过的坑: 增益滑块"往左"那一半没画出来 ✗)。
 /// 所以这里始终返回 `min(anchor, value)` 当 Start、`max(...)` 当 End, 两端一交换, 两个方向都能画 ✓</summary>
 public sealed class SliderAnchorConverter : IMultiValueConverter
 {

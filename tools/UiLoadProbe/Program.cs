@@ -1,6 +1,6 @@
-// UiLoadProbe — 无界面加载探针 (M5.1 UI 轮排查用)
+// UiLoadProbe — 无界面加载探针 (UI 排查用)
 //
-// ⚠️ **本文件的判定原则** (轮 29 用户明确要求, 改之前先读这一段):
+// ⚠️ **本文件的判定原则** (改之前先读这一段):
 //   只针对**程序自己算出来的 / 有规则的**东西做断言, 例如:
 //     · 纯函数真值表 (MetricKeysForMode / DecidePaneForWidth)、
 //     · 从对象自身读出来的不变量 (banner 外圆角 − 边框厚 = 光层内圆角)、
@@ -53,6 +53,15 @@ if (args.Length >= 2 && args[0] == "--dump-ring")
     td.SetApartmentState(ApartmentState.STA);
     td.Start();
     td.Join();
+    return;
+}
+// `--dump-page <前缀>`: 整页出图（重构前后像素对照）—— home/capture/audio/color/advanced/devices
+if (args.Length >= 2 && args[0] == "--dump-page")
+{
+    var tp = new Thread(() => UiLoadProbe.PageDiag.Dump(args[1]));
+    tp.SetApartmentState(ApartmentState.STA);
+    tp.Start();
+    tp.Join();
     return;
 }
 var t = new Thread(Run);
@@ -204,7 +213,7 @@ static void Run()
     app.InitializeComponent();          // 入口 Main 里才调用, 探针必须手动调: 加载 App.xaml 全局资源
     // `App.Instance` 是在 OnStartup 里赋的 (`_instance = this`), 而探针不跑 OnStartup →
     // 任何走 `App.Instance.xxx` 的代码路径都会 NRE。这里用反射把它补上, 让"有会话"这类
-    // 路径也能在无头宿主里跑到 (轮 34 补 7: 设备行按 key 配对需要 App 实例)。
+    // 路径也能在无头宿主里跑到 (设备行按 key 配对需要 App 实例)。
     typeof(AmbientLight.App)
         .GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
         ?.SetValue(null, app);
@@ -271,7 +280,7 @@ static void Run()
     }
 
     // 卡片间距: 断言的是"一致", 不是"等于 4" —— 用户调间距时不该报错, 但"某一张被动画
-    // 把基准 margin 抹掉"这种真 bug 会表现为"唯独它跟别人不一样" (轮 16 就是这么发现的)。
+    // 把基准 margin 抹掉"这种真 bug 会表现为"唯独它跟别人不一样"。
     Console.WriteLine();
     Console.WriteLine("---- 卡片间距 (卡片级元素的下边距必须彼此一致) ----");
     foreach (var pt in new[]
@@ -299,6 +308,51 @@ static void Run()
         Console.WriteLine(bad.Count == 0
             ? $"OK   {pt.Name}: {cards.Count} 个卡片级元素, 下边距彼此一致 (基准 {norm})"
             : $"FAIL {pt.Name}: {string.Join(", ", bad)}");
+    }
+
+    // SettingRow 头部结构: 从 App 资源模板装出来 (标题/说明真的进了两行文本); 空说明收起第二行。
+    {
+        var advRows = new AmbientLight.Views.SettingsPageAdvanced();
+        var rows = LogicalDescendants(advRows).OfType<AmbientLight.Controls.SettingRow>().ToList();
+        int wired = 0, mismatch = 0;
+        foreach (var r in rows)
+        {
+            if (r.Header is not Grid hg || hg.Children.Count < 2
+                || hg.Children[0] is not TextBlock t0 || hg.Children[1] is not TextBlock t1)
+                continue;
+            bool titleOk = t0.Text == (r.Title ?? "");
+            bool descOk = string.IsNullOrEmpty(r.Description)
+                ? t1.Visibility == Visibility.Collapsed && t1.Text.Length == 0
+                : t1.Visibility == Visibility.Visible && t1.Text == r.Description;
+            if (titleOk && descOk) wired++;
+            else mismatch++;
+        }
+        Console.WriteLine((rows.Count > 0 && mismatch == 0 && wired == rows.Count ? "OK   " : "FAIL ") +
+                          $"SettingRow 头部模板接线: {wired}/{rows.Count} 行的标题/说明进了两行文本 (不匹配 {mismatch})");
+    }
+
+    // XAML 字面量 → {DynamicResource} 后的接线抽查 —— 断言"XAML 显示值 == 字典值 (同键同源)"。
+    // 动机: DynamicResource 缺键/断链是**静默**的 (文本变空), 出图对照能兜底, 这里再给一条数值断言
+    // (不写死文案, 只验证两边取自同一个字典)。
+    {
+        var hp8 = new AmbientLight.Views.HomePage();
+        var cap8 = new AmbientLight.Views.SettingsPageCapture();
+        var ring8 = new AmbientLight.Controls.LedRingView();
+        string K(string k) => AmbientLight.Localization.Loc.T(k);
+        var xamlWired = new (string Desc, object? Got, string Want)[]
+        {
+            ("主页 WarnBar.Title", (hp8.FindName("WarnBar") as Wpf.Ui.Controls.InfoBar)?.Title, K("Home.Warn.Title")),
+            ("主页 DiagBar.Title", (hp8.FindName("DiagBar") as Wpf.Ui.Controls.InfoBar)?.Title, K("Home.Diag.Title")),
+            ("主页 BrightnessRow.Title", (hp8.FindName("BrightnessRow") as AmbientLight.Controls.SettingRow)?.Title, K("Home.Brightness.Title")),
+            ("主页 MetricsEmptyText", (hp8.FindName("MetricsEmptyText") as TextBlock)?.Text, K("Home.Metrics.Empty")),
+            ("采集页 RotateRow.Title", (cap8.FindName("RotateRow") as AmbientLight.Controls.SettingRow)?.Title, K("Cap.Rotate.Title")),
+            ("灯环 HintTitle", (ring8.FindName("HintTitle") as TextBlock)?.Text, K("Ring.Preview")),
+        };
+        var xamlBad = xamlWired.Where(c => !Equals(c.Got, c.Want))
+                               .Select(c => $"{c.Desc}: {c.Got ?? "(null)"} != {c.Want}").ToList();
+        Console.WriteLine((xamlBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"XAML {{DynamicResource}} 文案接线抽查 {xamlWired.Length} 处 (显示值 == 字典值): " +
+                          (xamlBad.Count == 0 ? "全部同源" : string.Join("; ", xamlBad)));
     }
 
     Console.WriteLine();
@@ -335,7 +389,7 @@ static void Run()
     Console.WriteLine((solidCollapsed ? "OK   " : "FAIL ") +
                       $"SolidCard 默认折叠 = {solidCollapsed} (展开态只露 Header: HEX 框 + 色块)");
 
-    // 轮 17: banner 点亮态的三条光层必须自带圆角 —— WPF 的 Border **只把 Background 裁到圆角,
+    // banner 点亮态的三条光层必须自带圆角 —— WPF 的 Border **只把 Background 裁到圆角,
     // 不裁子元素**, 所以光层 Rectangle 漏写 RadiusX/RadiusY 就会把 banner 四角撑成直角
     // (灰色态是圆角、点亮态变直角)。内圆角 = 外圆角 − 边框厚度。
     Console.WriteLine();
@@ -352,11 +406,11 @@ static void Run()
                       (sharp.Count > 0
                           ? $"; 未圆角: {string.Join(", ", sharp.Select((r, i) => $"#{i}={r.RadiusX}"))}"
                           : ""));
-    // banner 里不得再出现噪点层 (轮 17 用户要求去掉: 无时域抖动时静态噪点只会把画面弄脏)
+    // banner 里不得再出现噪点层 (无时域抖动时静态噪点只会把画面弄脏)
     bool ditherGone = home.FindName("Dither") == null;
-    Console.WriteLine((ditherGone ? "OK   " : "FAIL ") + "Dither 噪点层已移除 (轮 17)");
+    Console.WriteLine((ditherGone ? "OK   " : "FAIL ") + "Dither 噪点层已移除");
 
-    // 轮 19: 提示条显隐**回到 IsOpen 原生行为**, 不再用 AnimatedVisibility —— InfoBar 模板是用
+    // 提示条显隐**回到 IsOpen 原生行为**, 不用 AnimatedVisibility —— InfoBar 模板是用
     // IsOpen 直接切 Visibility(Collapsed) 的, Collapsed 的元素整个退出布局, 高度动画没有任何可见效果;
     // 两套机制并存只会互相打架。这条断言用来守住"只用 IsOpen", 防止又被人加上 AnimatedVisibility。
     Console.WriteLine();
@@ -371,11 +425,11 @@ static void Run()
                           $"AnimatedVisibility.Expanded={untouched} (要求 True = 未被接管)");
     }
 
-    // 轮 19: "连接中断 → banner 不点亮 + 胶囊说'正在尝试重连' + 按钮说'关闭'" 属于行为约定,
+    // "连接中断 → banner 不点亮 + 胶囊说'正在尝试重连' + 按钮说'关闭'" 属于行为约定,
     // 无头探针验不到 (要真实会话状态机), 留给真机复验; 口径同源由 ApplyBannerLook/IsLit 与
     // "按钮 = App.CoreRunning" 保证。
 
-    // 轮 18 ②/轮 29: "刷新/重新枚举"这类按钮必须是纯图标 (无按钮底/边框)。
+    // "刷新/重新枚举"这类按钮必须是纯图标 (无按钮底/边框)。
     // 断言方式: 按**名字**找那四个已知的刷新按钮, 要求它们都用 IconOnlyButtonTemplate ——
     // 不断言"全页只有 N 个纯图标按钮"(那会随界面调整误报)。
     var tplRes = home.TryFindResource("IconOnlyButtonTemplate");
@@ -418,7 +472,7 @@ static void Run()
         }
     }
 
-    // 轮 20: 左侧菜单自适应折叠的决策真值表。最容易改错的一条是"恢复只对自动折的那次生效"
+    // 左侧菜单自适应折叠的决策真值表。最容易改错的一条是"恢复只对自动折的那次生效"
     // (用户自己折起来的菜单不能被自动展开), 而改错**不会抛异常**, 只会静默变成错的交互 ——
     // 正是最该被回归网住的东西。
     Console.WriteLine();
@@ -442,7 +496,7 @@ static void Run()
                           (ok ? "" : $"  (期望 {c.SetOpen?.ToString() ?? "不动"} / {c.AutoAfter})"));
     }
 
-    // 轮 16 真 bug 回归 (轮 29 改成不依赖具体数值): AnimatedVisibility 的基准 Margin 只能在元素
+    // 真 bug 回归 (不依赖具体数值): AnimatedVisibility 的基准 Margin 只能在元素
     // Loaded 时捕获 (解析期读到的是默认 0 → 展开后下边距永久少一截)。
     // 判据改成**与同页同类元素比对**: 展开后 SolidCard 的下边距必须等于另一个 CardExpander
     // (FxExpander) 的 —— 用户改间距两边一起改, 不再误报; 而"被抹成 0"这个 bug 一定会露馅。
@@ -493,13 +547,13 @@ static void Run()
         }
     }
 
-    // 轮 21: 高级页「关于」组新增两项 + 窗口级 ContentDialog 宿主。
+    // 高级页「关于」组的两个断言 + 窗口级 ContentDialog 宿主。
     // ① ContentDialog 宿主: WPF-UI 的 ShowAsync() 在宿主为空时直接抛 "DialogHost was not set",
     //    而那只在用户点按钮时才暴露 → 断言宿主存在且类型正确 (宿主注册发生在 Loaded, 探针不显示窗口,
     //    所以这里查 XAML 声明本身, 不用 GetForWindow)。
     // ② 「恢复默认配置」必须在「配置目录」的**折叠内** —— 破坏性操作不该裸奔在页面上。
     Console.WriteLine();
-    Console.WriteLine("---- 高级页「关于」组 (轮 21) ----");
+    Console.WriteLine("---- 高级页「关于」组 ----");
     try
     {
         var win = new AmbientLight.Views.MainWindow();
@@ -517,10 +571,50 @@ static void Run()
                           $"半透明: WindowBackdropType={win.WindowBackdropType}, " +
                           $"ExtendsContentIntoTitleBar={win.ExtendsContentIntoTitleBar} " +
                           $"(用了 backdrop 就必须为 True) = {backdropOk}");
+        // 左侧菜单文案 —— 按 TargetPageType 找 item (不依赖顺序), 断言 XAML ↔ 字典同源
+        if (win.FindName("RootNav") is Wpf.Ui.Controls.NavigationView nav8)
+        {
+            var navWant = new (Type Page, string Key)[]
+            {
+                (typeof(AmbientLight.Views.HomePage), "Nav.Home"),
+                (typeof(AmbientLight.Views.SettingsPageCapture), "Nav.Capture"),
+                (typeof(AmbientLight.Views.SettingsPageAudio), "Nav.Audio"),
+                (typeof(AmbientLight.Views.SettingsPageColor), "Nav.Color"),
+                (typeof(AmbientLight.Views.SettingsPageAdvanced), "Nav.Adv"),
+            };
+            var navBad = navWant.Where(w =>
+                    !nav8.MenuItems.OfType<Wpf.Ui.Controls.NavigationViewItem>().Any(it =>
+                        it.TargetPageType == w.Page && Equals(it.Content, AmbientLight.Localization.Loc.T(w.Key))))
+                .Select(w => w.Key).ToList();
+            Console.WriteLine((navBad.Count == 0 ? "OK   " : "FAIL ") +
+                              $"导航文案 {navWant.Length} 项 (XAML ↔ 字典同源): " +
+                              (navBad.Count == 0 ? "全部一致" : string.Join(", ", navBad)));
+        }
+        else
+        {
+            Console.WriteLine("FAIL 未找到 RootNav (导航文案断言无法执行)");
+        }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"FAIL MainWindow 实例化: {ex.GetType().Name}: {ex.Message}");
+    }
+
+    // 校准窗文案走 {DynamicResource} —— 用反射实例化一次 (私有构造; 不 Show),
+    // 保证 XAML 解析得过 + 窗口标题与字典同源。该窗不在 --dump-page 的六图里, 这里是唯一防线。
+    try
+    {
+        var calCtor = typeof(AmbientLight.Views.CalibrateWindow).GetConstructor(
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+            null, new[] { typeof(int), typeof(string) }, null);
+        var calWin = (Window)calCtor!.Invoke(new object[] { 0, "0_1" });
+        bool calTitleOk = Equals(calWin.Title, AmbientLight.Localization.Loc.T("Calib.WindowTitle"));
+        Console.WriteLine((calTitleOk ? "OK   " : "FAIL ") +
+                          $"校准窗实例化 + 标题与字典同源 = {calTitleOk} ({calWin.Title})");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"FAIL 校准窗实例化: {ex.GetType().Name}: {ex.Message}");
     }
 
     var advanced = new AmbientLight.Views.SettingsPageAdvanced();
@@ -534,18 +628,18 @@ static void Run()
     Console.WriteLine((restoreInExpander ? "OK   " : "FAIL ") +
                       $"「恢复默认配置」按钮在 CardExpander 折叠内 = {restoreInExpander}");
 
-    // ================= 轮 26: M5.1 主页构件重设计 (docs/M5.1_HOME_REDESIGN_PLAN.md §2~§7) =================
+    // ================= M5.1 主页构件重设计 (docs/M5.1_HOME_REDESIGN_PLAN.md §2~§7) =================
     // 无头宿主里 Loaded 不触发, 所以先让页面自己做一次"不依赖 App/核心"的界面装配,
     // 才有真实的磁贴/指标条结构可断言。
     home.BuildForProbe();
 
     Console.WriteLine();
     Console.WriteLine("---- §2 固件特效: 图标磁贴网格 ----");
-    var fxPanel = home.FindName("FxPanel") as ItemsControl;
+    var fxPanel = home.FindName("FxPanel") as Panel;   // 磁贴已改为 XAML 静态子元素 (WrapPanel)
     var fxTpl = home.TryFindResource("FxTileTemplate");
-    var fxTiles = fxPanel?.Items.OfType<System.Windows.Controls.RadioButton>().ToList() ?? [];
+    var fxTiles = fxPanel?.Children.OfType<System.Windows.Controls.RadioButton>().ToList() ?? [];
     // 磁贴数必须等于**MCU 模式数** (数据驱动), 不写死 11 —— 加一款特效不该让探针报警
-    int mcuCount = AmbientCore.Modes.Count(m => AmbientCore.IsMcuMode(m.Index));
+    int mcuCount = AmbientLight.Views.ModeCatalog.All.Count(AmbientCore.IsMcuMode);
     bool tilesOk = fxTpl is ControlTemplate && fxPanel is not null && fxTiles.Count == mcuCount
                    && fxTiles.All(t => ReferenceEquals(t.Template, fxTpl));
     Console.WriteLine((tilesOk ? "OK   " : "FAIL ") +
@@ -557,11 +651,20 @@ static void Run()
     // 磁贴里显示的必须是模式名 (数据驱动), 不是我自己编的文案
     var tileNames = fxTiles.Select(t => t.Content is Panel p
         ? string.Concat(p.Children.OfType<TextBlock>().Select(x => x.Text)) : "").ToList();
-    var expectNames = AmbientCore.Modes.Where(m => AmbientCore.IsMcuMode(m.Index)).Select(m => m.Name).ToList();
+    var expectNames = AmbientLight.Views.ModeCatalog.All.Where(AmbientCore.IsMcuMode)
+                                   .Select(AmbientLight.Views.ModeCatalog.Name).ToList();
     bool namesOk = tileNames.SequenceEqual(expectNames);
     Console.WriteLine((namesOk ? "OK   " : "FAIL ") +
                       $"磁贴文案 == 模式表里的名字 = {namesOk}" +
                       (namesOk ? "" : $"  (实得 [{string.Join(", ", tileNames)}])"));
+    // 主模式卡: 同为 XAML 静态声明 —— 三张、都带 ModeCardTemplate、每张有 Tag(=模式号, 供选中态同步)
+    var cardGrid = home.FindName("PrimaryModeGrid") as Panel;
+    var modeCards = cardGrid?.Children.OfType<System.Windows.Controls.RadioButton>().ToList() ?? [];
+    bool cardsOk = modeCards.Count == 3
+        && modeCards.All(c => c.Template is ControlTemplate
+                              && c.Tag is string s && int.TryParse(s, out _));
+    Console.WriteLine((cardsOk ? "OK   " : "FAIL ") +
+                      $"主模式卡 {modeCards.Count} 张 (期望 3), 均带模板与 Tag = {cardsOk}");
     // 折叠头右侧的「当前 XX」胶囊: 非 MCU 模式时必须收起 (收起状态靠它一眼看出用哪款)
     var fxPill = home.FindName("FxCurrentPill") as UIElement;
     var fxPillText = home.FindName("FxCurrentText") as TextBlock;
@@ -596,17 +699,17 @@ static void Run()
                       $"实际轨道 Border#TrackBackground.Background = {trackBorder?.Background} (期望透明)");
     Console.WriteLine();
     Console.WriteLine("---- §3 预设色板 (自绘圆形 + 覆写悬停 + 预设/自定义分区) ----");
-    var presetStrip = home.FindName("PresetStrip") as ItemsControl;
+    var presetStrip = home.FindName("PresetStrip") as Panel;   // 已改为 XAML 静态子元素 (WrapPanel)
     var presetTpl = home.TryFindResource("PresetSwatchTemplate");
-    var presetBtns = presetStrip?.Items.OfType<Button>().ToList() ?? [];
+    var presetBtns = presetStrip?.Children.OfType<Button>().ToList() ?? [];
     // 只断言**机制与规则**, 不断言条数/几何数值 —— 用户加个预设、调个尺寸不该让探针报警。
-    //   ① 每个色块都用自绘模板: 否则退回默认 Button 模板, 悬停会把色块铺成灰色 (轮 27 真实 bug);
-    //   ② 预设与自定义之间有竖向分割线 (轮 29 要求的"分区");
+    //   ① 每个色块都用自绘模板: 否则退回默认 Button 模板, 悬停会把色块铺成灰色 (真 bug);
+    //   ② 预设与自定义之间有竖向分割线 ("分区");
     //   ③ 自绘模板里确实是圆 (Ellipse), 且悬停由模板自己的触发器接管。
     bool swatchTplOk = presetTpl is ControlTemplate
                        && presetBtns.Count > 0
                        && presetBtns.All(b => ReferenceEquals(b.Template, presetTpl));
-    bool hasDivider = presetStrip?.Items.OfType<System.Windows.Shapes.Rectangle>().Any() == true;
+    bool hasDivider = presetStrip?.Children.OfType<System.Windows.Shapes.Rectangle>().Any() == true;
     Console.WriteLine((swatchTplOk ? "OK   " : "FAIL ") +
                       $"色板 {presetBtns.Count} 个色块全部使用 PresetSwatchTemplate = {swatchTplOk}");
     Console.WriteLine((hasDivider ? "OK   " : "FAIL ") +
@@ -671,7 +774,7 @@ static void Run()
                       (rtBad.Count == 0 ? "全部回到原值 (±1/通道)" : string.Join(", ", rtBad)));
 
     Console.WriteLine();
-    Console.WriteLine("---- §4 banner 底边辉光带 (轮 27: 数值驱动 + alpha 叠加) ----");
+    Console.WriteLine("---- §4 banner 底边辉光带 (数值驱动 + alpha 叠加) ----");
     var glow = home.FindName("GlowBand") as System.Windows.Controls.Border;
     double glowInner = Math.Max(0, outerR - (banner?.BorderThickness.Top ?? 0));
     bool glowEffect = glow?.Effect is System.Windows.Media.Effects.BlurEffect;
@@ -686,7 +789,7 @@ static void Run()
                       $"(要求 {glowInner} = 外圆角 − 边框厚)");
     Console.WriteLine((glowMask ? "OK   " : "FAIL ") + $"辉光带上透下实的 OpacityMask = {glowMask}");
     // 关键: 辉光的亮度必须压在 **alpha** 上 —— 否则不亮的地方会变成一条黑带, 把 banner 压暗。
-    // 这是用户明确的诉求("应该是将自己的亮度叠加上去, 不亮的地方要透明")。
+    // 口径: "应该是将自己的亮度叠加上去, 不亮的地方要透明"。
     // 判据用**不变量**表达 (端点透明 + 存在峰值 + 所有 stop 同色), 不写死段数与峰值下标。
     bool sameRgb = glowStops is { Count: >= 3 }
                    && glowStops.All(s => s.Color.R == glowStops[0].Color.R
@@ -703,7 +806,7 @@ static void Run()
                       $"高级页「界面」组的 banner 辉光开关存在 = {advancedHasGlowSwitch}");
 
     Console.WriteLine();
-    Console.WriteLine("---- §5 运行指标 (轮 27: 双层 / 去 CPU / 去着色) ----");
+    Console.WriteLine("---- §5 运行指标 (双层 / 去 CPU / 去着色) ----");
     var metricCases = new (int Mode, bool Running, string[] Expect, string Desc)[]
     {
         (0,  false, [],                     "未启动 → 空集 (页面显示一行灰字, 不铺 0.0)"),
@@ -724,41 +827,112 @@ static void Run()
     bool noCpu = Enumerable.Range(0, 14).All(m => !AmbientLight.Views.HomePage.MetricKeysForMode(m, true).Contains("cpu"));
     Console.WriteLine((noCpu ? "OK   " : "FAIL ") + $"CPU 已从所有模式的指标集里移除 = {noCpu}");
     // 文案: **不断言具体措辞** (那是随手可改的产品文案), 只断言"每个指标键都配了专属标签" ——
-    // MetricLabel 的 default 分支会原样返回 key, 所以 label == key 就等于"漏配文案"(真 bug)。
+    // 文案源在 Strings.zh.xaml; Loc.T 缺键时返回 "Metric.<key>" 本身 → 以此判漏配 (真 bug)。
     var allMetricKeys = Enumerable.Range(0, 14)
         .SelectMany(m => AmbientLight.Views.HomePage.MetricKeysForMode(m, true))
         .Distinct().ToList();
-    var missingLabels = allMetricKeys.Where(k => AmbientLight.Views.HomePage.MetricLabel(k) == k).ToList();
+    var missingLabels = allMetricKeys
+        .Where(k => AmbientLight.Views.HomePage.MetricLabel(k) == "Metric." + k).ToList();
     Console.WriteLine((missingLabels.Count == 0 ? "OK   " : "FAIL ") +
                       $"指标文案齐备 = {missingLabels.Count == 0}" +
                       (missingLabels.Count > 0 ? $" (缺: {string.Join(", ", missingLabels)})" : "") +
                       "  · 当前措辞: " +
                       string.Join(" / ", allMetricKeys.Select(k => $"{k}={AmbientLight.Views.HomePage.MetricLabel(k)}")));
+    // 模式名/说明文案齐备 (14 个模式; 缺键会显示 key 本身)
+    int modeNameMissing = AmbientLight.Views.ModeCatalog.All
+        .Count(m => AmbientLight.Views.ModeCatalog.Name(m) == "Mode.Name." + m);
+    bool descMissing = AmbientLight.Views.ModeCatalog.All.Any(m =>
+        AmbientLight.Views.ModeCatalog.Desc(m).Length == 0);
+    Console.WriteLine((modeNameMissing == 0 && !descMissing ? "OK   " : "FAIL ") +
+                      $"模式名文案齐备 = {modeNameMissing == 0} (14 个), 说明非空 = {!descMissing}");
+    // 文案字典已合并 (Loc 冒烟: 常用按钮能解析出真值)
+    bool locMerged = AmbientLight.Localization.Loc.T("Common.GotIt") != "Common.GotIt";
+    Console.WriteLine((locMerged ? "OK   " : "FAIL ") + $"Strings.zh.xaml 已合并 (Loc 冒烟) = {locMerged}");
+    // 多行文案必须含**真换行**: 值里的 &#10; 若忘了配 xml:space="preserve" 会被 XAML 归一化成
+    // 空格 (静默失效 —— 对话框里两段话挤成一行)。实测与复现工具 .workbuddy/tmp/nl-probe。
+    var multilineKeys = new[] { "Dev.List.NotFound", "App.Launch.TooMany", "App.Launch.Failed",
+                                "App.Crash.UiException", "App.Start.NotFound.Detail",
+                                "Adv.Update.Body", "Adv.Restore.Body", "Calib.NeedSession" };
+    var nlBad = multilineKeys.Where(k => !AmbientLight.Localization.Loc.T(k).Contains('\n')).ToList();
+    Console.WriteLine((nlBad.Count == 0 ? "OK   " : "FAIL ") +
+                      $"多行文案含真换行 {multilineKeys.Length} 条 (&#10; 配 xml:space=preserve): " +
+                      (nlBad.Count == 0 ? "全部 ✓" : string.Join(", ", nlBad)));
+    // 核心诊断映射: native 英文原文 → 字典中文 (Views/DiagText, 纯函数真值表)。
+    // 命中的必须**真翻译** (输出 != 原文); 未收录的原文必须**原样透传** (宁显英文, 不吞信息)。
+    var diagCases = new (string Raw, string Want)[]
+    {
+        ("serial write failed on COM5, reconnecting",
+            AmbientLight.Localization.Loc.F("Diag.SerialWriteFailed", "COM5")),
+        ("device lost: no usable port (VID_2E3C&PID_5740)",
+            AmbientLight.Localization.Loc.T("Diag.NoUsablePort")),
+        ("capture build failed (D3D/resources), slow retry",
+            AmbientLight.Localization.Loc.T("Diag.CaptureFailed")),
+        ("core thread crashed, see log/ambientcore.log",
+            AmbientLight.Localization.Loc.T("Diag.CoreCrashed")),
+    };
+    var diagBad = diagCases.Where(c => AmbientLight.Views.DiagText.Translate(c.Raw) != c.Want)
+                           .Select(c => c.Raw).ToList();
+    bool diagTranslated = diagCases.All(c => AmbientLight.Views.DiagText.Translate(c.Raw) != c.Raw);
+    bool diagPass = AmbientLight.Views.DiagText.Translate("future unknown message") == "future unknown message"
+                    && AmbientLight.Views.DiagText.Translate("") == "";
+    bool diagOk = diagBad.Count == 0 && diagTranslated && diagPass;
+    Console.WriteLine((diagOk ? "OK   " : "FAIL ") +
+                      $"核心诊断映射 {diagCases.Length} 条 (native → 字典, 命中即翻译) + 未知透传: " +
+                      (diagOk ? "全部 ✓" : $"错配 {string.Join(", ", diagBad)} / 翻译 {diagTranslated} / 透传 {diagPass}"));
     // 双层结构: 栏数必须等于指标数 (数据驱动), 每栏 = 标签行 + 数值行, 数值初值不能是空/0
-    // (0 会被读成"卡住了"); 等宽分栏。
-    var metricsGrid = home.FindName("MetricsGrid") as Grid;
+    // (0 会被读成"卡住了"); 等宽分栏。结构在 XAML 模板里 → 这里验"数据 → 模板 → 实际渲染"整条线。
+    void CollectTextBlocks(DependencyObject d, List<TextBlock> into)
+    {
+        if (d is TextBlock t) into.Add(t);
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+            CollectTextBlocks(VisualTreeHelper.GetChild(d, i), into);
+    }
+    var metricsPanel = home.FindName("MetricsPanel") as ItemsControl;
+    var metricsEmpty = home.FindName("MetricsEmptyText") as TextBlock;
     var keysForProbe = AmbientLight.Views.HomePage.MetricKeysForMode(0, true);
     home.RenderMetricsForProbe(keysForProbe);
-    var cells = metricsGrid?.Children.OfType<StackPanel>().ToList() ?? [];
-    bool twoLine = cells.Count == keysForProbe.Length && cells.All(c => c.Children.Count == 2
-        && c.Children[0] is TextBlock c0 && c0.Text.Length > 0
-        && c.Children[1] is TextBlock c1 && c1.Text.Length > 0 && c1.Text != "0");
-    bool equalCols = metricsGrid?.ColumnDefinitions.Count == cells.Count
-                     && metricsGrid.ColumnDefinitions.All(cd => cd.Width.IsStar && cd.Width.Value == 1);
+    // 逼出容器 (ItemsControl 的容器在布局时生成; 控件不接窗口也能对它自身 Measure/Arrange)
+    metricsPanel!.Measure(new Size(800, 120));
+    metricsPanel.Arrange(new Rect(0, 0, 800, 120));
+    metricsPanel.UpdateLayout();
+    var cellTexts = new List<List<TextBlock>>();
+    for (int i = 0; i < metricsPanel.Items.Count; i++)
+    {
+        var tbs = new List<TextBlock>();
+        if (metricsPanel.ItemContainerGenerator.ContainerFromIndex(i) is { } cont)
+            CollectTextBlocks(cont, tbs);
+        cellTexts.Add(tbs);
+    }
+    bool twoLine = cellTexts.Count == keysForProbe.Length && cellTexts.All(t =>
+        t.Count == 2 && t[0].Text.Length > 0 && t[1].Text.Length > 0 && t[1].Text != "0");
+    bool equalCols = metricsPanel.ItemsPanel.LoadContent()
+                     is System.Windows.Controls.Primitives.UniformGrid { Rows: 1 };
     Console.WriteLine((twoLine ? "OK   " : "FAIL ") +
-                      $"双层结构: {cells.Count} 栏 == 指标数 {keysForProbe.Length}, 每栏 2 行 (标签/数值), " +
+                      $"双层结构: {cellTexts.Count} 栏 == 指标数 {keysForProbe.Length}, 每栏 2 行 (标签/数值), " +
                       $"数值初值非空非 0 = {twoLine}");
     Console.WriteLine((equalCols ? "OK   " : "FAIL ") +
-                      $"等宽分栏 = {equalCols} (列数 {metricsGrid?.ColumnDefinitions.Count}, 全 1*)");
+                      $"等宽分栏 (UniformGrid 单行) = {equalCols}");
+    // 接线断言: 改数据项 → 看**渲染出来的**文本是否跟随 (证明模板里的绑定真的活着)
+    bool valueWired = false;
+    if (metricsPanel.Items.Count > 0
+        && metricsPanel.Items[0] is AmbientLight.Views.HomePage.MetricCell mc
+        && cellTexts.Count > 0 && cellTexts[0].Count == 2)
+    {
+        mc.Value = "接线探针";
+        valueWired = cellTexts[0][1].Text == "接线探针";
+    }
+    Console.WriteLine((valueWired ? "OK   " : "FAIL ") +
+                      $"指标值绑定是活的 (改数据项 → 渲染文本跟随) = {valueWired}");
     // 没指标时 (灯带没开) 收成一行占位, 而不是铺 N 栏空值; 同时指标卡本身要挂着 AnimatedVisibility
-    // 且初始是**收起**的 (轮 29: 关闭时整块高度动画收掉, 与拾音页「输入/输出设备」同一套机制)
+    // 且初始是**收起**的 (关闭时整块高度动画收掉, 与拾音页「输入/输出设备」同一套机制)
     home.RenderMetricsForProbe([]);
-    bool emptyCollapsed = metricsGrid is { Children.Count: 1 } && metricsGrid.ColumnDefinitions.Count == 1;
+    bool emptyCollapsed = metricsPanel.Items.Count == 0
+                          && metricsEmpty?.Visibility == Visibility.Visible;
     var metricsCard = home.FindName("MetricsCard") as FrameworkElement;
     bool cardWired = metricsCard != null
                      && !AmbientLight.Controls.AnimatedVisibility.GetExpanded(metricsCard);
     Console.WriteLine((emptyCollapsed ? "OK   " : "FAIL ") +
-                      $"空指标集 → 单栏占位 (不铺空值) = {emptyCollapsed}");
+                      $"空指标集 → 单行灰字占位 (不铺空值) = {emptyCollapsed}");
     Console.WriteLine((cardWired ? "OK   " : "FAIL ") +
                       $"指标卡挂 AnimatedVisibility 且初始收起 = {cardWired} " +
                       "(与拾音页「输入/输出设备」同一套收展机制)");
@@ -772,7 +946,7 @@ static void Run()
                       "布局预览 Header 摘要元素存在 (收起时显示 「N 灯 · M 边」)");
     Console.WriteLine((home.FindName("Ring") is not null ? "OK   " : "FAIL ") +
                       "几何环仍在 LayoutCard 内 (M4 的真实比例几何原样保留)");
-    // 校准向导的"安装示意" (2026-10-08 用户设计稿替换了旧的"起点 0 号 + ↺ 逆时针"一行小字):
+    // 校准向导的"安装示意" (替换了旧的"起点 0 号 + ↺ 逆时针"一行小字):
     // 环线 + 箭头表示绕向, "起点"徽标贴在 0 号灯那个**角**上。这里断三件事:
     //   ① 起点角/镜像规则 (纯函数, 与核心段序同构); ② 示意的可见性 (线/箭头 vs 屏幕底、徽标字 vs 徽标底);
     //   ③ ★接线: 真的画一遍, 断言"徽标的位置真的跟着绕向跑到另一侧"。
@@ -800,7 +974,7 @@ static void Run()
     var guideShapes = guideCanvas?.Children.OfType<System.Windows.Shapes.Path>().ToArray() ?? [];
     var guideBadge = guideCanvas?.Children.OfType<System.Windows.Controls.Border>()
                               .FirstOrDefault(b => (b.Child as TextBlock)?.Text == "起点");
-    // 两个 Path: 环线(描边) 与 箭头(填充)。★ 环线必须是**开口**路径 —— 用户设计稿要求
+    // 两个 Path: 环线(描边) 与 箭头(填充)。★ 环线必须是**开口**路径 —— 设计要求
     // "绕向线在起点徽标处断开" (像灯带在这里起头/收尾), 所以断口不能靠遮罩糊, 得真是开口。
     var loopPath = guideShapes.FirstOrDefault(p => p.Stroke is not null);
     var headPath = guideShapes.FirstOrDefault(p => p.Fill is not null);
@@ -882,8 +1056,8 @@ static void Run()
     }
 
     Console.WriteLine();
-    Console.WriteLine("---- 轮 27~29 反馈项 (只验规则, 不验数值/文案) ----");
-    // 磁贴"内容居中"是用户明确的需求 → 断言 ContentPresenter 的对齐 (枚举语义), 不是坐标数字。
+    Console.WriteLine("---- 布局/磁贴补充项 (只验规则, 不验数值/文案) ----");
+    // 磁贴"内容居中"是明确的设计要求 → 断言 ContentPresenter 的对齐 (枚举语义), 不是坐标数字。
     // 不断言"磁贴组没有居中"这类**未改动**断言 —— 那只会让下次调整布局时误报。
     var fxTplX = home.TryFindResource("FxTileTemplate") as ControlTemplate;
     bool contentCentered = false;
@@ -931,6 +1105,11 @@ static void Run()
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) WalkMon(VisualTreeHelper.GetChild(d, i));
         }
         WalkMon(mrow);
+        // [diag] 绑定没生效时看这里: 数据项到底有没有挂上
+        var rowItem = ((mrow as FrameworkElement)?.DataContext
+                       ?? (mrow as ContentPresenter)?.Content) as AmbientLight.Views.HomePage.MonitorRowItem;
+        Console.WriteLine($"       [diag] 行根={mrow.GetType().Name}, 数据项=" +
+                          (rowItem is null ? "(null)" : $"#{rowItem.Number} / {rowItem.ResolutionText}"));
         string joined = string.Join(" | ", texts.Select(t => t.Text));
         bool resOk = texts.Any(t => t.Text.Contains($"{probeW}×{probeH}"));
         bool adOk = texts.Any(t => t.Text.Contains(probeAdapter));
@@ -972,8 +1151,8 @@ static void Run()
                       $"「色相强度」有说明文案 = {hueDesc}  · 当前: {hueRow?.Description}");
 
     Console.WriteLine();
-    Console.WriteLine("---- 轮 33: 设备行胶囊口径 (有会话时必须看会话状态) ----");
-    // 轮 33 用户报的两个现象都由这条规则解释: 拔线后 slot 还在 → 旧代码一律"运行中";
+    Console.WriteLine("---- 设备行胶囊口径 (有会话时必须看会话状态) ----");
+    // 两个踩过的现象都由这条规则解释: 拔线后 slot 还在 → 旧代码一律"运行中";
     // 托盘关灯 → 会话消失但当时没有刷新信号。这里只断言**色调**(严重度), 文案只打印 ——
     // 措辞随手可改, 而"灯带不在位不能显示成绿色"是硬的。
     var pillWithSlot = new (int State, string Desc, AmbientLight.Views.HomePage.PillTone Expect)[]
@@ -1008,8 +1187,8 @@ static void Run()
     }
 
     Console.WriteLine();
-    Console.WriteLine("---- 轮 34 补 7: 设备行 ↔ 会话配对 (纯函数真值表) ----");
-    // 用户实测: 手动指定一个"在位但不是灯带"的口后开启 → banner 显示正在重连、诊断说未应答,
+    Console.WriteLine("---- 设备行 ↔ 会话配对 (纯函数真值表) ----");
+    // 场景: 手动指定一个"在位但不是灯带"的口后开启 → banner 显示正在重连、诊断说未应答,
     // 但**设备行胶囊仍是「就绪」**。根因: 配对原来只看端口, 而连不上的会话 `ACStatus.comPort`
     // 是空的 (端口只在握手成功时回填) → 行认不出这个会话 → 显示乐观的「就绪」。
     // 规则: ① 设备 key 相同 > ② 端口相同 > ③ 端口被占且恰有一个非停止会话(兜底)。
@@ -1046,8 +1225,8 @@ static void Run()
     }
 
     Console.WriteLine();
-    Console.WriteLine("---- 轮 34 补 6: 胶囊的两条端口规则 (手动指定端口) ----");
-    // 用户反馈: 手动指定端口后胶囊还显示「就绪」。规则:
+    Console.WriteLine("---- 胶囊的两条端口规则 (手动指定端口) ----");
+    // 场景: 手动指定端口后胶囊还显示「就绪」。规则:
     //   ① 配置的口**本机不存在** → 「端口不在位」(不点开启就知道连不上);
     //   ② 有会话 + DEV_LOST + 手动指定 → 「指定端口无应答」(而不是"灯带不在位" —— 那暗示灯带被拔了);
     //   ③ "口在位但不是灯带"**不做**预检 (要真开端口试握手) → 只能等开启后由诊断说明。
@@ -1091,7 +1270,7 @@ static void Run()
     Console.WriteLine((baudOk ? "OK   " : "FAIL ") +
                       $"波特率候选含默认值 2000000 且排首位 = {baudOk}  · " +
                       string.Join(" / ", AmbientLight.Views.SettingsPageAdvanced.BaudChoices));
-    // ⚠️ 轮 33 真 bug 回归: 光有"候选数组"不够, 下拉必须**真的被填上** —— 当时忘了给 ComboBox
+    // ⚠️ 真 bug 回归: 光有"候选数组"不够, 下拉必须**真的被填上** —— 曾忘了给 ComboBox
     // 设 ItemsSource, 空列表上设 SelectedIndex 既不报错也不生效, 于是用户看到空下拉。
     // 这里断言"控件里确实有项, 且选中项与配置往返一致" (数据驱动, 不写死数量/文案)。
     advPage.BuildForProbe();
@@ -1196,7 +1375,7 @@ static void Run()
 
     Console.WriteLine();
     Console.WriteLine("---- M5.2 主题: 强调色\"中介刷子\" (改强调色后按钮/滑块要立刻跟上) ----");
-    // 用户实测现象: 改系统强调色 → **自绘控件**(直接引 AccentFillColorDefaultBrush)马上变,
+    // 现象: 改系统强调色 → **自绘控件**(直接引 AccentFillColorDefaultBrush)马上变,
     // 而 WPF-UI 的**按钮/滑块要等下次换主题**才变。原因 (查 4.3.0 源码):
     //   按钮/滑块引的是**住在主题字典里**的中介刷子 ——
     //     AccentButtonBackground.Color = {DynamicResource AccentFillColorDefault}
@@ -1227,7 +1406,7 @@ static void Run()
 
     Console.WriteLine();
     Console.WriteLine("---- M5.2 主题: 高级页主题下拉 (控件 ↔ 配置 往返) ----");
-    // 轮 33 的教训: 断言了常量数组却没断言控件 → 空下拉漏到用户手里。这里做**往返**断言。
+    // 教训: 断言了常量数组却没断言控件 → 空下拉漏到用户手里。这里做**往返**断言。
     var themeCombo = advPage.FindName("ThemeCombo") as ComboBox;
     int themeComboCount = themeCombo?.Items.Count ?? 0;
     bool themeComboFilled = themeComboCount == AmbientLight.Views.SettingsPageAdvanced.ThemeChoices.Length;
@@ -1323,9 +1502,9 @@ static void Run()
 
     Console.WriteLine();
     Console.WriteLine("---- M5.2 主题: 文字色层级的对比度 (浅色下说明文字不能发虚) ----");
-    // 用户反馈: 浅色模式下说明/次级文字太淡 —— 量化后是 WPF-UI 的 TextFillColorTertiaryBrush
+    // 动机: 浅色模式下说明/次级文字太淡 —— 量化后是 WPF-UI 的 TextFillColorTertiaryBrush
     // 浅色只有 #72000000 (45% 黑), 落在卡片底上对比度 3.33。
-    // 结论 (轮 34 补定稿): **不自造刷子**, 说明文字改用 WPF-UI 的 TextFillColorSecondaryBrush;
+    // 结论: **不自造刷子**, 说明文字改用 WPF-UI 的 TextFillColorSecondaryBrush;
     // 这里断言两条**可计算的不变量**, 都不锁具体色值:
     //   ① 说明文字档 (Secondary) 在两个主题下都 ≥ 4.0;
     //   ② 层级必须单调递减 Primary > Secondary > Tertiary (同一个底上) —— 这条能抓住"两个键被写反"。
@@ -1652,7 +1831,7 @@ static void Run()
 
     // ⑤ 禁用态: 轨道/拇指换成禁用色, **进度填充要在** (只是变成灰的) —— 但填充色必须与**轨道底**
     //    是不同的键! 早先两者都用 `ControlFillColorDisabledBrush` ⇒ 同色叠加, 只有填充那一段亮一档,
-    //    左端留一条暗条 = 用户报的"缺一截" ✗ (这条断言就是钉住那个坑的)
+    //    左端留一条暗条 = "缺一截" ✗ (这条断言就是钉住那个坑的)
     var slDisabled = new Slider { Minimum = 0, Maximum = 100, Value = 50, Width = 200, IsEnabled = false };
     HostSlider(slDisabled);
     var dPart = PartOf(slDisabled);
@@ -1754,7 +1933,7 @@ static void Run()
     Console.WriteLine("---- D1-B: 光带 / 辉光的浅色版 (主题化资源解析) ----");
     // 用户的调参入口有两处: XAML 的 BannerStreak<色系>Brush(Light) 与代码里的 ModeGlowColor(mode, dark)。
     // 这里断三件事: ① 键的约定 (浅色版 = 深色版 + "Light"); ② **资源真能解析**(解析失败是静默的);
-    // ③ 辉光基色与同色系光带**同色相** (轮 27 定稿的"辉光与光带同一套色系"规则)。
+    // ③ 辉光基色与同色系光带**同色相** ("辉光与光带同一套色系"规则)。
     var colorModes = new (int Mode, string Key)[] { (0, "Blue"), (1, "Green"), (11, "Purple"), (2, "Mono") };
     bool namingOk = true;
     foreach (var (m, k) in colorModes)
@@ -1815,8 +1994,8 @@ static void Run()
     }
 
     Console.WriteLine();
-    Console.WriteLine("---- 轮 34 补 5: 设备行端口文案 (显示\"实际会用的口\") ----");
-    // 用户反馈: 高级页给某台手动指定了 COM4 后, 设备行仍显示枚举到的 COM5, 点开启却去连 COM4。
+    Console.WriteLine("---- 设备行端口文案 (显示\"实际会用的口\") ----");
+    // 场景: 高级页给某台手动指定了 COM4 后, 设备行仍显示枚举到的 COM5, 点开启却去连 COM4。
     // 规则: **手动指定优先** (它是"必须用它") > 会话端口 > 枚举端口;
     //       `Warn`(警示色) 只在"配置端口 ≠ 本行枚举端口"时才给 —— 一致时只是普通文字。
     var portCases = new (string? Sess, string? Cfg, string? Enum, string Text, bool Manual, bool Warn, string Desc)[]
@@ -1837,10 +2016,27 @@ static void Run()
                           $"{c.Desc} → \"{text}\" (标记 {manual}/{warn}), 期望 \"{c.Text}\" ({c.Manual}/{c.Warn})");
     }
 
-    // ★ **接线断言** (轮 33 的教训: 断言了常量没断言控件, 于是空下拉漏到用户手里):
+    // ★ **接线断言** (教训: 断言了常量没断言控件, 于是空下拉漏到用户手里):
     //   光验纯函数不够 —— 真正的 bug 是调用点把"配置里的端口"多套了一个 managedHere 条件,
     //   导致**无会话时永远显示枚举端口**。这里真的建一行, 看第二行文字是什么。
-    // 轮 34 补 6 再扩两条: ① 端口不在位时胶囊要是「端口不在位」; ② 警示色真的落到第二行上。
+    // 另两条: ① 端口不在位时胶囊要是「端口不在位」; ② 警示色真的落到第二行上。
+    // 行元素现在是 ContentPresenter (模板渲染) → 逻辑树里看不到模板内容, 改用**宿主 + 视觉树**读文本
+    // (模板应用发生在 Measure; 控件不接窗口也能对它自身 Measure/Arrange)。
+    List<TextBlock> RowTextBlocks(UIElement el)
+    {
+        var host = new ContentControl { Content = el, Width = 700 };
+        host.Measure(new Size(700, 160));
+        host.Arrange(new Rect(0, 0, 700, 160));
+        var list = new List<TextBlock>();
+        void RWalk(DependencyObject d)
+        {
+            if (d is TextBlock t) list.Add(t);
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+                RWalk(VisualTreeHelper.GetChild(d, i));
+        }
+        RWalk(host);
+        return list;
+    }
     const string probeKey = "9_3";                       // 用个不会被选中的 key, 免得影响别的断言
     var cautionBrush = Application.Current.TryFindResource("SystemFillColorCautionBrush") as SolidColorBrush;
     try
@@ -1854,7 +2050,7 @@ static void Run()
         {
             devType = 9, devId = 3, inUse = 0,
         }, sess: null, sessSlot: -1);
-        var texts = LogicalDescendants(devRow).OfType<TextBlock>().Select(t => t.Text).ToArray();
+        var texts = RowTextBlocks(devRow).Select(t => t.Text).ToArray();
         bool wired = texts.Any(t => t.Contains("COM4 (手动指定)"));
         Console.WriteLine((wired ? "OK   " : "FAIL ") +
                           $"设备行(无会话)第二行真的显示了配置端口 = {wired} · 行内文字: " +
@@ -1867,7 +2063,7 @@ static void Run()
             new AmbientLight.Services.DeviceSettings { ComPort = "COM99" };  // 本机不存在的口
         var missRow = home.BuildDeviceRow(new ACDeviceInfo { devType = 9, devId = 3, inUse = 0 },
                                           sess: null, sessSlot: -1);
-        var missTexts = LogicalDescendants(missRow).OfType<TextBlock>().ToList();
+        var missTexts = RowTextBlocks(missRow);
         bool missPill = missTexts.Any(t => t.Text == "端口不在位");
         Console.WriteLine((missPill ? "OK   " : "FAIL ") +
                           $"指定了口但本机没有 → 胶囊「端口不在位」= {missPill} · 行内文字: " +
@@ -1880,7 +2076,7 @@ static void Run()
                           $"端口不在位时第二行用警示色 = {caution} · 实测 {lineColor?.Color} " +
                           $"(期望 {cautionBrush?.Color})");
 
-        // ③ 用户实测的完整场景: 手动指定"在位但不是灯带"的口 → 开启 → 会话连不上 (DEV_LOST,
+        // ③ 完整场景: 手动指定"在位但不是灯带"的口 → 开启 → 会话连不上 (DEV_LOST,
         //    它的 devType/devId/comPort 都还没回填) → 行必须仍然**认出这个会话**并显示「指定端口无应答」,
         //    而且类型/编号要退回用枚举的值 (不能因为会话是 -1 就显示"未知 · 读取中")。
         AmbientLight.Services.ConfigStore.Devices[probeKey] =
@@ -1888,8 +2084,7 @@ static void Run()
         var lostSess = new ACStatus { devType = -1, devId = -1, state = AmbientCore.StateDevLost };
         var lostRow = home.BuildDeviceRow(new ACDeviceInfo { devType = 9, devId = 3, inUse = 0 },
                                           lostSess, sessSlot: 0);
-        var lostTexts = LogicalDescendants(lostRow).OfType<TextBlock>()
-            .Select(t => t.Text).Where(s => s.Length > 0).ToArray();
+        var lostTexts = RowTextBlocks(lostRow).Select(t => t.Text).Where(s => s.Length > 0).ToArray();
         bool lostPill = lostTexts.Contains("指定端口无应答");
         Console.WriteLine((lostPill ? "OK   " : "FAIL ") +
                           $"连不上的会话仍被行认出来 → 胶囊「指定端口无应答」= {lostPill} · " +
@@ -1903,9 +2098,29 @@ static void Run()
         AmbientLight.Services.ConfigStore.Devices.Remove(probeKey);
     }
 
+    // 供电口径 (banner 端口行与设备行共用 PowerText, 2026-10-10 统一):
+    // 只有 Running + bit0=1 才显示「供电 正常」; 其余一律不显示 (0 分不清真异常/还没读到)。
+    // 同时兜"缺键" —— 显示出来的必须是字典值, 不能是 key 本身。
+    var powerCases = new (int State, long Byte, bool Expect)[]
+    {
+        (AmbientCore.StateRunning, 1, true),
+        (AmbientCore.StateRunning, 0, false),
+        (AmbientCore.StateStarting, 1, false),
+        (AmbientCore.StateWaitDisp, 1, false),
+        (AmbientCore.StateDevLost, 1, false),
+        (AmbientCore.StateStopped, 1, false),
+    };
+    int powerOk = powerCases.Count(c =>
+    {
+        string got = AmbientLight.Views.HomePage.PowerText(c.State, c.Byte);
+        return c.Expect ? got.Length > 0 && got != "Dev.Power.Normal" : got.Length == 0;
+    });
+    Console.WriteLine((powerOk == powerCases.Length ? "OK   " : "FAIL ") +
+                      $"供电口径 (仅 Running+bit0=1 显示「供电 正常」) = {powerOk}/{powerCases.Length}");
+
     Console.WriteLine();
-    Console.WriteLine("---- 轮 34 补 4: 总开关按钮的放开条件 (纯函数真值表) ----");
-    // 用户要求: 关闭后**收尾没完**不许点开启 (native StopEx 的 join 可能还在跑 1~5s);
+    Console.WriteLine("---- 总开关按钮的放开条件 (纯函数真值表) ----");
+    // 口径: 关闭后**收尾没完**不许点开启 (native StopEx 的 join 可能还在跑 1~5s);
     // 判据 = 不在处理本次点击 && 没有启动任务在飞 && 队列里没有未完成的生命周期调用。
     var toggleCases = new (bool Toggling, bool Starting, bool Busy, bool Expect, string Desc)[]
     {
@@ -1923,8 +2138,8 @@ static void Run()
     }
 
     Console.WriteLine();
-    Console.WriteLine("---- 轮 34 补 4: 布局预览中心提示的空行 (校准窗只显示标题时不该多一行) ----");
-    // 用户反馈: 校准窗里中心只有「LED 预览」一行, 底衬却按两行给高度。
+    Console.WriteLine("---- 布局预览中心提示的空行 (校准窗只显示标题时不该多一行) ----");
+    // 问题: 校准窗里中心只有「LED 预览」一行时, 底衬却按两行给高度。
     var ring = new AmbientLight.Controls.LedRingView();
     var hint = ring.FindName("HintText") as TextBlock;
     bool hintHiddenByDefault = hint is not null && hint.Visibility == Visibility.Collapsed;

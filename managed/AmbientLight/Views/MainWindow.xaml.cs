@@ -12,7 +12,7 @@ public partial class MainWindow : FluentWindow
 
     public bool AllowClose { get => _allowClose; set => _allowClose = value; }
 
-    // ---- 自适应折叠左侧菜单 (轮 20; WPF UI 4.3.0 的 PaneDisplayMode 只有
+    // ---- 自适应折叠左侧菜单 (WPF UI 4.3.0 的 PaneDisplayMode 只有
     //      Left/LeftMinimal/LeftFluent/Top/Bottom, **没有 Auto**, 所以宽度自适应得自己写) ----
     // 规则: 窗口宽度**跨过**阈值时 —— 变窄则自动折叠 (仅当当前是展开的), 变宽则恢复;
     // **恢复只对"我们自动折的那一次"生效**, 用户自己折起来的菜单永不被自动展开。
@@ -39,7 +39,7 @@ public partial class MainWindow : FluentWindow
             // Mica 半透明**不在这里做**: 由 MainWindow.xaml 的 WindowBackdropType="Mica" 触发
             // FluentWindow.OnSourceInitialized → OnBackdropTypeChanged 的官方序列
             // (SetWindowChrome → RemoveBackground → ApplyBackdrop → RemoveTitlebarBackground)。
-            // 轮 25 之前手搓那套缺前两步/时机也不对, 所以一直不生效 (PROJECT_PLAN §8.2 有完整根因)。
+            // 手搓那套缺前两步/时机也不对, 所以不生效 (PROJECT_PLAN §8.2 有完整根因)。
             // 不支持 Mica 的环境由 WPF-UI 自己兜底 (IsSupported 为假时不应用 backdrop) ——
             // 极端情况下窗口会退回不透明, 不会花屏; 浅色主题可读性走 5.2 主题轮。
         };

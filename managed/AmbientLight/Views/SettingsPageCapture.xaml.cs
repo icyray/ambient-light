@@ -3,6 +3,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using AmbientLight.Interop;
+using AmbientLight.Localization;
 using AmbientLight.Services;
 
 namespace AmbientLight.Views;
@@ -66,7 +67,7 @@ public partial class SettingsPageCapture : Page
     {
         bool on = ChaseSmoothToggle.IsChecked == true;
         // 首次打开 (两个单选都未选) 时默认落到"抑制闪光" —— 否则会出现"界面看不出选了哪个、
-        // 但配置已经生效"的状态 (用户实测反馈) ✓
+        // 但配置已经生效"的状态 ✓
         if (ChaseModeGuardRadio.IsChecked != true && ChaseModeBothRadio.IsChecked != true)
             ChaseModeGuardRadio.IsChecked = true;
         ChaseModeGuardRadio.IsEnabled = ChaseModeBothRadio.IsEnabled = on;   // 关着总开关时不可选
@@ -82,12 +83,12 @@ public partial class SettingsPageCapture : Page
         try
         {
             var mons = AmbientCore.GetMonitors();
-            // 文案 (轮 28 用户定稿, 轮 29 微调分隔符): `序号. 分辨率 - 适配器 - 主屏`
+            // 文案: `序号. 分辨率 - 适配器 - 主屏`
             // 不再出现 `[0]` 与 `\\.\DISPLAY5` 这种不友好的名字; 序号从 1 起, 与主页编号徽标一致。
             MonitorCombo.ItemsSource = mons
                 .Select((m, i) => new MonitorItem(i,
-                    $"{i + 1}. {m.width}×{m.height} - {m.Adapter}" +
-                    (m.primary != 0 ? " - 主屏" : "")))
+                    Loc.F("Cap.Monitor.Item", i + 1, m.width, m.height, m.Adapter) +
+                    (m.primary != 0 ? " - " + Loc.T("Cap.Monitor.PrimaryMark") : "")))
                 .ToList();
             if (mons.Length > 0)
                 MonitorCombo.SelectedIndex = Math.Clamp(select, 0, mons.Length - 1);
@@ -97,7 +98,7 @@ public partial class SettingsPageCapture : Page
         catch
         {
             MonitorCombo.ItemsSource = new List<MonitorItem>
-                { new(0, "显示器枚举失败 (核心未加载?)" ) };
+                { new(0, Loc.T("Cap.Monitor.EnumFailed")) };
         }
     }
 
@@ -108,7 +109,7 @@ public partial class SettingsPageCapture : Page
         _loading = false;
     }
 
-    /// <summary>全屏校准向导 (轮 28 从「高级」页移来, 就在灯序偏移下面 —— 这是它的使用场景)。</summary>
+    /// <summary>全屏校准向导 (从「高级」页移来, 就在灯序偏移下面 —— 这是它的使用场景)。</summary>
     private void OnCalibrate(object sender, RoutedEventArgs e) => CalibrateWindow.TryOpen();
 
     private void OnMonitorChanged(object sender, SelectionChangedEventArgs e)
@@ -139,8 +140,8 @@ public partial class SettingsPageCapture : Page
         RotateBox.Value = Math.Clamp(ConfigStore.Device.LedRotate, -maxRot, maxRot);
         RotateBox.IsEnabled = maxRot > 0;
         RotateRow.Description = maxRot > 0
-            ? $"校正灯带物理起点与协议起点的少量错位 (±{maxRot}); 全屏校准向导里可直接试出正确值"
-            : "灯数少于 10 时无需灯序偏移";
+            ? Loc.F("Cap.Rotate.Desc", maxRot)
+            : Loc.T("Cap.Rotate.NoNeed");
     }
 
     private void OnRotateChanged(object sender, RoutedEventArgs e)
