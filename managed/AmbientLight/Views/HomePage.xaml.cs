@@ -67,6 +67,10 @@ public partial class HomePage : Page
     private const int GlowEaseMs = 130;         // 常规跟踪 (跟随数值变化, 要跟得紧)
     private const int GlowBreathPeriodMs = 5000;   // 固件特效的呼吸周期
     private const double GlowBreathMin = 0.3, GlowBreathAmp = 0.8;
+    /// <summary>未知模式 (表外号) 的辉光: 恒定中性微光, **不呼吸** —— 呼吸在既有语义里绑定
+    /// "固件在渲染", 未知时不该假装。取呼吸曲线的时间平均 (Min + Amp/2), 这样从固件特效切过去
+    /// 不会突然跳一下。</summary>
+    private const double GlowSteadyLevel = GlowBreathMin + GlowBreathAmp * 0.5;
     private static readonly double[] GlowBellAlphas =
         [0, 0.05, 0.16, 0.34, 0.58, 1.0, 0.58, 0.34, 0.16, 0.05, 0];
     private DispatcherTimer? _glowTimer;
@@ -78,10 +82,10 @@ public partial class HomePage : Page
     private ACStatus _lastStatus;               // 最近一次状态轮询快照 (无会话时辉光用它兜底)
 
     /// <summary>亮度参数对这个模式有意义吗 —— **纯函数** (探针打真值表)。
-    /// MCU 特效的帧由**固件**渲染, 主机只发命令 → 亮度对我们没有落点 → UI 要禁用亮度滑块
-    /// (用户 2026-10-08 提的: 免得用户以为那能调)。追光/拾音/纯色都可用
-    /// (拾音时它是"最高亮度上限", 乘在音量包络上)。</summary>
-    public static bool BrightnessEnabled(int mode) => !AmbientCore.IsMcuMode(mode);
+    /// 语义由 `ModeCatalog` 表里的 `Bright` 列给: `Multiply` 直接乘 / `Cap` 作为上限 /
+    /// `None` 没有落点 (固件特效、以及我们不认识的模式) → UI 禁用滑块。
+    /// (用户 2026-10-08 提的: 免得用户以为那能调)</summary>
+    public static bool BrightnessEnabled(int mode) => ModeCatalog.Of(mode).Bright != BrightKind.None;
 
     public HomePage()
     {
@@ -257,16 +261,17 @@ public partial class HomePage : Page
         foreach (var (index, ctl) in _modeBtns)
             if (ctl is System.Windows.Controls.RadioButton rb) rb.IsChecked = index == cur;
         _updatingMode = false;
-        bool solid = cur == 11;
+        var modeDef = ModeCatalog.Of(cur);
+        bool solid = modeDef.Ui == UiSection.SolidPicker;
         // 纯色拾色器每次展示时回到**折叠**态 (只露 Header: HEX 输入 + 色块预览);
         // 预设色板/H/S 滑块由用户点标题条自行展开
         if (solid) SolidCard.IsExpanded = false;
-        FxExpander.IsExpanded = AmbientCore.IsMcuMode(cur);   // 正用固件特效时保持展开
+        bool fxTile = modeDef.Ui == UiSection.FirmwareFx;
+        FxExpander.IsExpanded = fxTile;                       // 正用固件特效时保持展开
         AnimatedVisibility.SetExpanded(SolidCard, solid);     // 纯色拾色器仅纯色灯光模式显示
         // §2 折叠头右侧的「当前 XX」胶囊: 收起状态也能一眼看到正在用哪款特效
-        bool mcu = AmbientCore.IsMcuMode(cur);
-        FxCurrentPill.Visibility = mcu ? Visibility.Visible : Visibility.Collapsed;
-        if (mcu) FxCurrentText.Text = Loc.F("Home.Fx.Current", ModeCatalog.Name(cur));
+        FxCurrentPill.Visibility = fxTile ? Visibility.Visible : Visibility.Collapsed;
+        if (fxTile) FxCurrentText.Text = Loc.F("Home.Fx.Current", ModeCatalog.Name(cur));
     }
 
     private void SetMode(int mode)
@@ -332,15 +337,20 @@ public partial class HomePage : Page
         // MCU 模式下禁用亮度滑块 + 改说明。禁用**视觉**由本地滑块皮肤提供
         // (Styles/SliderStyle.xaml 的 IsEnabled=False 触发器 —— 上游 4.3.0 的模板没有这一档,
         //  以前只能用整行 Opacity 硬压, 现已撤掉 ✓)
+        // 亮度滑块能不能点 + 那一行说明, 都由**亮度语义**决定 (BrightKind)。
+        // "不可调"有两种原因 (固件渲染 / 我们还不认识这个模式) → 说明文案要分开写, 别让未知模式顶着
+        // "固件特效由灯带渲染"的解释。
         bool brightOk = BrightnessEnabled(mode);
         if (BrightnessRow.IsEnabled != brightOk)
         {
             BrightnessRow.IsEnabled = brightOk;
         }
-        BrightnessRow.Description = mode switch
+        var modeDef = ModeCatalog.Of(mode);
+        BrightnessRow.Description = modeDef.Bright switch
         {
-            1 => Loc.T("Home.Brightness.Audio"),
-            _ when AmbientCore.IsMcuMode(mode) => Loc.T("Home.Brightness.McuHint"),
+            BrightKind.Cap => Loc.T("Home.Brightness.Audio"),
+            BrightKind.None => Loc.T(modeDef.Frame == FrameKind.Unknown
+                                     ? "Home.Brightness.UnknownHint" : "Home.Brightness.McuHint"),
             _ => Loc.T("Home.Brightness.Desc"),
         };
 
@@ -390,7 +400,13 @@ public partial class HomePage : Page
         UpdateGlow(st);
         UpdateRing(st);
 
+        // 未知模式 (表外号) 先说清楚 —— 它**可行动** (切走就好), 而且此时亮度被禁用、指标只剩 wire/leds,
+        // 不解释一句用户会以为软件坏了。放在提示条最前面。
+        bool modeUnknown = !ModeCatalog.IsKnown(mode);
+
         var warns = new List<string>();
+        if (modeUnknown)
+            warns.Add(Loc.F("Home.Warn.UnknownMode", mode));
         if (st.monitorFallback == 1)
             warns.Add(Loc.T("Home.Warn.MonitorFallback"));
         if (st.allBlackFrames > 30)
@@ -401,7 +417,8 @@ public partial class HomePage : Page
         bool showWarn = blocked || warns.Count > 0;
         if (showWarn)
         {
-            WarnBar.Title = Loc.T(blocked ? "Home.Warn.Blocked" : "Home.Warn.Title");
+            WarnBar.Title = Loc.T(blocked ? "Home.Warn.Blocked"
+                                : modeUnknown ? "Home.Warn.Mode.Title" : "Home.Warn.Title");
             WarnBar.Message = blocked ? _block!.Value.Detail : string.Join("\n", warns);
         }
         WarnBar.IsOpen = showWarn;

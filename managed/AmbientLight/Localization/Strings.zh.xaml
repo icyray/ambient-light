@@ -51,6 +51,8 @@
     <sys:String x:Key="Mode.Desc.1">跟随音乐律动</sys:String>
     <sys:String x:Key="Mode.Desc.11">灯带单色显示</sys:String>
     <sys:String x:Key="Mode.Desc.Mcu">固件端自带特效</sys:String>
+    <!-- 表外模式号 (固件报了一个此版本还不认识的模式): 副标题必须说实话, 不能自称"固件端自带特效" -->
+    <sys:String x:Key="Mode.Desc.Unknown">此版本未识别的模式</sys:String>
 
     <!-- ===== 灯环 (布局预览 / 校准) ===== -->
     <sys:String x:Key="Ring.Side.Top">顶</sys:String>
@@ -117,12 +119,17 @@
     <sys:String x:Key="Home.Brightness.Desc">可对灯带的亮度进行调节</sys:String>
     <sys:String x:Key="Home.Brightness.Audio">拾音律动模式下为最高亮度上限</sys:String>
     <sys:String x:Key="Home.Brightness.McuHint">固件特效由灯带渲染，亮度不可调</sys:String>
+    <!-- "不可调"的另一种原因: 我们不认识这个模式 (与 McuHint 分开, 别让未知模式顶着固件特效的解释) -->
+    <sys:String x:Key="Home.Brightness.UnknownHint">当前模式未被识别，亮度设置可能无效</sys:String>
     <sys:String x:Key="Home.Fx.Current">当前 {0}</sys:String>
     <sys:String x:Key="Home.Toggle.Close">关闭</sys:String>
     <sys:String x:Key="Home.Toggle.Closing">关闭中…</sys:String>
     <sys:String x:Key="Home.Toggle.Open">开启</sys:String>
     <sys:String x:Key="Home.Port.None">未连接设备</sys:String>
     <sys:String x:Key="Home.Warn.Title">画面提示</sys:String>
+    <!-- 未知模式提示 (可行动: 切走就好) —— 用「模式提示」做标题, 别混进"画面"那类 -->
+    <sys:String x:Key="Home.Warn.Mode.Title">模式提示</sys:String>
+    <sys:String x:Key="Home.Warn.UnknownMode">灯带报了模式 {0}，此版本还不认识它；切换到其它模式即可恢复</sys:String>
     <sys:String x:Key="Home.Warn.Blocked">无法开启灯带</sys:String>
     <sys:String x:Key="Home.Warn.MonitorFallback">配置的显示器不可用，已回退主屏</sys:String>
     <sys:String x:Key="Home.Warn.AllBlack">连续 {0} 帧全黑，程序可能运行在独占全屏模式，画面可能不准</sys:String>

@@ -44,13 +44,11 @@ public static unsafe partial class AmbientCore
     public const int MaxLeds = 180;                 // 固件定长帧上限
     public const int MaxAudioDevs = 16;             // 音频端点枚举上限
 
-    // ---- 模式判定 (模式号 = 固件协议; 显示名/说明见 Views/ModeCatalog + Localization) ----
-
-    /// <summary>MCU 特效模式 (3B 命令透传, 特效由固件渲染)</summary>
-    public static bool IsMcuMode(int m) => (m >= 2 && m <= 10) || m == 12 || m == 13;
-
-    /// <summary>主机渲染灯帧的模式 (ACStatus.ledRgb 有实时数据)</summary>
-    public static bool IsHostFrameMode(int m) => m == 0 || m == 11;
+    // ---- 模式判定: **不在本层** ----
+    // 模式号是固件协议, 但"哪些号是固件特效 / 哪些号主机发帧"是**我们的业务事实** ——
+    // 已收进 `Views/ModeCatalog.Modes` 一张表 (那里还有亮度语义/UI 分区/指标集)。
+    // 以前这里有两个算术闭集 (IsMcuMode / IsHostFrameMode), 加一款特效时不会报错 →
+    // 静默把新模式当主机发帧 (亮度可拖但没用…)。别再在这里加模式判定。
 
     // ---- 原生导出 ----
     [LibraryImport(Lib)]

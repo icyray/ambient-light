@@ -72,12 +72,14 @@ public partial class HomePage : Page
             AnimateGlowColor(ModeGlowColor(mode, ThemeService.IsDark), _glowApplied);
         }
 
-        double level = mode switch
+        // 辉光数值 = f(颜色从哪来) —— FrameKind 表里那一列:
+        //   HostFrame → 亮着的灯占比 / Scalar → 音量 / Firmware → 呼吸 / Unknown → 恒定微光
+        double level = ModeCatalog.Of(mode).Frame switch
         {
-            0 => TraceLitLevel(st, dev.LedCount),      // 追光: 亮着的灯占比
-            1 => st.audioLevel / 255.0,                // 拾音: 音量
-            11 => Math.Clamp(dev.Brightness, 0, 1),    // 纯色: 亮度
-            _ => BreathLevel(),                        // 固件特效: 呼吸 (不受亮度控制)
+            FrameKind.HostFrame => TraceLitLevel(st, dev.LedCount),   // 追光/纯色: 亮着的灯占比
+            FrameKind.Scalar => st.audioLevel / 255.0,                // 拾音: 音量
+            FrameKind.Firmware => BreathLevel(),                      // 固件特效: 呼吸 (不受亮度控制)
+            _ => GlowSteadyLevel,                                     // 未知模式: 不假装
         };
         AnimateGlow(level, modeChanged);
         _glowApplied = true;
@@ -364,14 +366,10 @@ public partial class HomePage : Page
         _ => "Banner.State.Stopped",
     });
 
-    /// <summary>模式 → 光带色系 (追光=蓝 / 拾音=绿 / 纯色=紫 / 固件特效=中性白灰)。
-    /// MCU 模式不参与取色也不律动, 故用白灰而不是琥珀 (琥珀留给"等待/警告"的状态色)</summary>
-    private static string ModeColorKey(int mode) => mode switch
-    {
-        0 => "Blue",
-        1 => "Green",
-        11 => "Purple",
-        _ => "Mono",
-    };
+    /// <summary>模式 → 光带色系。**色系现在写在 `ModeCatalog.Modes` 的 GlowTint 列里**,
+    /// 没写的按"颜色从哪来"取默认 (追光蓝 / 标量绿 / 中性白灰)。
+    /// ⚠️ 纯色(11) 的"亮度"驱动量不是这里管的 —— 见 UpdateGlow 的 Frame 分派。
+    /// MCU 模式不参与取色也不律动, 故用白灰而不是琥珀 (琥珀留给"等待/警告"的状态色)。</summary>
+    private static string ModeColorKey(int mode) => ModeCatalog.GlowTintOf(mode);
 
 }

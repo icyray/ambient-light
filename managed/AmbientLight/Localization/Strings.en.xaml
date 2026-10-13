@@ -54,6 +54,7 @@
     <sys:String x:Key="Mode.Desc.1">Pulsing to the music</sys:String>
     <sys:String x:Key="Mode.Desc.11">Solid single color</sys:String>
     <sys:String x:Key="Mode.Desc.Mcu">Built into the light strip firmware</sys:String>
+    <sys:String x:Key="Mode.Desc.Unknown">Mode not recognized by this version</sys:String>
 
     <!-- ===== LED ring (layout preview / calibration) ===== -->
     <sys:String x:Key="Ring.Side.Top">Top</sys:String>
@@ -120,12 +121,15 @@
     <sys:String x:Key="Home.Brightness.Desc">Adjust the brightness of the light strip</sys:String>
     <sys:String x:Key="Home.Brightness.Audio">Acts as the maximum brightness in Music mode</sys:String>
     <sys:String x:Key="Home.Brightness.McuHint">Firmware effects are rendered on the strip, so brightness is not adjustable</sys:String>
+    <sys:String x:Key="Home.Brightness.UnknownHint">This mode is not recognized; brightness may have no effect</sys:String>
     <sys:String x:Key="Home.Fx.Current">Current {0}</sys:String>
     <sys:String x:Key="Home.Toggle.Close">Turn off</sys:String>
     <sys:String x:Key="Home.Toggle.Closing">Turning off…</sys:String>
     <sys:String x:Key="Home.Toggle.Open">Turn on</sys:String>
     <sys:String x:Key="Home.Port.None">No device connected</sys:String>
     <sys:String x:Key="Home.Warn.Title">Display notice</sys:String>
+    <sys:String x:Key="Home.Warn.Mode.Title">Mode notice</sys:String>
+    <sys:String x:Key="Home.Warn.UnknownMode">The strip reported mode {0}, which this version does not recognize; switch to another mode to recover</sys:String>
     <sys:String x:Key="Home.Warn.Blocked">Cannot turn on the light strip</sys:String>
     <sys:String x:Key="Home.Warn.MonitorFallback">The configured monitor is unavailable, fell back to the primary display</sys:String>
     <sys:String x:Key="Home.Warn.AllBlack">{0} consecutive black frames; the app may be running in exclusive fullscreen, so colors may be off</sys:String>

@@ -646,12 +646,26 @@ static void Run()
     var fxPanel = home.FindName("FxPanel") as Panel;   // 磁贴已改为 XAML 静态子元素 (WrapPanel)
     var fxTpl = home.TryFindResource("FxTileTemplate");
     var fxTiles = fxPanel?.Children.OfType<System.Windows.Controls.RadioButton>().ToList() ?? [];
-    // 磁贴数必须等于**MCU 模式数** (数据驱动), 不写死 11 —— 加一款特效不该让探针报警
-    int mcuCount = AmbientLight.Views.ModeCatalog.All.Count(AmbientCore.IsMcuMode);
+    // 磁贴数必须等于**表里 Ui=FirmwareFx 的模式数** (数据驱动), 不写死 11 —— 加一款特效不该让探针报警
+    var fxIds = AmbientLight.Views.ModeCatalog.Modes
+        .Where(m => m.Ui == AmbientLight.Views.UiSection.FirmwareFx)
+        .Select(m => m.Id).OrderBy(v => v).ToList();
+    int mcuCount = fxIds.Count;
     bool tilesOk = fxTpl is ControlTemplate && fxPanel is not null && fxTiles.Count == mcuCount
                    && fxTiles.All(t => ReferenceEquals(t.Template, fxTpl));
     Console.WriteLine((tilesOk ? "OK   " : "FAIL ") +
-                      $"磁贴 {fxTiles.Count} 个 == MCU 模式数 {mcuCount}, 全部使用 FxTileTemplate = {tilesOk}");
+                      $"磁贴 {fxTiles.Count} 个 == 表里 Ui=FirmwareFx 的模式数 {mcuCount}, 全部使用 FxTileTemplate = {tilesOk}");
+    // ★ 双向对账: XAML 磁贴的 Tag 集合 ⇄ 表里 Ui=FirmwareFx 的 id 集合 —— 这是"加了模式忘加磁贴"
+    // 与"删了模式忘删磁贴"两个方向的守门 (单向计数在两头都改时照样通过)。
+    var tileIds = fxTiles.Select(t => t.Tag as string ?? "")
+                         .Select(s => int.TryParse(s, out var v) ? v : -1).OrderBy(v => v).ToList();
+    bool tilesMatch = tileIds.SequenceEqual(fxIds);
+    var tileMissing = fxIds.Except(tileIds).ToList();
+    var tileOrphan = tileIds.Except(fxIds).ToList();
+    Console.WriteLine((tilesMatch ? "OK   " : "FAIL ") +
+                      $"磁贴 Tag 集合 ⇄ 表(FirmwareFx) 双向一致 = {tilesMatch}" +
+                      (tileMissing.Count > 0 ? $" 表里有磁贴缺: {string.Join(",", tileMissing)}" : "") +
+                      (tileOrphan.Count > 0 ? $" 磁贴无表行: {string.Join(",", tileOrphan)}" : ""));
     int tilesWithIcon = fxTiles.Count(t => t.Content is Panel p
         && p.Children.OfType<Wpf.Ui.Controls.SymbolIcon>().Any());
     Console.WriteLine((tilesWithIcon == fxTiles.Count ? "OK   " : "FAIL ") +
@@ -659,8 +673,7 @@ static void Run()
     // 磁贴里显示的必须是模式名 (数据驱动), 不是我自己编的文案
     var tileNames = fxTiles.Select(t => t.Content is Panel p
         ? string.Concat(p.Children.OfType<TextBlock>().Select(x => x.Text)) : "").ToList();
-    var expectNames = AmbientLight.Views.ModeCatalog.All.Where(AmbientCore.IsMcuMode)
-                                   .Select(AmbientLight.Views.ModeCatalog.Name).ToList();
+    var expectNames = fxIds.Select(AmbientLight.Views.ModeCatalog.Name).ToList();
     bool namesOk = tileNames.SequenceEqual(expectNames);
     Console.WriteLine((namesOk ? "OK   " : "FAIL ") +
                       $"磁贴文案 == 模式表里的名字 = {namesOk}" +
@@ -2139,15 +2152,96 @@ static void Run()
 
 
     Console.WriteLine();
+    Console.WriteLine("---- 模式表 (唯一事实源: ModeCatalog.Modes) ----");
+    // 动机: 以前"哪些号是固件特效 / 哪些号主机发帧"是 **6 处分散的算术闭集 + switch**,
+    // 加一款固件特效**没有一处在编译期报错** → 静默把新模式当主机发帧 (亮度可拖但没用、指标错、
+    // 胶囊不显示、副标题自称"固件端自带特效")。现在判定/UI/指标全从一张表派生, 下面逐条守住它。
+    {
+        var modes = AmbientLight.Views.ModeCatalog.Modes;
+        // 表外号 = "未知模式"探测器。**跟着表算**, 不写死 14 —— 否则哪天表里真加了 14, 这几条断言会误报
+        // (我自己就踩了一次: 正是"范围写死"那个病的小号版本)。
+        int UnknownProbeId = modes.Select(m => m.Id).Max() + 1;
+        bool rowOk = modes.Length > 0
+            && modes.Select(m => m.Id).Distinct().Count() == modes.Length
+            && modes.All(m => m.MetricKeys.Length > 0)
+            && modes.All(m => m.Ui != AmbientLight.Views.UiSection.FirmwareFx
+                              || m.Frame == AmbientLight.Views.FrameKind.Firmware)
+            // 非固件行必须自带副标题 (否则新的主机模式会顶着"固件端自带特效")
+            && modes.All(m => m.Frame == AmbientLight.Views.FrameKind.Firmware || m.DescKey.Length > 0);
+        Console.WriteLine((rowOk ? "OK   " : "FAIL ") +
+                          $"表 {modes.Length} 行自洽 (Id 唯一 / 指标非空 / 磁贴行=固件 / 非固件行自带副标题) = {rowOk}");
+        bool allDerived = AmbientLight.Views.ModeCatalog.All.SequenceEqual(modes.Select(m => m.Id));
+        Console.WriteLine((allDerived ? "OK   " : "FAIL ") + $"All 由表派生 (全工程不再有第二份模式清单) = {allDerived}");
+
+        // 文案: 每个 Id 都要有 Mode.Name.<Id>; 磁贴行还要有 Home.Fx.Tip.<Id>; 兜底行的指标键也要有文案。
+        // (只查一本: 各字典键集逐键一致已有断言 —— 一本有就是本本有。)
+        var modeDict = Application.Current.Resources.MergedDictionaries.FirstOrDefault(d =>
+            (d.Source?.ToString() ?? "").Contains("Localization", StringComparison.OrdinalIgnoreCase));
+        var dictKeys = modeDict?.Keys.Cast<object>().Select(o => o?.ToString() ?? "").ToHashSet() ?? [];
+        var missingWording = new List<string>();
+        foreach (var m in modes)
+        {
+            if (!dictKeys.Contains($"Mode.Name.{m.Id}")) missingWording.Add($"Mode.Name.{m.Id}");
+            if (m.Ui == AmbientLight.Views.UiSection.FirmwareFx && !dictKeys.Contains($"Home.Fx.Tip.{m.Id}"))
+                missingWording.Add($"Home.Fx.Tip.{m.Id}");
+            foreach (var k in m.MetricKeys)
+                if (!dictKeys.Contains("Metric." + k)) missingWording.Add($"Metric.{k}");
+            if (m.DescKey.Length > 0 && !dictKeys.Contains(m.DescKey)) missingWording.Add(m.DescKey);
+        }
+        foreach (var k in AmbientLight.Views.ModeCatalog.Unknown.MetricKeys)
+            if (!dictKeys.Contains("Metric." + k)) missingWording.Add($"Metric.{k}");
+        Console.WriteLine((missingWording.Count == 0 ? "OK   " : "FAIL ") +
+                          $"表的每个 Id/指标/副标题都有文案键 = {missingWording.Count == 0}" +
+                          (missingWording.Count > 0 ? $" 缺: {string.Join(", ", missingWording.Distinct())}" : ""));
+
+        // 投影真值表: 每行的**可观察行为**必须等于它自己那几列 (不再从别处推断)
+        var projBad = new List<string>();
+        foreach (var m in modes)
+        {
+            if (AmbientLight.Views.HomePage.BrightnessEnabled(m.Id) != (m.Bright != AmbientLight.Views.BrightKind.None))
+                projBad.Add($"#{m.Id} 亮度可用 != Bright 列");
+            if (!AmbientLight.Views.HomePage.MetricKeysForMode(m.Id, true).SequenceEqual(m.MetricKeys))
+                projBad.Add($"#{m.Id} 指标 != 表列");
+            string tint = AmbientLight.Views.ModeCatalog.GlowTintOf(m.Id);
+            if (tint.Length == 0
+                || home.TryFindResource($"BannerStreak{tint}Brush") is not System.Windows.Media.Brush)
+                projBad.Add($"#{m.Id} 色系「{tint}」解析不到");
+        }
+        Console.WriteLine((projBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"投影真值表: 每行 {modes.Length} 个投影 (亮度/指标/色系) 与表列一致 = {projBad.Count == 0}" +
+                          (projBad.Count > 0 ? $" 坏例: {string.Join("; ", projBad)}" : ""));
+
+        // ★ 表外号 = 显式"未知模式"降级 (不撒谎: 亮度禁用 / 指标只留真实项 / 不画逐灯 / 副标题说实话)
+        bool unknownOk =
+            !AmbientLight.Views.ModeCatalog.IsKnown(UnknownProbeId)
+            && ReferenceEquals(AmbientLight.Views.ModeCatalog.Of(UnknownProbeId), AmbientLight.Views.ModeCatalog.Unknown)
+            && ReferenceEquals(AmbientLight.Views.ModeCatalog.Of(99), AmbientLight.Views.ModeCatalog.Unknown)
+            && !AmbientLight.Views.HomePage.BrightnessEnabled(UnknownProbeId)
+            && AmbientLight.Views.HomePage.MetricKeysForMode(UnknownProbeId, true).SequenceEqual(["wire", "leds"])
+            && AmbientLight.Views.ModeCatalog.Of(UnknownProbeId).Frame != AmbientLight.Views.FrameKind.HostFrame
+            && AmbientLight.Views.ModeCatalog.Of(UnknownProbeId).Ui == AmbientLight.Views.UiSection.Standard
+            && AmbientLight.Views.ModeCatalog.Name(UnknownProbeId)
+               == AmbientLight.Localization.Loc.F("Mode.Unknown", UnknownProbeId)
+            && AmbientLight.Views.ModeCatalog.Desc(UnknownProbeId)
+               == AmbientLight.Localization.Loc.T("Mode.Desc.Unknown")
+            && AmbientLight.Views.ModeCatalog.GlowTintOf(UnknownProbeId) == "Mono";
+        Console.WriteLine((unknownOk ? "OK   " : "FAIL ") +
+                          $"表外模式号 {UnknownProbeId} 走显式降级 (亮度禁用/指标 wire+leds/非主机帧/副标题说实话) = {unknownOk}");
+        // 兜底行不参与"可选模式", 所以它不该出现在 All 里 (否则主页会为它造 UI)
+        bool unknownNotListed = !AmbientLight.Views.ModeCatalog.All.Contains(-1);
+        Console.WriteLine((unknownNotListed ? "OK   " : "FAIL ") + $"兜底行不在可选清单 All 里 = {unknownNotListed}");
+    }
+
+    Console.WriteLine();
     Console.WriteLine("---- v1.6: MCU 模式下禁用亮度 + 追光两开关的配置往返 ----");
-    // ① 亮度可用性 (纯函数): MCU 特效由固件渲染, 亮度无落点 → UI 必须禁用滑块
-    bool brightTable = AmbientLight.Views.HomePage.BrightnessEnabled(0)      // 追光 ✓
-                       && AmbientLight.Views.HomePage.BrightnessEnabled(1)   // 拾音 ✓ (它是最高亮度上限)
-                       && AmbientLight.Views.HomePage.BrightnessEnabled(11)  // 纯色 ✓
-                       && !new[] { 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13 }     // MCU 全系 ✗
-                              .Any(m => AmbientLight.Views.HomePage.BrightnessEnabled(m));
+    // ① 亮度可用性 (纯函数): 由表里的 Bright 列决定 (固件特效/未知模式 = 无落点 → UI 禁用滑块)
+    var modesForBright = AmbientLight.Views.ModeCatalog.Modes;
+    bool brightTable = modesForBright.Where(m => m.Bright != AmbientLight.Views.BrightKind.None)
+                                     .All(m => AmbientLight.Views.HomePage.BrightnessEnabled(m.Id))
+                       && modesForBright.Where(m => m.Bright == AmbientLight.Views.BrightKind.None)
+                                        .All(m => !AmbientLight.Views.HomePage.BrightnessEnabled(m.Id));
     Console.WriteLine((brightTable ? "OK   " : "FAIL ") +
-                      $"亮度可用性真值表 (追光/拾音/纯色 可用 · MCU 全系禁用) = {brightTable}");
+                      $"亮度可用性真值表 (按表里 Bright 列逐行) = {brightTable}");
 
     // ② 柔化平滑**档位** (0=关 / 1=抑制闪光 / 2=抑制闪光+时域柔和) 的配置往返
     bool roundTrip = true;

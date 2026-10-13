@@ -17,19 +17,14 @@ namespace AmbientLight.Views;
 public partial class HomePage : Page
 {
     // ---- §5 运行指标 (双层: 标签在上 / 数值在下) ----
-    /// <summary>指标集随模式换。**纯函数** —— 探针用它打真值表: 这类"写错不报错、只会静默显示错指标"
-    /// 的规则最该被回归网住。running=false → 空集 (显示一行灰字)。
+    /// <summary>指标集随模式换 —— **数据在 `ModeCatalog.Modes` 表里** (每个模式一行 `MetricKeys`)。
+    /// 以前这里是一串 `if (mode==0) … if (mode==11) … if (IsMcuMode) …`, 加模式就漏;
+    /// 现在是查表, 表外模式走 Unknown 兜底行。**纯函数**, 探针按表打真值表。
+    /// `running=false` → 空集 (显示一行灰字)。
     /// **不含 CPU**: `ACStatus.cpuPercent` 从 M1 起就标着"预留", native 侧从来没赋过值 (恒 0.0%);
     /// 为了一个没人会照着行动的数字去核心加采样线程, 不值得 → 拿掉。</summary>
     public static string[] MetricKeysForMode(int mode, bool running)
-    {
-        if (!running) return [];
-        if (mode == 0) return ["proc", "wire", "fps"];
-        if (mode == 1) return ["audio", "wire"];
-        if (mode == 11) return ["wire", "leds", "bright"];
-        if (AmbientCore.IsMcuMode(mode)) return ["cmd", "wire", "leds"];
-        return ["wire"];
-    }
+        => running ? ModeCatalog.Of(mode).MetricKeys : [];
 
     /// <summary>指标标签 (文案在 Strings.zh.xaml; 缺键时 Loc.T 返回 "Metric.<key>" 本身 —— 探针以此判漏配)</summary>
     public static string MetricLabel(string key) => Loc.T("Metric." + key);
@@ -128,7 +123,8 @@ public partial class HomePage : Page
 
         // 折叠时不重绘 (几何环收进折叠后, 原来 4Hz 重绘 60 个 Ellipse 的开销消失); 窗口不可见同理
         if (!LayoutCard.IsExpanded || !IsUiVisible()) return;
-        if (st.state == AmbientCore.StateRunning && AmbientCore.IsHostFrameMode(dev.ModeIndex))
+        if (st.state == AmbientCore.StateRunning
+            && ModeCatalog.Of(dev.ModeIndex).Frame == FrameKind.HostFrame)
         {
             Ring.Update(st.CopyLedRgb(), dev.LedCount);
         }
