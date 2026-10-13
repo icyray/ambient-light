@@ -12,6 +12,7 @@
 *.json text eol=crlf
 *.manifest text eol=crlf
 *.csproj text eol=crlf
+*.py text eol=lf
 
 # 二进制
 *.ico binary
