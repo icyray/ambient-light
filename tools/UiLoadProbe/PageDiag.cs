@@ -1,7 +1,8 @@
 // PageDiag.cs — 整页出图工具（重构前后的**像素对照**用）。
 //
-// 用法: UiLoadProbe.exe --dump-page <前缀>
+// 用法: UiLoadProbe.exe --dump-page <前缀> [zh|en]
 //   → <前缀>_home.png / _capture.png / _audio.png / _color.png / _advanced.png / _devices.png
+//   第二个参数 = 语言 (M5.3): 省略则用 ConfigStore 默认 (zh); 出英文验收图用 `en`。
 //
 // 为什么需要它: 大范围结构平移（code-behind 拼控件 → XAML 模板）不允许改变观感,
 // 而"数值断言全绿、观感照样错"是踩过的坑 → 每批改动前后出图对照是验收手段。
@@ -27,10 +28,16 @@ internal static class PageDiag
 {
     private const double PageWidth = 880;      // 与 MainWindow 默认宽度一致
 
-    public static void Dump(string prefix)
+    public static void Dump(string prefix, string? lang = null)
     {
         var app = new AmbientLight.App();
         app.InitializeComponent();
+        // M5.3 语言: 与 App.OnStartup 同序 —— 建页面**之前**先把字典摆对, 页面构造期取到的就是目标语言。
+        if (!string.IsNullOrEmpty(lang))
+        {
+            ConfigStore.App.Lang = lang;
+            LanguageService.ApplyAtStartup();
+        }
         typeof(AmbientLight.App)
             .GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static)
             ?.SetValue(null, app);

@@ -25,6 +25,9 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using AmbientLight.Interop;
+using L = AmbientLight.Services.LanguageService;   // 探针里语言服务用得密集, 短别名 (静态类可别名)
+using LangChoice = AmbientLight.Services.LangChoice;
+using LangDef = AmbientLight.Services.LangDef;
 
 Console.OutputEncoding = Encoding.UTF8;
 // `--dump-ring <输出.png>`: 只把 LedRingView 渲染成图片 (设计评审用), 不跑断言。
@@ -55,10 +58,10 @@ if (args.Length >= 2 && args[0] == "--dump-ring")
     td.Join();
     return;
 }
-// `--dump-page <前缀>`: 整页出图（重构前后像素对照）—— home/capture/audio/color/advanced/devices
+// `--dump-page <前缀> [zh|en]`: 整页出图（重构前后像素对照）—— home/capture/audio/color/advanced/devices
 if (args.Length >= 2 && args[0] == "--dump-page")
 {
-    var tp = new Thread(() => UiLoadProbe.PageDiag.Dump(args[1]));
+    var tp = new Thread(() => UiLoadProbe.PageDiag.Dump(args[1], args.Length >= 3 ? args[2] : null));
     tp.SetApartmentState(ApartmentState.STA);
     tp.Start();
     tp.Join();
@@ -217,6 +220,11 @@ static void Run()
     typeof(AmbientLight.App)
         .GetField("_instance", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
         ?.SetValue(null, app);
+    // 同理补一个 `_poller`: 拾音页的 OnLoaded 会订阅 `App.Instance.Poller.Polled`, 而探针不跑 OnStartup
+    // → 不填就是 NRE (不 Start: 无消息泵, DispatcherTimer 不会跑; 与 PageDiag 同款做法)。
+    typeof(AmbientLight.App)
+        .GetField("_poller", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+        ?.SetValue(app, new AmbientLight.Services.PollingService());
     Console.WriteLine("INFO App.Instance 已注入 (反射补位, 仅探针用) = "
                       + (AmbientLight.App.Instance is not null));
     Console.WriteLine($"GroupLabel in app resources: {app.Resources.Contains("GroupLabel")}");
@@ -824,11 +832,11 @@ static void Run()
                           (ok ? "" : $"  (期望 [{string.Join(", ", c.Expect)}])"));
     }
     // CPU 从 M1 起就是 native 的"预留"字段 (从不赋值) → 任何模式的指标集里都不该再出现它
-    bool noCpu = Enumerable.Range(0, 14).All(m => !AmbientLight.Views.HomePage.MetricKeysForMode(m, true).Contains("cpu"));
+    bool noCpu = AmbientLight.Views.ModeCatalog.All.All(m => !AmbientLight.Views.HomePage.MetricKeysForMode(m, true).Contains("cpu"));
     Console.WriteLine((noCpu ? "OK   " : "FAIL ") + $"CPU 已从所有模式的指标集里移除 = {noCpu}");
     // 文案: **不断言具体措辞** (那是随手可改的产品文案), 只断言"每个指标键都配了专属标签" ——
     // 文案源在 Strings.zh.xaml; Loc.T 缺键时返回 "Metric.<key>" 本身 → 以此判漏配 (真 bug)。
-    var allMetricKeys = Enumerable.Range(0, 14)
+    var allMetricKeys = AmbientLight.Views.ModeCatalog.All
         .SelectMany(m => AmbientLight.Views.HomePage.MetricKeysForMode(m, true))
         .Distinct().ToList();
     var missingLabels = allMetricKeys
@@ -838,6 +846,21 @@ static void Run()
                       (missingLabels.Count > 0 ? $" (缺: {string.Join(", ", missingLabels)})" : "") +
                       "  · 当前措辞: " +
                       string.Join(" / ", allMetricKeys.Select(k => $"{k}={AmbientLight.Views.HomePage.MetricLabel(k)}")));
+    // 反向: 字典里也不该有 MetricKeysForMode **从没用过**的指标键 (删指标/改名后的残留会一直挂在那)。
+    // 这一步只能在探针做 —— 脚本读不到函数返回值, 它只知道"Metric.* 是整命名空间动态引用"。
+    {
+        var metricDict = Application.Current.Resources.MergedDictionaries.FirstOrDefault(d =>
+            (d.Source?.ToString() ?? "").Contains("Localization", StringComparison.OrdinalIgnoreCase));
+        var dictMetrics = metricDict?.Keys.Cast<object>().Select(o => o?.ToString() ?? "")
+            .Where(k => k.StartsWith("Metric.", StringComparison.Ordinal)).ToHashSet() ?? [];
+        var wantMetrics = allMetricKeys.Select(k => "Metric." + k).ToHashSet();
+        var extra = dictMetrics.Except(wantMetrics).ToList();
+        var lack = wantMetrics.Except(dictMetrics).ToList();
+        Console.WriteLine((extra.Count == 0 && lack.Count == 0 ? "OK   " : "FAIL ") +
+                          $"字典的 Metric.* 键集 == MetricKeysForMode 并集 (双向) = {extra.Count == 0 && lack.Count == 0}" +
+                          (extra.Count > 0 ? $" 多余: {string.Join(", ", extra)}" : "") +
+                          (lack.Count > 0 ? $" 缺: {string.Join(", ", lack)}" : ""));
+    }
     // 模式名/说明文案齐备 (14 个模式; 缺键会显示 key 本身)
     int modeNameMissing = AmbientLight.Views.ModeCatalog.All
         .Count(m => AmbientLight.Views.ModeCatalog.Name(m) == "Mode.Name." + m);
@@ -879,6 +902,207 @@ static void Run()
     Console.WriteLine((diagOk ? "OK   " : "FAIL ") +
                       $"核心诊断映射 {diagCases.Length} 条 (native → 字典, 命中即翻译) + 未知透传: " +
                       (diagOk ? "全部 ✓" : $"错配 {string.Join(", ", diagBad)} / 翻译 {diagTranslated} / 透传 {diagPass}"));
+
+    // ---- M5.3 i18n: 语言服务 ------------------------------------------------
+    // 三条不变量, 覆盖"切了语言却不生效"的三种静默失败:
+    //   ① 纯函数 (配置值↔枚举 / LANGID↔语言 / 选择+系统→实际加载哪本) 的真值表;
+    //   ② 字典**真的被换掉** (最致命的静默失败: 找不到那本字典时换字典会无声无息地不做);
+    //   ③ 已经渲染出来的 `{DynamicResource}` 元素**自己**跟着变 —— 这是"零跳变热切换"的机制本身,
+    //      也是本项目选资源字典方案 (而非 Lepo.i18n) 的唯一理由, 必须由断言守住。
+    Console.WriteLine();
+    Console.WriteLine("---- M5.3 i18n: 语言服务 (纯函数真值表 + 字典真替换 + DynamicResource 自动刷新) ----");
+    {
+        // ★ 全部断言都**从 LanguageService.All 生成** —— 社区加一种语言, 这里的覆盖自动跟着长
+        //   (写死 zh/en 的话, 新语言一个断言都碰不到 = 加错了也没人喊)。
+        var langs = L.All;
+        bool langRt = langs.Select(d => d.Key).Append("system").All(k => L.ToKey(L.Parse(k)) == k);
+        Console.WriteLine((langRt ? "OK   " : "FAIL ") +
+                          $"语言 json 值 ⇄ 枚举往返 ({langs.Length} 种语言 + system) = {langRt}");
+
+        var langWeird = new List<(string Raw, LangChoice Want, string Desc)>
+        {
+            ("", LangChoice.System, "空串"),
+            ("  ", LangChoice.System, "空白"),
+            ("zz", LangChoice.System, "未支持语言的 key"),
+        };
+        foreach (var d in langs)
+        {
+            langWeird.Add((d.Key.ToUpperInvariant() + " ", d.Choice, $"{d.Key} 大写 + 尾空格"));
+            langWeird.Add((d.Key + "-XX", d.Choice, $"{d.Key} 带区域"));
+            langWeird.Add((d.Key + "_XX", d.Choice, $"{d.Key} 下划线区域"));
+        }
+        var weirdBad = langWeird.Where(c => L.Parse(c.Raw) != c.Want).Select(c => c.Desc).ToList();
+        Console.WriteLine((weirdBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"语言裸值归一化 {langWeird.Count} 例 (未知一律跟随系统) = {weirdBad.Count == 0}" +
+                          (weirdBad.Count > 0 ? $" 坏例: {string.Join(", ", weirdBad)}" : ""));
+
+        // LANGID: 表里每个 id → 它自己的语言; 高位区域位不参与判定; 表外的一律落 Fallback
+        var langIdCases = new List<(ushort Id, LangChoice Want, string Desc)>();
+        foreach (var d in langs)
+            foreach (var id in d.LangIds)
+            {
+                langIdCases.Add((id, d.Choice, $"{d.Key} 0x{id:X4}"));
+                langIdCases.Add(((ushort)(id | 0x0800), d.Choice, $"{d.Key} 0x{id | 0x0800:X4} (含区域位)"));
+            }
+        ushort freeLangId = 0;
+        for (ushort cand = 0x0C; cand < 0x80; cand++)
+            if (langs.All(d => !d.LangIds.Contains(cand))) { freeLangId = cand; break; }
+        langIdCases.Add((freeLangId, L.Fallback.Choice,
+                         $"未支持语言 0x{freeLangId:X4} → 回落 {L.Fallback.Key}"));
+        var langIdBad = langIdCases.Where(c => L.FromLangId(c.Id) != c.Want).Select(c => c.Desc).ToList();
+        Console.WriteLine((langIdBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"系统 LANGID → 语言 真值表 {langIdCases.Count} 例 = {langIdBad.Count == 0}" +
+                          (langIdBad.Count > 0 ? $" 坏例: {string.Join(", ", langIdBad)}" : ""));
+
+        bool resolveOk = langs.All(fixedLang =>
+            L.ResolveForApply(LangChoice.System, fixedLang.Choice) == fixedLang.Choice
+            && langs.All(other => L.ResolveForApply(fixedLang.Choice, other.Choice) == fixedLang.Choice));
+        Console.WriteLine((resolveOk ? "OK   " : "FAIL ") +
+                          $"「选择 + 系统实况 → 实际加载哪本」真值表 (固定语言与系统无关) = {resolveOk}");
+        bool sysLangOk = langs.Any(d => d.Choice == L.SystemLanguage());
+        Console.WriteLine((sysLangOk ? "OK   " : "FAIL ") +
+                          $"本机系统语言解析 = {L.DefOf(L.SystemLanguage()).Key} (必须落在语言表里) = {sysLangOk}");
+
+        // 语言表自洽 —— 加语言最容易错的地方, 而且表坏了上面那些断言会**看起来都通过**
+        bool tableOk = langs.Length > 0
+            && langs.All(d => d.Key.Length > 0 && d.Endonym.Length > 0 && d.LangIds.Length > 0)
+            && langs.All(d => d.Choice != LangChoice.System)          // System 不是一种语言, 不该进表
+            && langs.Select(d => d.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count() == langs.Length
+            && langs.Select(d => L.DictFileOf(d.Choice)).Distinct(StringComparer.OrdinalIgnoreCase).Count() == langs.Length
+            && langs.SelectMany(d => d.LangIds).Distinct().Count() == langs.Sum(d => d.LangIds.Length);
+        Console.WriteLine((tableOk ? "OK   " : "FAIL ") +
+                          $"语言表自洽 (Key/字典名/LangID 互不重复且非空, 无 System 行) = {tableOk}");
+
+        // 加语言要动**两处** (枚举成员 + 表行) —— 漏了表行就只剩一个没有对应语言的枚举值。
+        // 这条把它点出来 (只靠"表自洽"是查不到的: 表自己是完整的)。
+        var enumOrphans = Enum.GetValues<LangChoice>()
+            .Where(c => c != LangChoice.System && !langs.Any(d => d.Choice == c))
+            .Select(c => c.ToString()).ToList();
+        Console.WriteLine((enumOrphans.Count == 0 ? "OK   " : "FAIL ") +
+                          $"LangChoice 里每个非 System 成员都有语言表行 (加语言要动两处, 漏一处在这报) = {enumOrphans.Count == 0}" +
+                          (enumOrphans.Count > 0 ? $" 孤儿: {string.Join(", ", enumOrphans)}" : ""));
+
+        // 同一门语言的**多个变体** (简体/繁体) 必须能共存 —— 机制 = "完整标识优先, primary 兜底"。
+        // 真表里还没有繁中行, 所以拿一张**合成表**验机制本身 (这是"将来加 zh-TW 会不会串味"的唯一凭据):
+        //   简体行登记 [0x0804 完整, 0x04 primary]; 繁体行只登记 [0x0404 完整]
+        var synth = new LangDef[]
+        {
+            new(LangChoice.Zh, "zh",    "简体中文", [0x0804, 0x04]),
+            new(LangChoice.En, "zh-TW", "繁體中文", [0x0404]),   // 用 En 当哨兵值, 好和简体区分开
+        };
+        var tierCases = new (string Desc, Func<object> Got, object Want)[]
+        {
+            ("config \"zh-TW\" → 命中繁体行 (完整键优先, 不被 head zh 抢走)", () => L.Parse("zh-TW", synth), LangChoice.En),
+            ("config \"zh-tw\" → 大小写不敏感", () => L.Parse("zh-tw", synth), LangChoice.En),
+            ("config \"zh_Hant\" → 下划线写法 + 退到 primary 行", () => L.Parse("zh_Hant", synth), LangChoice.Zh),
+            ("config \"zh\" → 命中简体行", () => L.Parse("zh", synth), LangChoice.Zh),
+            ("系统 0x0404 (zh-TW) → 命中繁体行 (完整 LANGID 优先)", () => L.FromLangId(0x0404, synth), LangChoice.En),
+            ("系统 0x0804 (zh-CN) → 命中简体行", () => L.FromLangId(0x0804, synth), LangChoice.Zh),
+            ("系统 0x0C04 (zh-HK, 未登记) → primary 落简体 (有意的默认兜底)", () => L.FromLangId(0x0C04, synth), LangChoice.Zh),
+        };
+        var tierBad = tierCases.Where(c => !Equals(c.Got(), c.Want)).Select(c => c.Desc).ToList();
+        Console.WriteLine((tierBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"同一门语言的多个变体 (简/繁) 分派机制 {tierCases.Length} 例 (合成表) = {tierBad.Count == 0}" +
+                          (tierBad.Count > 0 ? $" 坏例: {string.Join("; ", tierBad)}" : ""));
+
+        // 合并字典里那本文案字典 (换语言就是换它)
+        ResourceDictionary? stringDict = app.Resources.MergedDictionaries.FirstOrDefault(d =>
+            (d.Source?.ToString() ?? "").Contains("Localization", StringComparison.OrdinalIgnoreCase)
+            && (d.Source?.ToString() ?? "").EndsWith(".xaml", StringComparison.OrdinalIgnoreCase));
+        int baseKeyCount = stringDict?.Keys.Count ?? 0;
+        Console.WriteLine((stringDict is not null ? "OK   " : "FAIL ") +
+                          $"文案字典是 Application.Resources.MergedDictionaries 的直接成员 = " +
+                          $"{stringDict is not null} (键数 {baseKeyCount})");
+        // App.xaml 合并的那本 == StartupDefault 指的那本 (改一处忘改另一处 = 启动时白重建/白闪一下)
+        string startupWant = L.DictFileOf(L.StartupDefault);
+        bool startupOk = stringDict?.Source?.ToString()?.EndsWith(startupWant, StringComparison.OrdinalIgnoreCase) == true;
+        Console.WriteLine((startupOk ? "OK   " : "FAIL ") +
+                          $"App.xaml 合并的字典 == StartupDefault({L.DefOf(L.StartupDefault).Key}) 指的 {startupWant} = {startupOk}");
+
+        // 每本字典都必须**编进程序集** (不是只躺在磁盘上): pack URI 取得到才算过 ——
+        // 漏了这一步, 切过去会在运行时抛 "找不到资源" 或静默什么都不换 (社区加语言最常见的坑)。
+        var loaded = new Dictionary<LangChoice, ResourceDictionary>();
+        var loadBad = new List<string>();
+        foreach (var d in langs)
+        {
+            try { loaded[d.Choice] = new ResourceDictionary { Source = new Uri(L.SourceOf(d.Choice)) }; }
+            catch (Exception ex) { loadBad.Add($"{d.Key}({ex.GetType().Name})"); }
+        }
+        Console.WriteLine((loadBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"{langs.Length} 本字典都已编入程序集且可按 pack URI 取到 = {loadBad.Count == 0}" +
+                          (loadBad.Count > 0 ? $" 坏例: {string.Join(", ", loadBad)}" : "") +
+                          "  · " + string.Join(" / ", loaded.Select(kv => $"{L.DefOf(kv.Key).Key}:{kv.Value.Keys.Count} 键")));
+        // 键集逐键一致: 少一个键, 切过去那一行就显示 key 原文 (静默) —— 脚本也查, 这里再加一道运行时闸
+        var baseKeys = stringDict is null
+            ? new HashSet<string?>()
+            : stringDict.Keys.Cast<object>().Select(o => o.ToString()).ToHashSet();
+        var parityBad = new List<string>();
+        foreach (var (choice, dict) in loaded)
+        {
+            var ks = dict.Keys.Cast<object>().Select(o => o.ToString()).ToHashSet();
+            int missing = baseKeys.Count(k => k is not null && !ks.Contains(k));
+            int extra = ks.Count(k => k is not null && !baseKeys.Contains(k));
+            if (missing > 0 || extra > 0) parityBad.Add($"{L.DefOf(choice).Key}(缺 {missing} / 多 {extra})");
+        }
+        Console.WriteLine((parityBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"{langs.Length} 本字典键集逐键一致 = {parityBad.Count == 0}" +
+                          (parityBad.Count > 0 ? $" 坏例: {string.Join(", ", parityBad)}" : ""));
+
+        // ③ 真渲染元素: 造一个挂在 Window 里、被 {DynamicResource} 引用的 TextBlock —— 换字典后
+        // **它自己**要变 (这条才是"热切换零跳变"的机制断言; 只断言"Application.TryFindResource 变了"
+        // 不够 —— 那是查字典, 不是已渲染元素真的重取)。
+        // ⚠️ 宿主必须是 **Window** —— 实测 (2026-10-13): Application.Resources 的失效是沿
+        // Application.Windows 往下传的, 裸元素 / unparented Frame 里的 DynamicResource **收不到**通知
+        // (那种宿主里 Application.TryFindResource 已经变了、元素却纹丝不动)。真机上所有页面都活在
+        // 窗口里, 所以"Window 宿主会跟着变"就是够用的机制证据。
+        var langHost = new Window { Width = 300, Height = 100 };
+        var langTb = new TextBlock();
+        langTb.SetResourceReference(TextBlock.TextProperty, "Home.Brightness.Title");
+        langHost.Content = langTb;
+        string baseTitle = langTb.Text;
+        string langBefore = AmbientLight.Services.ConfigStore.App.Lang;
+        var swapBad = new List<string>();
+        foreach (var d in langs.Where(d => d.Choice != L.StartupDefault))
+        {
+            AmbientLight.Services.ConfigStore.App.Lang = d.Key;
+            if (!L.Apply(d.Choice)) { swapBad.Add($"{d.Key}: Apply 失败"); continue; }
+            string want = loaded.TryGetValue(d.Choice, out var dd)
+                ? dd["Home.Brightness.Title"] as string ?? "" : "";
+            if (L.Applied != d.Choice || want.Length == 0 || langTb.Text != want || langTb.Text == baseTitle)
+                swapBad.Add($"{d.Key}: 元素「{langTb.Text}」≠ 字典「{want}」");
+            if (AmbientLight.Localization.Loc.T("Common.GotIt") != (loaded[d.Choice]["Common.GotIt"] as string))
+                swapBad.Add($"{d.Key}: C# 侧 Loc.T 没跟上");
+        }
+        Console.WriteLine((swapBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"切到其余 {langs.Length - 1} 种语言: 已渲染的 {{DynamicResource}} 元素 + C# 侧 Loc.T 都真的换值 " +
+                          $"= {swapBad.Count == 0} (基准「{baseTitle}」)" +
+                          (swapBad.Count > 0 ? $" 坏例: {string.Join("; ", swapBad)}" : ""));
+        // 还原: 后面的用例都按"默认语言"写 (且别把开发者的探针跑成英文)
+        AmbientLight.Services.ConfigStore.App.Lang = langBefore;
+        var beforeChoice = L.Parse(langBefore);
+        string baseWant = loaded.TryGetValue(L.StartupDefault, out var bd) ? bd["Home.Brightness.Title"] as string ?? "" : "";
+        bool restored = L.Apply(beforeChoice)
+                        && langTb.Text == baseWant
+                        && L.Applied == L.ResolveForApply(beforeChoice, L.SystemLanguage());
+        Console.WriteLine((restored ? "OK   " : "FAIL ") + $"切回原语言: 元素「{langTb.Text}」与字典都还原 = {restored}");
+        // 挂/摘幂等 (与主题同一套窗口钩子; 摘不掉 = 那个隐藏窗口吊着进程)
+        bool langHookOk = true;
+        try
+        {
+            var langHookWin = new AmbientLight.Views.MainWindow();
+            L.Attach(langHookWin);
+            L.Attach(langHookWin);
+            L.Detach();
+            L.Detach();
+        }
+        catch (Exception ex)
+        {
+            langHookOk = false;
+            Console.WriteLine($"INFO 语言服务挂/摘异常: {ex.GetType().Name}: {ex.Message}");
+        }
+        Console.WriteLine((langHookOk ? "OK   " : "FAIL ") +
+                          $"语言服务的系统语言监听可重复挂/摘 (幂等不抛) = {langHookOk}");
+    }
     // 双层结构: 栏数必须等于指标数 (数据驱动), 每栏 = 标签行 + 数值行, 数值初值不能是空/0
     // (0 会被读成"卡住了"); 等宽分栏。结构在 XAML 模板里 → 这里验"数据 → 模板 → 实际渲染"整条线。
     void CollectTextBlocks(DependencyObject d, List<TextBlock> into)
@@ -1431,6 +1655,212 @@ static void Run()
                           $"配置 theme=\"{c.Key}\" ({c.Desc}) → 下拉选中 {themeCombo?.SelectedIndex} (期望 {idx})");
     }
     AmbientLight.Services.ConfigStore.App.Theme = themeKeyBefore;
+
+    Console.WriteLine();
+    Console.WriteLine("---- M5.3 i18n: 高级页语言下拉 (控件 ↔ 配置 往返 + endonym 不随语言变) ----");
+    var langCombo = advPage.FindName("LangCombo") as ComboBox;
+    int langComboCount = langCombo?.Items.Count ?? 0;
+    int langChoiceCount = AmbientLight.Views.SettingsPageAdvanced.LangChoices.Length;
+    bool langComboFilled = langComboCount == langChoiceCount;
+    Console.WriteLine((langComboFilled ? "OK   " : "FAIL ") +
+                      $"语言下拉已填充 {langComboCount} 项 (== 候选数 {langChoiceCount}) = {langComboFilled}");
+    // 候选 = 「跟随系统」+ 语言表逐项 (顺序也必须一致 —— LangChoices 与下拉项是两个数组, 靠这条对齐)
+    bool candidatesOk = langChoiceCount == L.All.Length + 1
+        && AmbientLight.Views.SettingsPageAdvanced.LangChoices[0] == AmbientLight.Services.LangChoice.System
+        && L.All.Select((d, i) =>
+               AmbientLight.Views.SettingsPageAdvanced.LangChoices[i + 1] == d.Choice).All(x => x);
+    Console.WriteLine((candidatesOk ? "OK   " : "FAIL ") +
+                      $"候选 = 跟随系统 + 语言表逐项同序 (从表派生, 不另写一份) = {candidatesOk}");
+    string langKeyBefore = AmbientLight.Services.ConfigStore.App.Lang;
+    // 配置 → 下拉选中 (遍历语言表, 加语言自动纳入)
+    var langRtCases = new List<(string Key, AmbientLight.Services.LangChoice Expect, string Desc)>
+    {
+        ("system", AmbientLight.Services.LangChoice.System, "跟随系统"),
+        ("weird-value", AmbientLight.Services.LangChoice.System, "未知值 → 跟随系统"),
+    };
+    langRtCases.AddRange(L.All.Select(d => (d.Key, d.Choice, d.Endonym)));
+    foreach (var c in langRtCases)
+    {
+        AmbientLight.Services.ConfigStore.App.Lang = c.Key;
+        advPage.BuildForProbe();                       // 无头宿主不触发 Loaded → 手工装配
+        int idx = Array.IndexOf(AmbientLight.Views.SettingsPageAdvanced.LangChoices,
+                                AmbientLight.Services.LanguageService.Parse(c.Key));
+        bool ok = langCombo?.SelectedIndex == idx;
+        Console.WriteLine((ok ? "OK   " : "FAIL ") +
+                          $"配置 lang=\"{c.Key}\" ({c.Desc}) → 下拉选中 {langCombo?.SelectedIndex} (期望 {idx})");
+    }
+    AmbientLight.Services.ConfigStore.App.Lang = langKeyBefore;
+    // **每种语言各建一次页面**: ① endonym 必须原样出现 (语言自己的名字不随界面语言变);
+    // ② 「跟随系统」项必须与当时那本字典同源 (照抄 Loc.T, 不写死措辞)。
+    var perLangBad = new List<string>();
+    foreach (var d in L.All)
+    {
+        if (!L.Apply(d.Choice)) { perLangBad.Add($"{d.Key}: Apply 失败"); continue; }
+        var p = new AmbientLight.Views.SettingsPageAdvanced();
+        var c = p.FindName("LangCombo") as ComboBox;
+        bool items = c?.Items.Count == langChoiceCount;
+        bool follow = c?.Items.OfType<string>()
+                          .Contains(AmbientLight.Localization.Loc.T("Adv.Lang.System")) == true;
+        var missingEndonym = L.All.Where(e => c?.Items.OfType<string>().Contains(e.Endonym) != true)
+                                       .Select(e => e.Endonym).ToList();
+        if (!items || !follow || missingEndonym.Count > 0)
+            perLangBad.Add($"{d.Key}(项数 {items} / 跟随系统同源 {follow} / 缺 endonym {string.Join("+", missingEndonym)})");
+    }
+    Console.WriteLine((perLangBad.Count == 0 ? "OK   " : "FAIL ") +
+                      $"{L.All.Length} 种语言各建一页: 项数正确 + endonym 原样在位 + 「跟随系统」与字典同源 " +
+                      $"= {perLangBad.Count == 0}" + (perLangBad.Count > 0 ? $" 坏例: {string.Join("; ", perLangBad)}" : ""));
+
+    // 换语言时**页内下拉自己重建** (页内订阅了 LanguageChanged) —— XAML 那半边是自动的、不会露馅,
+    // 所以这条契约只能这样守: 在前一种语言下构造的页面, 切到后一种语言后它的项必须自己变过去。
+    // (语言表至少两种时才有意义; 只有一种时跳过。)
+    if (L.All.Length >= 2)
+    {
+        var first = L.All[0];
+        var second = L.All[1];
+        L.Apply(second.Choice);
+        var livePage = new AmbientLight.Views.SettingsPageAdvanced();
+        var liveCombo = livePage.FindName("LangCombo") as ComboBox;
+        string secondFollow = AmbientLight.Localization.Loc.T("Adv.Lang.System");
+        L.Apply(first.Choice);
+        string firstFollow = AmbientLight.Localization.Loc.T("Adv.Lang.System");
+        bool liveRebuilt = firstFollow != secondFollow
+                           && liveCombo?.Items.OfType<string>().Contains(firstFollow) == true
+                           && liveCombo?.Items.OfType<string>().Contains(secondFollow) == false;
+        Console.WriteLine((liveRebuilt ? "OK   " : "FAIL ") +
+                          $"换语言 → 高级页下拉项自己重建 ({second.Key}「{secondFollow}」→ {first.Key}「{firstFollow}」) = {liveRebuilt}");
+    }
+    L.Apply(L.Parse(langKeyBefore));
+
+    Console.WriteLine();
+    Console.WriteLine("---- 设置页「下拉项 ↔ 值域」对齐 (索引耦合类的守护网) ----");
+    // 真相: **值/枚举住在 .cs, 下拉项住在 .xaml (或构造期生成)** —— 编译器完全不管它们同序同长。
+    // 历史事故 (见 ConfigStore.cs 里 FpsCapChoices 的注释): 值数组改升序、XAML 项还是降序 →
+    // 用户选 "240 fps" 实际发 30。这类错**不抛异常**, 只是发错值 —— 只能靠断言。
+    // 两条: ① 项数 == 值域大小; ② 配置值 ⇄ 选中项 往返一致 (顺序/偏移/置换写错都现形)。
+    // 覆盖 5 种映射形状: 偏移 (Sides) / 重排 (FpsCap) / 置换 (Source [0,2,1]) / 逆序 (WaitDisp [2,1,0]) / 下标即值 (Output)。
+    {
+        var capPg = new AmbientLight.Views.SettingsPageCapture();
+        capPg.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, capPg));
+        var audioPg = new AmbientLight.Views.SettingsPageAudio();
+        audioPg.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, audioPg));
+        var colorPg = new AmbientLight.Views.SettingsPageColor();
+        colorPg.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, colorPg));
+        ComboBox? Box(Page p, string n) => p.FindName(n) as ComboBox;
+
+        var countCases = new (string Desc, int Got, int Want)[]
+        {
+            ("边数 SidesCombo (Sides 2..4)", Box(capPg, "SidesCombo")?.Items.Count ?? -1, 3),
+            ("起始方向 DirectionCombo (0/1)", Box(capPg, "DirectionCombo")?.Items.Count ?? -1, 2),
+            ("追光平滑 SmoothingCombo", Box(capPg, "SmoothingCombo")?.Items.Count ?? -1,
+                AmbientLight.Views.SettingsPageCapture.SmoothingChoices.Length),
+            ("刷新率上限 FpsCapCombo", Box(capPg, "FpsCapCombo")?.Items.Count ?? -1,
+                AmbientLight.Views.SettingsPageCapture.FpsCapChoices.Length),
+            ("音源 SourceCombo", Box(audioPg, "SourceCombo")?.Items.Count ?? -1,
+                AmbientLight.Views.SettingsPageAudio.SourceValues.Length),
+            ("熄屏策略 WaitDispCombo", Box(advPage, "WaitDispCombo")?.Items.Count ?? -1,
+                AmbientLight.Views.SettingsPageAdvanced.PolicyChoices.Length),
+            ("波特率 BaudCombo", Box(advPage, "BaudCombo")?.Items.Count ?? -1,
+                AmbientLight.Views.SettingsPageAdvanced.BaudChoices.Length),
+            ("主题 ThemeCombo", Box(advPage, "ThemeCombo")?.Items.Count ?? -1,
+                AmbientLight.Views.SettingsPageAdvanced.ThemeChoices.Length),
+            ("语言 LangCombo", Box(advPage, "LangCombo")?.Items.Count ?? -1,
+                AmbientLight.Views.SettingsPageAdvanced.LangChoices.Length),
+            ("灯珠色序 OutputCombo", Box(colorPg, "OutputCombo")?.Items.Count ?? -1,
+                AmbientLight.Views.SettingsPageColor.OutputOrderCount),
+        };
+        var countBad = countCases.Where(c => c.Got != c.Want)
+                                 .Select(c => $"{c.Desc}: {c.Got} != {c.Want}").ToList();
+        Console.WriteLine((countBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"{countCases.Length} 个索引耦合下拉: 项数 == 值域 = {countBad.Count == 0}" +
+                          (countBad.Count > 0 ? $" 坏例: {string.Join("; ", countBad)}" : ""));
+
+        // 配置值改了要还回去 (后面还有别的断言按默认值跑)
+        var dev = AmbientLight.Services.ConfigStore.Device;
+        var (oldSides, oldFps, oldSrc, oldPolicy, oldOrder) =
+            (dev.Sides, dev.FpsCap, dev.AudioSource, dev.WaitDispPolicy, dev.OutputOrder);
+        var mappingBad = new List<string>();
+        foreach (var (sides, idx) in new[] { (2, 0), (3, 1), (4, 2) })          // ① 偏移
+        {
+            dev.Sides = sides;
+            capPg.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, capPg));
+            if (Box(capPg, "SidesCombo")?.SelectedIndex != idx)
+                mappingBad.Add($"Sides={sides} → 选中 {Box(capPg, "SidesCombo")?.SelectedIndex} (期望 {idx})");
+        }
+        var fps = AmbientLight.Views.SettingsPageCapture.FpsCapChoices;
+        for (int i = 0; i < fps.Length; i++)                                    // ② 重排 (含反向回写)
+        {
+            dev.FpsCap = fps[i];
+            capPg.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, capPg));
+            var fc = Box(capPg, "FpsCapCombo");
+            if (fc is null || fc.SelectedIndex != i)
+            {
+                mappingBad.Add($"FpsCap={fps[i]} → 选中 {fc?.SelectedIndex} (期望 {i})");
+                continue;
+            }
+            int move = (i + 1) % fps.Length;
+            fc.SelectedIndex = move;                                            // 程序化改选 → 控件应回写配置
+            if (dev.FpsCap != fps[move])
+                mappingBad.Add($"FpsCap 选中 {move} → 配置 {dev.FpsCap} (期望 {fps[move]})");
+        }
+        foreach (var (src, idx) in new[] { (0, 0), (2, 1), (1, 2) })            // ③ 置换
+        {
+            dev.AudioSource = src;
+            audioPg.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, audioPg));
+            if (Box(audioPg, "SourceCombo")?.SelectedIndex != idx)
+                mappingBad.Add($"AudioSource={src} → 选中 {Box(audioPg, "SourceCombo")?.SelectedIndex} (期望 {idx})");
+        }
+        foreach (var (pol, idx) in new[] { (2, 0), (1, 1), (0, 2) })            // ④ 逆序
+        {
+            dev.WaitDispPolicy = pol;
+            advPage.BuildForProbe();
+            if (Box(advPage, "WaitDispCombo")?.SelectedIndex != idx)
+                mappingBad.Add($"WaitDispPolicy={pol} → 选中 {Box(advPage, "WaitDispCombo")?.SelectedIndex} (期望 {idx})");
+        }
+        for (int v = 0; v < AmbientLight.Views.SettingsPageColor.OutputOrderCount; v++)   // ⑤ 下标即值
+        {
+            dev.OutputOrder = v;
+            colorPg.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, colorPg));
+            if (Box(colorPg, "OutputCombo")?.SelectedIndex != v)
+                mappingBad.Add($"OutputOrder={v} → 选中 {Box(colorPg, "OutputCombo")?.SelectedIndex} (期望 {v})");
+        }
+        (dev.Sides, dev.FpsCap, dev.AudioSource, dev.WaitDispPolicy, dev.OutputOrder) =
+            (oldSides, oldFps, oldSrc, oldPolicy, oldOrder);
+        Console.WriteLine((mappingBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"配置值 ⇄ 选中项 往返 (5 种映射形状: 偏移/重排/置换/逆序/下标即值) = {mappingBad.Count == 0}" +
+                          (mappingBad.Count > 0 ? $" 坏例: {string.Join("; ", mappingBad)}" : ""));
+        // 越界兜底: 配置里手改成越界值时, 选中项必须落回合法范围 (不能是 -1 = 空下拉)
+        dev.OutputOrder = AmbientLight.Views.SettingsPageColor.OutputOrderCount + 5;
+        colorPg.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, colorPg));
+        bool clampOk = Box(colorPg, "OutputCombo")?.SelectedIndex == AmbientLight.Views.SettingsPageColor.OutputOrderCount - 1;
+        dev.OutputOrder = oldOrder;
+        Console.WriteLine((clampOk ? "OK   " : "FAIL ") + $"越界配置值被钳到合法项 (不是空下拉) = {clampOk}");
+
+        // 项文本里**带值**的两处可以真正对账 (其余下拉的文案是语义化的, 只能靠项数 + 往返):
+        // 从文本抠出数字 → 必须等于该下标的**值**。当年 FpsCap 升/降序错位就是这个坑
+        // (用户选 "240 fps" 实发 30) —— 只比下标是自证的抓不到, 必须比文本里的数字。
+        var numBad = new List<string>();
+        if (Box(advPage, "BaudCombo") is { } baudBox)
+            for (int i = 0; i < baudBox.Items.Count; i++)
+            {
+                string txt = baudBox.Items[i]?.ToString() ?? "";
+                var m = System.Text.RegularExpressions.Regex.Match(txt, @"\d+");
+                int want = AmbientLight.Views.SettingsPageAdvanced.BaudChoices[i];
+                if (!m.Success || int.Parse(m.Value) != want)
+                    numBad.Add($"波特率[{i}] 文本「{txt}」≠ 值 {want}");
+            }
+        if (Box(capPg, "FpsCapCombo") is { } fpsBox)
+            for (int i = 0; i < fpsBox.Items.Count; i++)
+            {
+                string txt = (fpsBox.Items[i] as ComboBoxItem)?.Content?.ToString() ?? "";
+                var m = System.Text.RegularExpressions.Regex.Match(txt, @"\d+");
+                int got = m.Success ? int.Parse(m.Value) : 0;      // "不限/Unlimited" ↔ 值 0
+                int want = AmbientLight.Views.SettingsPageCapture.FpsCapChoices[i];
+                if (got != want) numBad.Add($"刷新率[{i}] 文本「{txt}」≠ 值 {want}");
+            }
+        Console.WriteLine((numBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"项文本里的数字 == 该下标的值 (波特率/刷新率) = {numBad.Count == 0}" +
+                          (numBad.Count > 0 ? $" 坏例: {string.Join("; ", numBad)}" : ""));
+    }
 
     // 系统偏好监听 (SystemEvents 是**静态**事件): 挂/摘必须幂等。
     // 摘不掉 = 那个隐藏窗口吊着进程, 用户点"退出"后进程不消失 (M5.2 用 Attach/Detach 包起来的原因)。
