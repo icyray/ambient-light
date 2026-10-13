@@ -851,7 +851,8 @@ static void Run()
     // 多行文案必须含**真换行**: 值里的 &#10; 若忘了配 xml:space="preserve" 会被 XAML 归一化成
     // 空格 (静默失效 —— 对话框里两段话挤成一行)。实测与复现工具 .workbuddy/tmp/nl-probe。
     var multilineKeys = new[] { "Dev.List.NotFound", "App.Launch.TooMany", "App.Launch.Failed",
-                                "App.Crash.UiException", "Adv.Update.Body", "Adv.Restore.Body", "Calib.NeedSession" };
+                                "App.Crash.UiException", "App.Start.NotFound.Detail",
+                                "Adv.Update.Body", "Adv.Restore.Body", "Calib.NeedSession" };
     var nlBad = multilineKeys.Where(k => !AmbientLight.Localization.Loc.T(k).Contains('\n')).ToList();
     Console.WriteLine((nlBad.Count == 0 ? "OK   " : "FAIL ") +
                       $"多行文案含真换行 {multilineKeys.Length} 条 (&#10; 配 xml:space=preserve): " +
