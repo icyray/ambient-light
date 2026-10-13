@@ -56,7 +56,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRepeatAll24}" Title="{DynamicResource Color.Output.Title}"
                              Description="{DynamicResource Color.Output.Desc}">
-            <ComboBox x:Name="OutputCombo" Width="120" VerticalAlignment="Center"
+            <ComboBox x:Name="OutputCombo" MinWidth="120" VerticalAlignment="Center"
                       SelectionChanged="OnOutputChanged">
                 <ComboBoxItem Content="RGB" />
                 <ComboBoxItem Content="GBR" />

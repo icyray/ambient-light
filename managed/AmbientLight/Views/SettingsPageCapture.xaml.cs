@@ -12,8 +12,8 @@ public sealed record MonitorItem(int Index, string Label);
 
 public partial class SettingsPageCapture : Page
 {
-    private static readonly int[] FpsCapChoices = [0, 240, 165, 144, 120, 90, 60, 30];   // 序与下拉一致 (M2 起显示序为降序, 原数组升序导致选 240 实发 30)
-    private static readonly int[] SmoothingChoices = [0, 3, 4, 5];   // 厂商: 步长 = 2+配置值
+    public static readonly int[] FpsCapChoices = [0, 240, 165, 144, 120, 90, 60, 30];   // 序与下拉一致 (M2 起显示序为降序, 原数组升序导致选 240 实发 30)
+    public static readonly int[] SmoothingChoices = [0, 3, 4, 5];   // 厂商: 步长 = 2+配置值
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
     public SettingsPageCapture()
@@ -22,7 +22,19 @@ public partial class SettingsPageCapture : Page
         Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
         // 订阅放在 InitializeComponent 之后: 解析期 Value="60" 不会触发处理程序
         LedCountBox.ValueChanged += (_, _) => OnLedCountValueChanged();
+        // M5.3 语言: 显示器下拉的「N. 宽×高 - 适配器」是 C# 拼的 → 换语言时重建
+        LanguageService.LanguageChanged += OnLanguageChanged;
         Loaded += (_, _) => { _loading = true; LoadFromConfig(); _loading = false; };
+        Unloaded += (_, _) => LanguageService.LanguageChanged -= OnLanguageChanged;
+    }
+
+    /// <summary>M5.3: 换语言后重建显示器下拉 (其余文案随 {DynamicResource} 自动刷)。</summary>
+    private void OnLanguageChanged()
+    {
+        if (!IsLoaded) return;               // 没在页面上就不用管 (切过去时会重新构造)
+        _loading = true;
+        LoadFromConfig();
+        _loading = false;
     }
 
     private void LoadFromConfig()

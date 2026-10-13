@@ -2,7 +2,7 @@
 //
 // 机制 = WPF 原生资源字典: 唯一文案源 = `Strings.zh.xaml` (App.xaml 合并)。
 //   · XAML 侧 (8 批) 用 `{DynamicResource 键}` (换字典自动刷新, 与主题同款);
-//   · C# 侧走本类的 T/F —— 换语言 = 替换字典 + 广播重取 (5.3 加语言切换时实现, 与主题同款)。
+//   · C# 侧走本类的 T/F —— 换语言 = 替换字典 + 广播重取 (已实现, 见 Services/LanguageService)。
 //
 // 约定:
 //   · 键稳定、值可改 —— 顺文案/翻译只动 Strings.*.xaml, 不动代码;

@@ -1,0 +1,381 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <!-- ════════════════════════════════════════════════════════════════════
+         Strings.en.xaml — English strings (M5.3 i18n). 键集必须与 Strings.zh.xaml
+         **逐键一致** (`.workbuddy/tmp/check_loc_keys.py` 与探针都守着这条); 只翻值, 不动键。
+         规则与 zh 版完全相同:
+           1) 值不带首尾空白 (空格在调用处拼); 换行写 &#10; —— 且元素上必须加 xml:space="preserve";
+           2) {0}/{1} 是 string.Format 占位; 字面大括号写 {{ }};
+           3) 灯带特效名 / 设备类型名**沿用厂商反编译的英文** (D:\Codes\ansnake-3.1\lang\en.xaml):
+              WORD1~14 = Tracking / Music / Rainbow / Ocean / Lightning / Breathing / Flame /
+              Aurora / Particle / Christmas / Vagaries / Color / Summer / Arctic;
+              ScreenCapureRGB="Screen Light" / FUNRGB="ARGB Fan" / DeskTopRGB="Table Light" /
+              SoundRGB="Light Bar"。
+         注: 语言选择器里的语言名 (简体中文 / English) 是**本语言字面量**, 不在这里 ——
+             endonym 必须与当前语言无关 (见 SettingsPageAdvanced.LangChoices)。
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ===== Common ===== -->
+    <sys:String x:Key="Common.Close">Close</sys:String>
+    <sys:String x:Key="Common.Cancel">Cancel</sys:String>
+    <sys:String x:Key="Common.GotIt">Got it</sys:String>
+    <!-- ⚠️ 列表分隔符: 尾部空格必须显式保留 (XAML 默认会裁掉) —— zh 用「、」没这问题 -->
+    <sys:String x:Key="Common.EnumSep" xml:space="preserve">, </sys:String>
+    <sys:String x:Key="Common.Refresh">Refresh</sys:String>
+    <sys:String x:Key="Common.ReEnumerate">Re-enumerate</sys:String>
+
+    <!-- ===== Metric labels (keys match MetricKeysForMode) ===== -->
+    <sys:String x:Key="Metric.proc">Process</sys:String>
+    <sys:String x:Key="Metric.wire">Serial write</sys:String>
+    <sys:String x:Key="Metric.fps">Frame rate</sys:String>
+    <sys:String x:Key="Metric.audio">Volume</sys:String>
+    <sys:String x:Key="Metric.leds">LEDs</sys:String>
+    <sys:String x:Key="Metric.bright">Brightness</sys:String>
+    <sys:String x:Key="Metric.cmd">Commands</sys:String>
+
+    <!-- ===== Mode names / descriptions (ModeCatalog; effect names follow the vendor lang/en) ===== -->
+    <sys:String x:Key="Mode.Name.0">Tracking</sys:String>
+    <sys:String x:Key="Mode.Name.1">Music</sys:String>
+    <sys:String x:Key="Mode.Name.2">Rainbow</sys:String>
+    <sys:String x:Key="Mode.Name.3">Ocean</sys:String>
+    <sys:String x:Key="Mode.Name.4">Lightning</sys:String>
+    <sys:String x:Key="Mode.Name.5">Breathing</sys:String>
+    <sys:String x:Key="Mode.Name.6">Flame</sys:String>
+    <sys:String x:Key="Mode.Name.7">Aurora</sys:String>
+    <sys:String x:Key="Mode.Name.8">Particle</sys:String>
+    <sys:String x:Key="Mode.Name.9">Christmas</sys:String>
+    <sys:String x:Key="Mode.Name.10">Vagaries</sys:String>
+    <sys:String x:Key="Mode.Name.11">Color</sys:String>
+    <sys:String x:Key="Mode.Name.12">Summer</sys:String>
+    <sys:String x:Key="Mode.Name.13">Arctic</sys:String>
+    <sys:String x:Key="Mode.Unknown">Unknown ({0})</sys:String>
+    <sys:String x:Key="Mode.Desc.0">Real-time screen sync</sys:String>
+    <sys:String x:Key="Mode.Desc.1">Pulsing to the music</sys:String>
+    <sys:String x:Key="Mode.Desc.11">Solid single color</sys:String>
+    <sys:String x:Key="Mode.Desc.Mcu">Built into the light strip firmware</sys:String>
+
+    <!-- ===== LED ring (layout preview / calibration) ===== -->
+    <sys:String x:Key="Ring.Side.Top">Top</sys:String>
+    <sys:String x:Key="Ring.Side.Right">Right</sys:String>
+    <sys:String x:Key="Ring.Side.Bottom">Bottom</sys:String>
+    <sys:String x:Key="Ring.Side.Left">Left</sys:String>
+    <sys:String x:Key="Ring.StartMark">Start</sys:String>
+    <sys:String x:Key="Ring.Summary">{0} LEDs · {1} sides</sys:String>
+    <sys:String x:Key="Ring.Center">{0} LEDs · {1} sides · {2} · index offset {3}</sys:String>
+    <sys:String x:Key="Ring.Ccw">Counter-clockwise</sys:String>
+    <sys:String x:Key="Ring.Cw">Clockwise</sys:String>
+    <sys:String x:Key="Ring.Preview">LED preview</sys:String>
+
+    <!-- ===== Devices (type names / device rows / ports / status pills) ===== -->
+    <sys:String x:Key="Dev.Type.Screen">Screen light</sys:String>
+    <sys:String x:Key="Dev.Type.Fan">ARGB fan</sys:String>
+    <sys:String x:Key="Dev.Type.Desk">Table light</sys:String>
+    <sys:String x:Key="Dev.Type.Sound">Light bar</sys:String>
+    <sys:String x:Key="Dev.Type.Unknown">Unknown</sys:String>
+    <sys:String x:Key="Dev.Name.WithId">{0} · id {1}</sys:String>
+    <sys:String x:Key="Dev.Name.Reading">{0} · reading</sys:String>
+    <sys:String x:Key="Dev.Name.ReadingShort">Reading…</sys:String>
+    <sys:String x:Key="Dev.Pill.Linking">Connecting…</sys:String>
+    <sys:String x:Key="Dev.Pill.Running">Running</sys:String>
+    <sys:String x:Key="Dev.Pill.NoScreen">Screen unavailable</sys:String>
+    <sys:String x:Key="Dev.Pill.NotPresent">Strip not present</sys:String>
+    <sys:String x:Key="Dev.Pill.NoResponse">No response on port</sys:String>
+    <sys:String x:Key="Dev.Pill.Error">Error</sys:String>
+    <sys:String x:Key="Dev.Pill.Stopped">Stopped</sys:String>
+    <sys:String x:Key="Dev.Pill.PortMissing">Port not present</sys:String>
+    <sys:String x:Key="Dev.Pill.PortBusy">Port in use</sys:String>
+    <sys:String x:Key="Dev.Pill.NoAnswer">No answer</sys:String>
+    <sys:String x:Key="Dev.Pill.Ready">Ready</sys:String>
+    <sys:String x:Key="Dev.Port.ManualMark">(manual)</sys:String>
+    <!-- single source for the power wording: banner port line + device row share it -->
+    <sys:String x:Key="Dev.Power.Normal">Power OK</sys:String>
+    <sys:String x:Key="Dev.LedCount">{0} LEDs</sys:String>
+    <sys:String x:Key="Dev.Toggle.Close">Turn off</sys:String>
+    <sys:String x:Key="Dev.Toggle.Open">Turn on</sys:String>
+    <sys:String x:Key="Dev.Pill.Current">Current</sys:String>
+    <sys:String x:Key="Dev.Select">Set as current</sys:String>
+    <sys:String x:Key="Dev.List.Probing">Probing…</sys:String>
+    <sys:String x:Key="Dev.List.NotFound" xml:space="preserve">No light strip found. Check the USB connection and make sure Ansnake is not using the port.&#10;You can also pick the port manually in Advanced settings.</sys:String>
+    <sys:String x:Key="Dev.List.Failed">Probe failed: {0}</sys:String>
+    <sys:String x:Key="Dev.Monitor.None">No monitor found</sys:String>
+    <sys:String x:Key="Dev.Monitor.Failed">Enumeration failed: {0}</sys:String>
+    <sys:String x:Key="Dev.Monitor.UnknownRes">Unknown resolution</sys:String>
+
+    <!-- ===== Core diagnostics (native English text → dictionary; map = Views/DiagText.cs) ===== -->
+    <sys:String x:Key="Diag.SerialWriteFailed">Serial port {0} write failed, reconnecting</sys:String>
+    <sys:String x:Key="Diag.NoUsablePort">Device lost: no usable port</sys:String>
+    <sys:String x:Key="Diag.CaptureFailed">Display capture init failed (D3D/resources), retrying slowly</sys:String>
+    <sys:String x:Key="Diag.CoreCrashed">Core thread crashed — check log/ambientcore.log</sys:String>
+
+    <!-- ===== banner state pill ===== -->
+    <sys:String x:Key="Banner.State.Running">Running</sys:String>
+    <sys:String x:Key="Banner.State.Starting">Starting</sys:String>
+    <sys:String x:Key="Banner.State.WaitDisp">Waiting for display</sys:String>
+    <sys:String x:Key="Banner.State.Reconnecting">Reconnecting</sys:String>
+    <sys:String x:Key="Banner.State.Error">Error</sys:String>
+    <sys:String x:Key="Banner.State.Stopped">Stopped</sys:String>
+
+    <!-- ===== Home page ===== -->
+    <sys:String x:Key="Home.Brightness.Desc">Adjust the brightness of the light strip</sys:String>
+    <sys:String x:Key="Home.Brightness.Audio">Acts as the maximum brightness in Music mode</sys:String>
+    <sys:String x:Key="Home.Brightness.McuHint">Firmware effects are rendered on the strip, so brightness is not adjustable</sys:String>
+    <sys:String x:Key="Home.Fx.Current">Current {0}</sys:String>
+    <sys:String x:Key="Home.Toggle.Close">Turn off</sys:String>
+    <sys:String x:Key="Home.Toggle.Closing">Turning off…</sys:String>
+    <sys:String x:Key="Home.Toggle.Open">Turn on</sys:String>
+    <sys:String x:Key="Home.Port.None">No device connected</sys:String>
+    <sys:String x:Key="Home.Warn.Title">Display notice</sys:String>
+    <sys:String x:Key="Home.Warn.Blocked">Cannot turn on the light strip</sys:String>
+    <sys:String x:Key="Home.Warn.MonitorFallback">The configured monitor is unavailable, fell back to the primary display</sys:String>
+    <sys:String x:Key="Home.Warn.AllBlack">{0} consecutive black frames; the app may be running in exclusive fullscreen, so colors may be off</sys:String>
+    <sys:String x:Key="Home.Picker.ClearHint">{0} (right-click to clear)</sys:String>
+    <sys:String x:Key="Home.Picker.EmptySlot">Custom slot · adjust a color and it is remembered automatically</sys:String>
+
+    <!-- Home page static XAML text -->
+    <sys:String x:Key="Home.Monitor.Capturing">Capturing</sys:String>
+    <sys:String x:Key="Home.Hero.Placeholder">Tracking</sys:String>
+    <sys:String x:Key="Home.Diag.Title">Core diagnostics</sys:String>
+    <sys:String x:Key="Home.Brightness.Title">Brightness</sys:String>
+    <sys:String x:Key="Home.Section.Mode">Mode</sys:String>
+    <sys:String x:Key="Home.Picker.Sub">The color applied to the current mode</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.WarmWhite">Warm white #FFE1D6</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Cream">Cream #FFF6E0</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.White">White #FFFFFF</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.CoolWhite">Cool white #C9E4FF</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Red">Red #FF3B30</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Orange">Orange #FF9500</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Yellow">Yellow #FFCC00</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Green">Green #34C759</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Cyan">Cyan #5AC8FA</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Blue">Blue #007AFF</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Purple">Purple #AF52DE</sys:String>
+    <sys:String x:Key="Home.Picker.Tip.Pink">Pink #FF2D55</sys:String>
+    <sys:String x:Key="Home.Picker.Hue">Hue</sys:String>
+    <sys:String x:Key="Home.Picker.Sat">Saturation</sys:String>
+    <sys:String x:Key="Home.Fx.Title">Firmware effects</sys:String>
+    <sys:String x:Key="Home.Fx.Sub">Effects built into the light strip firmware</sys:String>
+    <!-- firmware tile tooltips: MUST start with Mode.Name.<n> (the key check enforces this) -->
+    <sys:String x:Key="Home.Fx.Tip.2">Rainbow · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.3">Ocean · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.4">Lightning · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.5">Breathing · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.6">Flame · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.7">Aurora · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.8">Particle · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.9">Christmas · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.10">Vagaries · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.12">Summer · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Fx.Tip.13">Arctic · rendered by the light strip firmware</sys:String>
+    <sys:String x:Key="Home.Section.Metrics">Debug info</sys:String>
+    <sys:String x:Key="Home.Layout.Title">Layout preview</sys:String>
+    <sys:String x:Key="Home.Layout.Sub">Check how the strip actually lights up</sys:String>
+    <sys:String x:Key="Home.Metrics.Empty">Off · metrics appear once the strip is running</sys:String>
+    <sys:String x:Key="Home.Section.Device">Device</sys:String>
+    <sys:String x:Key="Home.Dev.Header">Connected device</sys:String>
+    <sys:String x:Key="Home.Monitor.Title">Monitor</sys:String>
+    <sys:String x:Key="Home.Monitor.Hint">Switch the capture target in the "Tracking" menu</sys:String>
+    <!-- ===== app shell (tray / startup / crash fallback) ===== -->
+    <sys:String x:Key="App.Tray.TurnOn">Turn on ambient light</sys:String>
+    <sys:String x:Key="App.Tray.TurnOff">Turn off ambient light</sys:String>
+    <sys:String x:Key="App.Tray.Calibrate">Screen calibration</sys:String>
+    <sys:String x:Key="App.Tray.Settings">Settings</sys:String>
+    <sys:String x:Key="App.Tray.Exit">Exit</sys:String>
+    <sys:String x:Key="App.Launch.TooMany" xml:space="preserve">Too many devices (limit {0}).&#10;Turn off a device you no longer use on the home page and try again.</sys:String>
+    <sys:String x:Key="App.Launch.FailedTitle">Startup failed</sys:String>
+    <sys:String x:Key="App.Launch.Failed" xml:space="preserve">Failed to start {0}: {1}&#10;{2}</sys:String>
+    <sys:String x:Key="App.Launch.ErrInvalid">Invalid configuration</sys:String>
+    <sys:String x:Key="App.Launch.ErrRunning">This session is already running</sys:String>
+    <sys:String x:Key="App.Launch.ErrCode">Error code {0}</sys:String>
+    <sys:String x:Key="App.Start.EnumFailed">Enumeration failed</sys:String>
+    <sys:String x:Key="App.Start.EnumFailed.Detail">Device enumeration failed: {0}</sys:String>
+    <sys:String x:Key="App.Start.Busy">Port in use</sys:String>
+    <sys:String x:Key="App.Start.Busy.Detail">Port {0} is already in use and cannot be opened. A common cause is another app (such as Ansnake) holding the light strip. Close it and click "Turn on" again.</sys:String>
+    <sys:String x:Key="App.Start.NoAnswer">Device not responding</sys:String>
+    <sys:String x:Key="App.Start.NoAnswer.Detail">Port {0} was found, but the handshake got no response. Check the USB connection and power, then click "Turn on" to retry.</sys:String>
+    <sys:String x:Key="App.Start.NotFound">No light strip found</sys:String>
+    <sys:String x:Key="App.Start.NotFound.Detail" xml:space="preserve">No light strip found. Check the USB connection and make sure Ansnake is not using the port, then click "Turn on" to retry.&#10;You can also pick the port manually in Advanced settings.</sys:String>
+    <sys:String x:Key="App.Start.NotEnabled">Device not enabled</sys:String>
+    <sys:String x:Key="App.Start.NotEnabled.Detail">A usable light strip was found, but "connect on startup" is not enabled for this device. Enable it in Advanced settings, or turn it on individually from the device list below.</sys:String>
+    <sys:String x:Key="App.Crash.UiException" xml:space="preserve">UI thread exception: {0}&#10;{1}</sys:String>
+    <sys:String x:Key="App.AutoStart.FailedTitle">Launch at login</sys:String>
+    <sys:String x:Key="App.AutoStart.Fail">Failed to set launch at login: {0}</sys:String>
+    <sys:String x:Key="App.AutoStart.NoExe">Cannot locate the current executable</sys:String>
+
+    <!-- ===== Navigation (main window left menu; static XAML) ===== -->
+    <sys:String x:Key="Nav.Home">Home</sys:String>
+    <sys:String x:Key="Nav.Capture">Tracking</sys:String>
+    <sys:String x:Key="Nav.Audio">Audio</sys:String>
+    <sys:String x:Key="Nav.Color">Color</sys:String>
+    <sys:String x:Key="Nav.Adv">Advanced</sys:String>
+    <!-- ===== Advanced settings ===== -->
+    <sys:String x:Key="Adv.Baud.Default">Default (2000000)</sys:String>
+    <sys:String x:Key="Adv.Theme.System">Follow system</sys:String>
+    <sys:String x:Key="Adv.Theme.Light">Light</sys:String>
+    <sys:String x:Key="Adv.Theme.Dark">Dark</sys:String>
+    <sys:String x:Key="Adv.Lang.System">Follow system</sys:String>
+    <sys:String x:Key="Adv.Lang.Title">Language</sys:String>
+    <sys:String x:Key="Adv.Lang.Desc">When following the system, switches with the Windows display language. Changing it takes effect immediately and is saved</sys:String>
+    <sys:String x:Key="Adv.Port.Auto">Auto-detect</sys:String>
+    <sys:String x:Key="Adv.Port.NotPresent">(not present)</sys:String>
+    <sys:String x:Key="Adv.Update.Title">Version update</sys:String>
+    <sys:String x:Key="Adv.Update.Body" xml:space="preserve">Current version {0}.&#10;&#10;This app has not been released yet, so updates cannot be checked.</sys:String>
+    <sys:String x:Key="Adv.Restore.Title">Restore default settings</sys:String>
+    <sys:String x:Key="Adv.Restore.Body" xml:space="preserve">All settings will be reset to factory defaults and cannot be undone.&#10;&#10;Are you sure?</sys:String>
+    <sys:String x:Key="Adv.Restore.Confirm">Restore defaults</sys:String>
+    <sys:String x:Key="Adv.Group.Fix">Image correction</sys:String>
+    <sys:String x:Key="Adv.MinBright.Title">LED minimum brightness</sys:String>
+    <sys:String x:Key="Adv.MinBright.Desc">LEDs dimmer than this become a dim gray glow to keep the strip from going dark. Set to 0 to allow the strip to turn off</sys:String>
+    <sys:String x:Key="Adv.Colorfix.Title">Low-gray fidelity fix (colorfix)</sys:String>
+    <sys:String x:Key="Adv.Colorfix.Desc">Turn on if dark grays get amplified into teal; clamps them to neutral gray using an absolute chroma threshold</sys:String>
+    <sys:String x:Key="Adv.Sfloor.Title">Chroma noise threshold</sys:String>
+    <sys:String x:Key="Adv.Sfloor.Desc">Anything below this threshold is treated as sampling noise</sys:String>
+    <sys:String x:Key="Adv.Group.Misc">Display and power</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Title">When the screen goes off</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Desc">How the strip behaves on lock/sleep/display switch. The darkest mode uses the minimum brightness setting</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Blank">Turn off</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Dim">Darkest</sys:String>
+    <sys:String x:Key="Adv.WaitDisp.Hold">Hold last image</sys:String>
+    <sys:String x:Key="Adv.Group.Conn">Connection</sys:String>
+    <sys:String x:Key="Adv.Port.Title">Port</sys:String>
+    <sys:String x:Key="Adv.Port.Desc">Applies to the currently selected device only. Auto-detect finds the strip and follows port changes; once specified manually, only that port is used</sys:String>
+    <sys:String x:Key="Adv.Baud.Title">Baud rate</sys:String>
+    <sys:String x:Key="Adv.Baud.Desc">Usually no need to change; for debugging only</sys:String>
+    <sys:String x:Key="Adv.Group.Ui">Interface</sys:String>
+    <sys:String x:Key="Adv.Theme.Title">Theme</sys:String>
+    <sys:String x:Key="Adv.Theme.Desc">When following the system, switches instantly with the Windows light/dark mode and accent color</sys:String>
+    <sys:String x:Key="Adv.Glow.Title">Home page glow effect</sys:String>
+    <sys:String x:Key="Adv.Glow.Desc">Shows a real-time blurred glow along the bottom of the home banner. Enabling it adds a small performance cost on the home page</sys:String>
+    <sys:String x:Key="Adv.Group.Start">Startup</sys:String>
+    <sys:String x:Key="Adv.AutoStart.Title">Launch at login</sys:String>
+    <sys:String x:Key="Adv.AutoStart.Desc">Run automatically after you sign in to Windows</sys:String>
+    <sys:String x:Key="Adv.AutoCore.Title">Auto-connect the light strip</sys:String>
+    <sys:String x:Key="Adv.AutoCore.Desc">Connects right after the app starts and restores the previous mode, reconnecting automatically if the connection drops</sys:String>
+    <sys:String x:Key="Adv.Minimize.Title">Start minimized to tray</sys:String>
+    <sys:String x:Key="Adv.Minimize.Desc">Start without showing the main window, leaving only the tray icon</sys:String>
+    <sys:String x:Key="Adv.Group.About">About</sys:String>
+    <sys:String x:Key="Adv.Update.Check">Check for updates</sys:String>
+    <sys:String x:Key="Adv.ConfigDir.Title">Config folder</sys:String>
+    <sys:String x:Key="Adv.ConfigDir.Open">Open</sys:String>
+    <sys:String x:Key="Adv.Restore.Hint">Reset all settings and device configurations to factory defaults</sys:String>
+    <sys:String x:Key="Adv.Restore.Button">Restore defaults…</sys:String>
+
+    <!-- ===== Audio settings ===== -->
+    <sys:String x:Key="Audio.DefaultDevice">System default</sys:String>
+    <sys:String x:Key="Audio.DefaultMark">(system default)</sys:String>
+    <sys:String x:Key="Audio.SourceLine">Source: {0}</sys:String>
+    <sys:String x:Key="Audio.Rebuilding">Output device changed, rebuilding the audio source…</sys:String>
+    <sys:String x:Key="Audio.Idle">Turn on Music mode to see the source and level</sys:String>
+    <sys:String x:Key="Audio.Group.Source">Source and devices</sys:String>
+    <sys:String x:Key="Audio.Level.Title">Live level</sys:String>
+    <sys:String x:Key="Audio.Source.Title">Source</sys:String>
+    <sys:String x:Key="Audio.Source.Desc">System sound is captured through loopback; a microphone picks up ambient sound. Firmware self-pickup may be unavailable on some models</sys:String>
+    <sys:String x:Key="Audio.Source.System">System sound</sys:String>
+    <sys:String x:Key="Audio.Source.Mic">Microphone</sys:String>
+    <sys:String x:Key="Audio.Source.Firmware">Firmware self-pickup</sys:String>
+    <sys:String x:Key="Audio.Out.Title">Output device</sys:String>
+    <sys:String x:Key="Audio.Out.Desc">With a non-default output, it falls back to the default when that device changes and switches back on replug</sys:String>
+    <sys:String x:Key="Audio.In.Title">Input device</sys:String>
+    <sys:String x:Key="Audio.In.Desc">With a non-default input, it falls back to the default when that device changes and switches back on replug</sys:String>
+    <sys:String x:Key="Audio.Group.Feel">Feel</sys:String>
+    <sys:String x:Key="Audio.Agc.Title">Auto gain</sys:String>
+    <sys:String x:Key="Audio.Agc.Desc">Tracks the peak of the last few seconds and normalizes, so even quiet sources pulse at full swing</sys:String>
+    <sys:String x:Key="Audio.Gain.Title">Sensitivity</sys:String>
+    <sys:String x:Key="Audio.Gain.Desc">Manual gain, multiplied with auto gain</sys:String>
+    <sys:String x:Key="Audio.Gate.Title">Noise gate</sys:String>
+    <sys:String x:Key="Audio.Gate.Desc">Dims the light below this level. Raise it if the light never goes dark; lower it if quiet parts are too sensitive</sys:String>
+    <sys:String x:Key="Audio.Soft.Title">Softness</sys:String>
+    <sys:String x:Key="Audio.Soft.Desc">Lower reacts faster, with flicker on big dynamics. Higher eases the attack and keeps gaps from going fully black</sys:String>
+    <sys:String x:Key="Audio.Release.Title">Release time</sys:String>
+    <sys:String x:Key="Audio.Release.Desc">How fast the light fades after a peak disappears. Short is crisp, long leaves an afterglow</sys:String>
+    <sys:String x:Key="Audio.Bass.Title">Bass emphasis</sys:String>
+    <sys:String x:Key="Audio.Bass.Desc">Lower follows overall loudness. Higher follows kicks and bass</sys:String>
+    <sys:String x:Key="Audio.Follow.Title">Follow system volume</sys:String>
+    <sys:String x:Key="Audio.Follow.Desc">Light amplitude shrinks as system volume is lowered. When off, amplitude no longer follows system volume</sys:String>
+
+    <!-- ===== Tracking settings (capture page) ===== -->
+    <sys:String x:Key="Cap.Monitor.Item">{0}. {1}×{2} - {3}</sys:String>
+    <sys:String x:Key="Cap.Monitor.PrimaryMark">Primary</sys:String>
+    <sys:String x:Key="Cap.Monitor.EnumFailed">Monitor enumeration failed (core not loaded?)</sys:String>
+    <sys:String x:Key="Cap.Rotate.Desc">Corrects the offset between the strip's physical start and the logical start (±{0}). You can adjust it visually in the fullscreen calibration wizard</sys:String>
+    <sys:String x:Key="Cap.Rotate.NoNeed">No index offset is needed below 10 LEDs</sys:String>
+    <sys:String x:Key="Cap.Group.Screen">Screen and strip</sys:String>
+    <sys:String x:Key="Cap.Monitor.Title">Monitor</sys:String>
+    <sys:String x:Key="Cap.Monitor.Desc">Where the tracked image comes from. Falls back to the primary display after a topology change</sys:String>
+    <sys:String x:Key="Cap.LedCount.Title">LED count</sys:String>
+    <sys:String x:Key="Cap.LedCount.Desc">Firmware limit is 180. Horizontal and vertical edges are distributed by the screen aspect ratio</sys:String>
+    <sys:String x:Key="Cap.Sides.Title">Strip sides</sys:String>
+    <sys:String x:Key="Cap.Sides.Desc">Which screen edges the light is sampled from</sys:String>
+    <sys:String x:Key="Cap.Sides.2">Left, right (2 sides)</sys:String>
+    <sys:String x:Key="Cap.Sides.3">Left, right, top (3 sides)</sys:String>
+    <sys:String x:Key="Cap.Sides.4">Left, right, top, bottom (4 sides)</sys:String>
+    <sys:String x:Key="Cap.Direction.Title">Start direction</sys:String>
+    <sys:String x:Key="Cap.Direction.Desc">Which corner the first LED is in, and the winding direction</sys:String>
+    <sys:String x:Key="Cap.Direction.Ccw">Counter-clockwise (from bottom-right)</sys:String>
+    <sys:String x:Key="Cap.Direction.Cw">Clockwise (from bottom-left)</sys:String>
+    <sys:String x:Key="Cap.Rotate.Title">Index offset</sys:String>
+    <sys:String x:Key="Cap.Rotate.Default">Corrects the offset between the strip's physical start and the logical start</sys:String>
+    <sys:String x:Key="Cap.Calib.Title">Fullscreen calibration wizard</sys:String>
+    <sys:String x:Key="Cap.Calib.Desc">Shows a calibration image; align the strip's color start with the four-color boundary</sys:String>
+    <sys:String x:Key="Cap.Calib.Open">Open wizard…</sys:String>
+    <sys:String x:Key="Cap.Group.Chase">Tracking</sys:String>
+    <sys:String x:Key="Cap.Range.Title">Tracking range</sys:String>
+    <sys:String x:Key="Cap.Range.Desc">Sampling depth; larger values let pixels farther from the edge contribute</sys:String>
+    <sys:String x:Key="Cap.Smooth.Title">Tracking smoothing</sys:String>
+    <sys:String x:Key="Cap.Smooth.Desc">Adjacent LEDs share sample points; smoother but less detailed</sys:String>
+    <sys:String x:Key="Cap.Smooth.1">Smooth</sys:String>
+    <sys:String x:Key="Cap.Smooth.2">Smoother</sys:String>
+    <sys:String x:Key="Cap.Smooth.3">Smoothest</sys:String>
+    <sys:String x:Key="Cap.Fps.Title">Frame rate cap</sys:String>
+    <sys:String x:Key="Cap.Fps.Desc">Limits the core's frame rate to reduce CPU and serial usage</sys:String>
+    <sys:String x:Key="Cap.Fps.Unlimited">Unlimited</sys:String>
+    <sys:String x:Key="Cap.Group.BlackBar">Black bars</sys:String>
+    <sys:String x:Key="Cap.BlackBar.Title">Black bar detection</sys:String>
+    <sys:String x:Key="Cap.BlackBar.Desc">Automatically shrinks the sampling border when the image has black bars (movies/ultrawide)</sys:String>
+    <sys:String x:Key="Cap.BlackBar.Level">Black bar threshold</sys:String>
+    <sys:String x:Key="Cap.BlackBar.LevelDesc">Higher is more conservative (less likely to misjudge dark scenes), lower is more aggressive</sys:String>
+    <sys:String x:Key="Cap.Soften.Title">Softening</sys:String>
+    <sys:String x:Key="Cap.Soften.Desc">Adds extra smoothing for a more comfortable movie-watching feel</sys:String>
+    <sys:String x:Key="Cap.Soften.A.Title">Flash suppression</sys:String>
+    <sys:String x:Key="Cap.Soften.A.Desc">Limits sudden overall brightness changes to avoid harsh flashes</sys:String>
+    <sys:String x:Key="Cap.Soften.B.Title">Flash suppression + temporal smoothing</sys:String>
+    <sys:String x:Key="Cap.Soften.B.Desc">Adds soft color transitions on top of flash suppression. Costs a little screen-tracking responsiveness</sys:String>
+
+    <!-- ===== Color settings (page) ===== -->
+    <sys:String x:Key="Color.Group">Color adjustment</sys:String>
+    <sys:String x:Key="Color.Vib.Title">Saturation</sys:String>
+    <sys:String x:Key="Color.Vib.Desc">How vivid the colors look</sys:String>
+    <sys:String x:Key="Color.Hue.Title">Hue shift</sys:String>
+    <sys:String x:Key="Color.Hue.Desc">Overall hue shift amount</sys:String>
+    <sys:String x:Key="Color.Gamma.Title">Brightness curve (gamma)</sys:String>
+    <sys:String x:Key="Color.Gamma.Desc">Gamma mapping curve of the light strip</sys:String>
+    <sys:String x:Key="Color.Cut.Title">Minimum color brightness</sys:String>
+    <sys:String x:Key="Color.Cut.Desc">Turns off LEDs dimmer than this to prevent color jitter at low brightness. The final result is affected by "LED minimum brightness" in Advanced settings</sys:String>
+    <sys:String x:Key="Color.Output.Title">LED color order</sys:String>
+    <sys:String x:Key="Color.Output.Desc">Try them one by one if the colors are wrong</sys:String>
+    <sys:String x:Key="Color.Balance.Title">LED color balance</sys:String>
+    <sys:String x:Key="Color.Balance.Desc">Per-channel gain; fine-tune when white is off</sys:String>
+    <!-- ===== Calibration window ===== -->
+    <sys:String x:Key="Calib.Color.Red">red</sys:String>
+    <sys:String x:Key="Calib.Color.Green">green</sys:String>
+    <sys:String x:Key="Calib.Color.Blue">blue</sys:String>
+    <sys:String x:Key="Calib.Color.Yellow">yellow</sys:String>
+    <sys:String x:Key="Calib.Title">Screen calibration</sys:String>
+    <sys:String x:Key="Calib.NeedSession" xml:space="preserve">The core session for the current device is not running.&#10;Turn on the light strip on the home page first.</sys:String>
+    <sys:String x:Key="Calib.Status.Running">Session running</sys:String>
+    <sys:String x:Key="Calib.Status.DevLost">Device lost: strip unplugged or port in use?</sys:String>
+    <sys:String x:Key="Calib.Status.WaitDisp">Display unavailable (target screen is locked or off)</sys:String>
+    <sys:String x:Key="Calib.Status.Other">Session state {0}</sys:String>
+    <sys:String x:Key="Calib.Scheme">Scheme {0}/4 · top-left {1} top-right {2} bottom-left {3} bottom-right {4}</sys:String>
+    <sys:String x:Key="Calib.Screen">Calibration screen {0} · {1}×{2} · {3}</sys:String>
+    <sys:String x:Key="Calib.Screen.Primary">(primary)</sys:String>
+    <sys:String x:Key="Calib.Rotate.Line">{0} LEDs · index offset {1} (max offset ±{2})</sys:String>
+    <sys:String x:Key="Calib.Index.Prefix">LED index:</sys:String>
+    <sys:String x:Key="Calib.WindowTitle">AmbientLight - Screen calibration</sys:String>
+    <sys:String x:Key="Calib.Intro">Once calibration starts, the light strip switches to Tracking mode at 100% brightness. Use "Shift left/right" to shift the strip colors so that each LED matches the quadrant it sits in and aligns with the screen's four-color boundary. The diagram below shows the strip's start position and mounting direction, plus the color the current LED should show. If the mounting direction does not match, change the start direction in Tracking settings.</sys:String>
+    <sys:String x:Key="Calib.ShiftLeft">← Shift left</sys:String>
+    <sys:String x:Key="Calib.ShiftRight">Shift right →</sys:String>
+    <sys:String x:Key="Calib.Reset">Reset</sys:String>
+    <sys:String x:Key="Calib.ChangeColors">Change colors</sys:String>
+    <sys:String x:Key="Calib.Footer">The offset takes effect and is saved immediately; "Reset" returns it to the default of 0. Press Esc or "Close" to exit and save your settings.</sys:String>
+</ResourceDictionary>

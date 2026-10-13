@@ -13,14 +13,26 @@ public partial class SettingsPageAudio : Page
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
     // 下拉序 ↔ audioSource 值: 0=回环(默认) 2=麦克风 1=MCU 自拾音
-    private static readonly int[] SourceValues = [0, 2, 1];
+    /// <summary>音源下拉的值 (与 XAML 项**同序**) —— public 是为了让探针能断言"项数/往返"。</summary>
+    public static readonly int[] SourceValues = [0, 2, 1];
 
     public SettingsPageAudio()
     {
         InitializeComponent();
         Controls.WheelScroll.Attach(this);
+        // M5.3 语言: 设备下拉的「系统默认 / (系统默认)」是 C# 拼的 → 换语言时重建
+        LanguageService.LanguageChanged += OnLanguageChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+    }
+
+    /// <summary>M5.3: 换语言后重建设备下拉 (其余文案随 {DynamicResource} 自动刷)。</summary>
+    private void OnLanguageChanged()
+    {
+        if (!IsLoaded) return;               // 没在页面上就不用管 (切过去时会重新构造)
+        _loading = true;
+        LoadFromConfig();
+        _loading = false;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -34,6 +46,7 @@ public partial class SettingsPageAudio : Page
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         App.Instance.Poller.Polled -= OnPolled;
+        LanguageService.LanguageChanged -= OnLanguageChanged;
     }
 
     private void LoadFromConfig()

@@ -9,6 +9,10 @@ namespace AmbientLight.Views;
 
 public partial class SettingsPageColor : Page
 {
+    /// <summary>灯珠色序下拉的项数 (与 XAML 里的 ComboBoxItem 个数**必须一致**)。
+    /// 两处独立存在 → 探针断言 items.Count == 它 (加一项漏改这个常数, 多出来的那项永远选不中)。</summary>
+    public const int OutputOrderCount = 6;
+
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
     public SettingsPageColor()
@@ -29,7 +33,7 @@ public partial class SettingsPageColor : Page
         GGainSlider.Value = Math.Clamp(dev.GGain, 0, 2);
         BGainSlider.Value = Math.Clamp(dev.BGain, 0, 2);
         RefreshGainSummary();
-        OutputCombo.SelectedIndex = Math.Clamp(dev.OutputOrder, 0, 5);
+        OutputCombo.SelectedIndex = Math.Clamp(dev.OutputOrder, 0, OutputOrderCount - 1);
     }
 
     // ---- 颜色链滑条 ------------------------------------------------------

@@ -33,7 +33,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon BorderAll24}" Title="{DynamicResource Cap.Sides.Title}"
                              Description="{DynamicResource Cap.Sides.Desc}">
-            <ComboBox x:Name="SidesCombo" Width="160" VerticalAlignment="Center"
+            <ComboBox x:Name="SidesCombo" MinWidth="160" VerticalAlignment="Center"
                       SelectionChanged="OnSidesChanged">
                 <ComboBoxItem Content="{DynamicResource Cap.Sides.2}" />
                 <ComboBoxItem Content="{DynamicResource Cap.Sides.3}" />
@@ -42,7 +42,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowRotateClockwise24}" Title="{DynamicResource Cap.Direction.Title}"
                              Description="{DynamicResource Cap.Direction.Desc}">
-            <ComboBox x:Name="DirectionCombo" Width="160" VerticalAlignment="Center"
+            <ComboBox x:Name="DirectionCombo" MinWidth="160" VerticalAlignment="Center"
                       SelectionChanged="OnDirectionChanged">
                 <ComboBoxItem Content="{DynamicResource Cap.Direction.Ccw}" />
                 <ComboBoxItem Content="{DynamicResource Cap.Direction.Cw}" />
@@ -75,7 +75,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DataLine24}" Title="{DynamicResource Cap.Smooth.Title}"
                              Description="{DynamicResource Cap.Smooth.Desc}">
-            <ComboBox x:Name="SmoothingCombo" Width="120" VerticalAlignment="Center"
+            <ComboBox x:Name="SmoothingCombo" MinWidth="120" VerticalAlignment="Center"
                       SelectionChanged="OnSmoothingChanged">
                 <ComboBoxItem Content="{DynamicResource Common.Close}" />
                 <ComboBoxItem Content="{DynamicResource Cap.Smooth.1}" />
@@ -85,7 +85,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="{DynamicResource Cap.Fps.Title}"
                              Description="{DynamicResource Cap.Fps.Desc}">
-            <ComboBox x:Name="FpsCapCombo" Width="120" VerticalAlignment="Center"
+            <ComboBox x:Name="FpsCapCombo" MinWidth="120" VerticalAlignment="Center"
                       SelectionChanged="OnFpsCapChanged">
                 <ComboBoxItem Content="{DynamicResource Cap.Fps.Unlimited}" />
                 <ComboBoxItem Content="240 fps" />

@@ -22,7 +22,8 @@
                      说明与迁移指南见 Styles/SliderStyle.xaml 头部 + docs/SLIDER_TEMPLATE.md -->
                 <ResourceDictionary Source="Styles/SliderStyle.xaml" />
                 <!-- M5.3 i18n: 文案字典 (唯一文案源; C# 走 Loc.T/Loc.F, XAML 走 {DynamicResource}).
-                     5.3 加语言切换 = 换这本字典 + 广播重取 (与主题同款) -->
+                     这里只合并**中文**那本 —— 语言切换 = Services/LanguageService 运行时把这一项
+                     换成 Strings.en.xaml (与主题换字典同款, 已实现; 「跟随系统」走系统显示语言) -->
                 <ResourceDictionary Source="Localization/Strings.zh.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <!-- M5.2 文字色层级的用法约定 (别再自造"提示文字"刷子):

@@ -65,7 +65,7 @@
         <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.Misc}" />
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon WeatherMoon24}" Title="{DynamicResource Adv.WaitDisp.Title}"
                              Description="{DynamicResource Adv.WaitDisp.Desc}">
-            <ComboBox x:Name="WaitDispCombo" Width="160" VerticalAlignment="Center"
+            <ComboBox x:Name="WaitDispCombo" MinWidth="160" VerticalAlignment="Center"
                       SelectionChanged="OnWaitDispChanged">
                 <ComboBoxItem Content="{DynamicResource Adv.WaitDisp.Blank}" />
                 <ComboBoxItem Content="{DynamicResource Adv.WaitDisp.Dim}" />
@@ -88,13 +88,13 @@
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </ui:Button>
-                <ComboBox x:Name="PortCombo" Width="160" DisplayMemberPath="Label"
+                <ComboBox x:Name="PortCombo" MinWidth="160" DisplayMemberPath="Label"
                           VerticalAlignment="Center" SelectionChanged="OnPortChanged" />
             </StackPanel>
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}" Title="{DynamicResource Adv.Baud.Title}"
                              Description="{DynamicResource Adv.Baud.Desc}">
-            <ComboBox x:Name="BaudCombo" Width="160" VerticalAlignment="Center"
+            <ComboBox x:Name="BaudCombo" MinWidth="160" VerticalAlignment="Center"
                       SelectionChanged="OnBaudChanged" />
         </controls:SettingRow>
 
@@ -105,8 +105,16 @@
              文案「跟随系统」= 随 Windows 的深/浅色**与强调色**变化自动跟随。 -->
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DarkTheme24}" Title="{DynamicResource Adv.Theme.Title}"
                              Description="{DynamicResource Adv.Theme.Desc}">
-            <ComboBox x:Name="ThemeCombo" Width="120" VerticalAlignment="Center"
+            <ComboBox x:Name="ThemeCombo" MinWidth="120" VerticalAlignment="Center"
                       SelectionChanged="OnThemeChanged" />
+        </controls:SettingRow>
+        <!-- M5.3 语言: 与主题同款 —— 立即生效不重启 (换字典 + 广播; 机制见 Services/LanguageService.cs)。
+             下拉项是**代码生成**的: 语言名 (简体中文 / English) 必须与当前语言无关 (endonym),
+             所以不进字典; 只有「跟随系统」随语言翻。 -->
+        <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon LocalLanguage24}" Title="{DynamicResource Adv.Lang.Title}"
+                             Description="{DynamicResource Adv.Lang.Desc}">
+            <ComboBox x:Name="LangCombo" MinWidth="120" VerticalAlignment="Center"
+                      SelectionChanged="OnLangChanged" />
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBrush24}" Title="{DynamicResource Adv.Glow.Title}"
                              Description="{DynamicResource Adv.Glow.Desc}">

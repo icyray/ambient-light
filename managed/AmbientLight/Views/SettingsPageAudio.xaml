@@ -22,7 +22,7 @@
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon SoundSource24}" Title="{DynamicResource Audio.Source.Title}"
                              Description="{DynamicResource Audio.Source.Desc}">
-            <ComboBox x:Name="SourceCombo" Width="160" VerticalAlignment="Center"
+            <ComboBox x:Name="SourceCombo" MinWidth="160" VerticalAlignment="Center"
                       SelectionChanged="OnSourceChanged">
                 <ComboBoxItem Content="{DynamicResource Audio.Source.System}" />
                 <ComboBoxItem Content="{DynamicResource Audio.Source.Mic}" />
@@ -40,7 +40,7 @@
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </ui:Button>
-                <ComboBox x:Name="OutDevCombo" Width="160" DisplayMemberPath="Label"
+                <ComboBox x:Name="OutDevCombo" MinWidth="160" DisplayMemberPath="Label"
                           VerticalAlignment="Center" SelectionChanged="OnOutDevChanged" />
             </StackPanel>
         </controls:SettingRow>
@@ -55,7 +55,7 @@
                     <ui:SymbolIcon Symbol="ArrowClockwise24" FontSize="18"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </ui:Button>
-                <ComboBox x:Name="MicDevCombo" Width="160" DisplayMemberPath="Label"
+                <ComboBox x:Name="MicDevCombo" MinWidth="160" DisplayMemberPath="Label"
                           VerticalAlignment="Center" SelectionChanged="OnMicDevChanged" />
             </StackPanel>
         </controls:SettingRow>

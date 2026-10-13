@@ -12,7 +12,8 @@ namespace AmbientLight.Views;
 public partial class SettingsPageAdvanced : Page
 {
     // ComboBox 显示序 (熄灭/最暗/保持) ↔ 配置值 (2/1/0)
-    private static readonly int[] PolicyChoices = [2, 1, 0];
+    /// <summary>熄屏策略下拉的值 (与 XAML 项**同序**) —— public 是为了让探针能断言"项数/往返"。</summary>
+    public static readonly int[] PolicyChoices = [2, 1, 0];
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
     // ---- 连接: 端口 / 波特率 (§8.3) --------------------------------------
@@ -37,6 +38,19 @@ public partial class SettingsPageAdvanced : Page
 
     private static string[] BuildThemeLabels() =>
         [Loc.T("Adv.Theme.System"), Loc.T("Adv.Theme.Light"), Loc.T("Adv.Theme.Dark")];
+
+    // ---- 语言 (M5.3) ------------------------------------------------------
+    /// <summary>语言下拉的候选项 —— **从 `LanguageService.All` 派生, 不在这里另写一份**
+    /// (加语言只改那张表; 以前这里/`BuildLangLabels` 是两处并列数组, 加语言漏改一处就错位)。</summary>
+    public static readonly LangChoice[] LangChoices =
+        [LangChoice.System, .. LanguageService.All.Select(d => d.Choice)];
+
+    /// <summary>语言下拉的显示文案 —— 与 <see cref="LangChoices"/> **同源同序**。
+    /// ⚠️ 各语言的显示名用 `LangDef.Endonym` (语言**自己**的名字, 写死的字面量) ——
+    /// endonym 必须与当前界面语言无关 (中文界面里也写 "English"), 否则用户在英文界面里
+    /// 找不到怎么切回中文。只有「跟随系统」随语言翻 (它是普通文案, 在字典里)。</summary>
+    private static string[] BuildLangLabels() =>
+        [Loc.T("Adv.Lang.System"), .. LanguageService.All.Select(d => d.Endonym)];
 
     /// <summary>端口下拉的一项。`Port = null` 表示"自动探测" (写回空串)。</summary>
     public sealed record PortItem(string? Port, string Label);
@@ -68,8 +82,25 @@ public partial class SettingsPageAdvanced : Page
         InitializeComponent();
         BaudCombo.ItemsSource = BuildBaudLabels();   // 静态内容 → 构造期就绑; 选中项由 ReloadFromConfig 定
         ThemeCombo.ItemsSource = BuildThemeLabels(); // 同上 (M5.2)
+        LangCombo.ItemsSource = BuildLangLabels();    // 同上 (M5.3)
         Controls.WheelScroll.Attach(this);   // 滚轮滚动由外层滚动器承担
+        // M5.3 换语言: XAML 侧靠 {DynamicResource} 自动刷新 (零跳变), 但本页那几个下拉的**项**
+        // 是构造期一次性生成的 C# 文案 (波特率/主题/语言/端口), 不会自己跟着字典变 → 自己重建。
+        LanguageService.LanguageChanged += OnLanguageChanged;
+        Unloaded += (_, _) => LanguageService.LanguageChanged -= OnLanguageChanged;
         Loaded += OnLoaded;
+    }
+
+    /// <summary>M5.3: 换语言后重建本页的下拉项 (语言选择器就在本页, 所以这是"当场就能看见"的那一页)。
+    /// 重建项 + 重读配置 = 选中项、端口列表一起回到正确状态 (_loading 接管回写)。
+    /// 其余页面不订阅: 它们切过去时都是新实例, 构造期自然取到新语言的文案。</summary>
+    private void OnLanguageChanged()
+    {
+        _loading = true;                     // 重建项期间别把选中清空当成用户改设置
+        BaudCombo.ItemsSource = BuildBaudLabels();
+        ThemeCombo.ItemsSource = BuildThemeLabels();
+        LangCombo.ItemsSource = BuildLangLabels();
+        ReloadFromConfig();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e) => ReloadFromConfig();
@@ -94,6 +125,7 @@ public partial class SettingsPageAdvanced : Page
         AutoStartCoreToggle.IsChecked = ConfigStore.Device.AutoStartCore;
         BannerGlowToggle.IsChecked = ConfigStore.App.BannerGlow;   // M5.1 §4
         ThemeCombo.SelectedIndex = Array.IndexOf(ThemeChoices, ThemeService.Parse(ConfigStore.App.Theme));  // M5.2 (Parse 永不失败)
+        LangCombo.SelectedIndex = Array.IndexOf(LangChoices, LanguageService.Parse(ConfigStore.App.Lang));  // M5.3 (同上)
 
         // 连接 (§8.3)
         ReloadPorts();
@@ -229,6 +261,30 @@ public partial class SettingsPageAdvanced : Page
         ConfigStore.App.Theme = key;
         ConfigStore.SaveApp();
         ThemeService.Apply(choice);
+    }
+
+    /// <summary>语言 (M5.3): **先应用、成功才写配置**。
+    /// 应用会换掉文案资源字典 → 各页面靠 {DynamicResource} 自动跟着变 (零跳变);
+    /// 页内 code-behind 一次性赋值的文案由各页的 LanguageChanged 订阅 + App 重写托盘菜单补齐。
+    /// ⚠️ 装不上目标字典时 (社区加了语言却忘了把文件编进去之类) **不写配置、把下拉退回去** ——
+    /// 否则界面还停在旧语言、配置已是新语言, 下次启动又变回去。</summary>
+    private void OnLangChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        int i = LangCombo.SelectedIndex;
+        if (i < 0 || i >= LangChoices.Length) return;
+        var choice = LangChoices[i];
+        string key = LanguageService.ToKey(choice);
+        if (key == ConfigStore.App.Lang) return;       // 没变就别白换一次字典
+        if (!LanguageService.Apply(choice))            // 失败 → 回退下拉 (配置不写)
+        {
+            _loading = true;
+            LangCombo.SelectedIndex = Array.IndexOf(LangChoices, LanguageService.Parse(ConfigStore.App.Lang));
+            _loading = false;
+            return;
+        }
+        ConfigStore.App.Lang = key;
+        ConfigStore.SaveApp();
     }
 
     // ---- 配置目录 --------------------------------------------------------

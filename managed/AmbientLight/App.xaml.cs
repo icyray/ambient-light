@@ -22,6 +22,9 @@ public partial class App : Application
     private EventWaitHandle? _showEvent;
     private TaskbarIcon? _tray;
     private MenuItem? _trayToggle;
+    private MenuItem? _trayCalibrate;
+    private MenuItem? _traySettings;
+    private MenuItem? _trayExit;
     private PollingService? _poller;
     private MainWindow? _main;
 
@@ -73,18 +76,23 @@ public partial class App : Application
         // (刷 Application.MainWindow 的 backdrop) 是空操作, 窗口创建时 OnSourceInitialized
         // 会按已经正确的主题走 backdrop 序列, 所以不会"先浅色再变深"闪一下。
         Services.ThemeService.ApplyAtStartup();
+        // M5.3 语言: 同样在 new MainWindow() **之前** —— 此时没有窗口, 换字典不会"先中文再英文"地闪一下。
+        Services.LanguageService.ApplyAtStartup();
         // 开机自启自愈: app.json 的 AutoStart 是事实源, 快捷方式丢失/残留都对齐
         if (ConfigStore.App.AutoStart && !AutoStart.IsActive())
             AutoStart.Enable();
         else if (!ConfigStore.App.AutoStart && AutoStart.IsActive())
             AutoStart.Disable();
         InitTray();
+        // M5.3 语言: 托盘菜单标题是一次性赋值的 C# 文案 → 换语言要重建 (主窗页由 MainWindow 重导航)
+        Services.LanguageService.LanguageChanged += RefreshTrayText;
 
         _poller = new PollingService();
         _poller.StateChanged += OnCoreStateChanged;
 
         _main = new MainWindow();
         Services.ThemeService.Attach(_main);   // M5.2: 接线后开始跟随系统主题/强调色变化
+        Services.LanguageService.Attach(_main);   // M5.3: 接线后「跟随系统」才会跟着 Windows 显示语言走
         if (ConfigStore.App.StartMinimized)
             _main.Hide();
         else
@@ -417,6 +425,15 @@ public partial class App : Application
             _trayToggle.Header = Loc.T(CoreRunning ? "App.Tray.TurnOff" : "App.Tray.TurnOn");
     }
 
+    /// <summary>M5.3 换语言后重写托盘菜单标题 (菜单是一次性构造的 C# 文案, 不会自己跟着字典变)。</summary>
+    private void RefreshTrayText()
+    {
+        UpdateTrayToggle();
+        if (_trayCalibrate != null) _trayCalibrate.Header = Loc.T("App.Tray.Calibrate");
+        if (_traySettings != null) _traySettings.Header = Loc.T("App.Tray.Settings");
+        if (_trayExit != null) _trayExit.Header = Loc.T("App.Tray.Exit");
+    }
+
     // ---- 托盘 ---------------------------------------------------------
     private void InitTray()
     {
@@ -430,17 +447,17 @@ public partial class App : Application
         var menu = new ContextMenu();
         _trayToggle = new MenuItem { Header = Loc.T("App.Tray.TurnOn") };
         _trayToggle.Click += (_, _) => ToggleCore();
-        var calibrate = new MenuItem { Header = Loc.T("App.Tray.Calibrate") };
-        calibrate.Click += (_, _) => { ShowMainWindow(); Views.CalibrateWindow.TryOpen(); };
-        var settings = new MenuItem { Header = Loc.T("App.Tray.Settings") };
-        settings.Click += (_, _) => ShowMainWindow();
-        var exit = new MenuItem { Header = Loc.T("App.Tray.Exit") };
-        exit.Click += (_, _) => ExitApp();
+        _trayCalibrate = new MenuItem { Header = Loc.T("App.Tray.Calibrate") };
+        _trayCalibrate.Click += (_, _) => { ShowMainWindow(); Views.CalibrateWindow.TryOpen(); };
+        _traySettings = new MenuItem { Header = Loc.T("App.Tray.Settings") };
+        _traySettings.Click += (_, _) => ShowMainWindow();
+        _trayExit = new MenuItem { Header = Loc.T("App.Tray.Exit") };
+        _trayExit.Click += (_, _) => ExitApp();
         menu.Items.Add(_trayToggle);
-        menu.Items.Add(calibrate);
-        menu.Items.Add(settings);
+        menu.Items.Add(_trayCalibrate);
+        menu.Items.Add(_traySettings);
         menu.Items.Add(new Separator());
-        menu.Items.Add(exit);
+        menu.Items.Add(_trayExit);
         _tray.ContextMenu = menu;
         _tray.TrayMouseDoubleClick += (_, _) => ShowMainWindow();
     }
@@ -465,6 +482,8 @@ public partial class App : Application
     {
         StopAllDevicesBlocking();
         Services.ThemeService.Detach();   // M5.2: SystemEvents 是静态事件, 不退订会吊着它的隐藏窗口
+        Services.LanguageService.Detach();   // M5.3: 窗口钩子同理
+        Services.LanguageService.LanguageChanged -= RefreshTrayText;
         if (ConfigStore.ConfigDir.Length > 0)
         {
             // 第二实例守卫退出时尚未 Load (ConfigDir 为空), 不能用默认值覆盖已存配置

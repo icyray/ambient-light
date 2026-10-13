@@ -116,6 +116,8 @@ public partial class HomePage : Page
         // 用 ThemeService.AppearanceChanged 而不是 ApplicationThemeManager.Changed:
         // 后者只在**换主题**时触发, 强调色变化不会触发它。
         ThemeService.AppearanceChanged += OnAppearanceChanged;
+        // M5.3 语言: 与主题同一套路 —— XAML 侧自动, code-behind 一次性/按签名短路的文案靠这里重建
+        LanguageService.LanguageChanged += OnLanguageChanged;
 
         CollectModeButtons();
         var dev = ConfigStore.Device;
@@ -140,9 +142,28 @@ public partial class HomePage : Page
         App.Instance.Poller.DevicesChanged -= OnDevicesChanged;
         App.Instance.Poller.StateChanged -= OnCoreStateChanged;
         ThemeService.AppearanceChanged -= OnAppearanceChanged;
+        LanguageService.LanguageChanged -= OnLanguageChanged;
         StopGlowTimer();
         _lastPolledState = -1;
     }
+
+    /// <summary>M5.3 换语言后的"重取 + 重建" (与主题那套同源)。
+    /// XAML 侧的 `{DynamicResource}` 已由字典替换自动刷新, 这里补的是 **code-behind 一次性赋值**
+    /// 和**按签名短路**的那几处:
+    ///   · `_lastHeroMode` —— banner 大字 (模式名) / 副标题 (模式说明) 只在模式变化时改写;
+    ///   · `_lastCenter` / `_lastRingSig` —— 布局预览的中心几何文本与折叠头摘要;
+    ///   · 其余 (banner 文字色/指标条标签/设备行/显示器行/自定义色槽) 复用主题那次的处理。
+    /// 注: 亮度说明 / 开关文案 / 端口行 / 提示条 / 诊断行是**每次轮询都重取**的, 不用管。</summary>
+    private void OnLanguageChanged()
+        => Dispatcher.BeginInvoke(() =>
+        {
+            if (!_loaded) return;
+            _lastHeroMode = -1;
+            _lastCenter = "\0";
+            _lastRingSig = -1;
+            RefreshModeButtons();         // 固件特效折叠头的「当前 XX」胶囊
+            OnAppearanceChanged();
+        });
 
     /// <summary>M5.2 主题 / 强调色变化后的"重取 + 重建"(见 OnLoaded 里的说明)。
     /// 复位那两个签名, 否则 ApplyBannerLook / CrossFadeStreak 会因为"看起来没变"而短路不刷色。
