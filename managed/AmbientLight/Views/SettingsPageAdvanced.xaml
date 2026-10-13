@@ -105,7 +105,7 @@
              文案「跟随系统」= 随 Windows 的深/浅色**与强调色**变化自动跟随。 -->
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon DarkTheme24}" Title="{DynamicResource Adv.Theme.Title}"
                              Description="{DynamicResource Adv.Theme.Desc}">
-            <ComboBox x:Name="ThemeCombo" MinWidth="120" VerticalAlignment="Center"
+            <ComboBox x:Name="ThemeCombo" MinWidth="160" VerticalAlignment="Center"
                       SelectionChanged="OnThemeChanged" />
         </controls:SettingRow>
         <!-- M5.3 语言: 与主题同款 —— 立即生效不重启 (换字典 + 广播; 机制见 Services/LanguageService.cs)。
@@ -113,7 +113,7 @@
              所以不进字典; 只有「跟随系统」随语言翻。 -->
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon LocalLanguage24}" Title="{DynamicResource Adv.Lang.Title}"
                              Description="{DynamicResource Adv.Lang.Desc}">
-            <ComboBox x:Name="LangCombo" MinWidth="120" VerticalAlignment="Center"
+            <ComboBox x:Name="LangCombo" MinWidth="160" VerticalAlignment="Center"
                       SelectionChanged="OnLangChanged" />
         </controls:SettingRow>
         <controls:SettingRow Margin="0,0,0,4" Icon="{ui:SymbolIcon PaintBrush24}" Title="{DynamicResource Adv.Glow.Title}"

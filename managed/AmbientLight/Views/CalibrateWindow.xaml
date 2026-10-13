@@ -54,13 +54,13 @@
 
                 <UniformGrid Columns="4" Margin="0,12,0,0">
                     <ui:Button x:Name="RotLeftBtn" Content="{DynamicResource Calib.ShiftLeft}"
-                               HorizontalAlignment="Center" Width="80" Click="OnRotLeft" />
+                               HorizontalAlignment="Center" MinWidth="80" Click="OnRotLeft" />
                     <ui:Button x:Name="RotRightBtn" Content="{DynamicResource Calib.ShiftRight}" 
-                               HorizontalAlignment="Center" Width="80" Click="OnRotRight" />
+                               HorizontalAlignment="Center" MinWidth="80" Click="OnRotRight" />
                     <ui:Button x:Name="RotResetBtn" Content="{DynamicResource Calib.Reset}" 
-                               HorizontalAlignment="Center" Width="80" Click="OnRotReset" />
+                               HorizontalAlignment="Center" MinWidth="80" Click="OnRotReset" />
                     <ui:Button Content="{DynamicResource Calib.ChangeColors}" 
-                               HorizontalAlignment="Center" Width="80" Click="OnRotateColors" />
+                               HorizontalAlignment="Center" MinWidth="80" Click="OnRotateColors" />
                 </UniformGrid>
                 <TextBlock Text="{DynamicResource Calib.Footer}"
                            Opacity="0.6" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" />
