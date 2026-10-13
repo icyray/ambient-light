@@ -129,7 +129,7 @@
     <sys:String x:Key="Home.Warn.Title">画面提示</sys:String>
     <!-- 未知模式提示 (可行动: 切走就好) —— 用「模式提示」做标题, 别混进"画面"那类 -->
     <sys:String x:Key="Home.Warn.Mode.Title">模式提示</sys:String>
-    <sys:String x:Key="Home.Warn.UnknownMode">灯带报了模式 {0}，此版本还不认识它；切换到其它模式即可恢复</sys:String>
+    <sys:String x:Key="Home.Warn.UnknownMode">灯带回报当前模式为 {0}，此版本无法识别；切换到其它模式即可恢复</sys:String>
     <sys:String x:Key="Home.Warn.Blocked">无法开启灯带</sys:String>
     <sys:String x:Key="Home.Warn.MonitorFallback">配置的显示器不可用，已回退主屏</sys:String>
     <sys:String x:Key="Home.Warn.AllBlack">连续 {0} 帧全黑，程序可能运行在独占全屏模式，画面可能不准</sys:String>
@@ -221,8 +221,8 @@
     <!-- 语言名 (简体中文 / English) 是**本语言字面量**, 不进字典 —— endonym 不该随当前语言变
          (见 SettingsPageAdvanced.LangChoices); 只有"跟随系统"随语言翻 -->
     <sys:String x:Key="Adv.Lang.System">跟随系统</sys:String>
-    <sys:String x:Key="Adv.Lang.Title">语言</sys:String>
-    <sys:String x:Key="Adv.Lang.Desc">跟随系统时随 Windows 显示语言切换，切换后立即生效并保存</sys:String>
+    <sys:String x:Key="Adv.Lang.Title">语言 / Language</sys:String>
+    <sys:String x:Key="Adv.Lang.Desc">跟随系统时随 Windows 显示语言切换</sys:String>
     <sys:String x:Key="Adv.Port.Auto">自动检测</sys:String>
     <sys:String x:Key="Adv.Port.NotPresent">(不在位)</sys:String>
     <sys:String x:Key="Adv.Update.Title">版本更新</sys:String>
