@@ -14,7 +14,7 @@
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="MinBrightnessValue" Text="1" MinWidth="32" TextAlignment="Right"
                            Margin="0,0,10,0" VerticalAlignment="Center" />
-                <Slider x:Name="MinBrightnessSlider" Width="200" Minimum="1" Maximum="25" Value="1"
+                <Slider x:Name="MinBrightnessSlider" Width="200" Minimum="0" Maximum="25" Value="1"
                         controls:SliderJump.Enabled="True"
                         VerticalAlignment="Center" ValueChanged="OnMinBrightnessChanged" />
             </StackPanel>

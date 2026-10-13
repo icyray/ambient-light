@@ -85,7 +85,7 @@ public partial class SettingsPageAdvanced : Page
     {
         _loading = true;
         var dev = ConfigStore.Device;
-        MinBrightnessSlider.Value = Math.Clamp(dev.MinBrightness, 1, 25);
+        MinBrightnessSlider.Value = Math.Clamp(dev.MinBrightness, 0, 25);
         WaitDispCombo.SelectedIndex = Array.IndexOf(PolicyChoices, dev.WaitDispPolicy) is >= 0 and int i ? i : 0;
         ColorfixToggle.IsChecked = dev.Colorfix;
         SfloorSlider.Value = Math.Clamp(dev.Sfloor, 0, 255);
