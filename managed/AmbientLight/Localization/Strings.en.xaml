@@ -129,7 +129,7 @@
     <sys:String x:Key="Home.Port.None">No device connected</sys:String>
     <sys:String x:Key="Home.Warn.Title">Display notice</sys:String>
     <sys:String x:Key="Home.Warn.Mode.Title">Mode notice</sys:String>
-    <sys:String x:Key="Home.Warn.UnknownMode">The strip reported mode {0}, which this version does not recognize; switch to another mode to recover</sys:String>
+    <sys:String x:Key="Home.Warn.UnknownMode">The strip reports its current mode as {0}, which this version cannot recognize; switch to another mode to recover</sys:String>
     <sys:String x:Key="Home.Warn.Blocked">Cannot turn on the light strip</sys:String>
     <sys:String x:Key="Home.Warn.MonitorFallback">The configured monitor is unavailable, fell back to the primary display</sys:String>
     <sys:String x:Key="Home.Warn.AllBlack">{0} consecutive black frames; the app may be running in exclusive fullscreen, so colors may be off</sys:String>
@@ -219,7 +219,7 @@
     <sys:String x:Key="Adv.Theme.Dark">Dark</sys:String>
     <sys:String x:Key="Adv.Lang.System">Follow system</sys:String>
     <sys:String x:Key="Adv.Lang.Title">Language</sys:String>
-    <sys:String x:Key="Adv.Lang.Desc">When following the system, switches with the Windows display language. Changing it takes effect immediately and is saved</sys:String>
+    <sys:String x:Key="Adv.Lang.Desc">When following the system, switches with the Windows display language</sys:String>
     <sys:String x:Key="Adv.Port.Auto">Auto-detect</sys:String>
     <sys:String x:Key="Adv.Port.NotPresent">(not present)</sys:String>
     <sys:String x:Key="Adv.Update.Title">Version update</sys:String>
