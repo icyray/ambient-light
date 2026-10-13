@@ -11,7 +11,7 @@
     <AssemblyName>AmbientLight</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Version>0.5.2</Version>
+    <Version>0.5.3</Version>
     <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <!-- 发布形态: self-contained 目录 + AmbientCore.dll 裸放旁边; 单文件 exe 暂缓 (用户决策) -->
