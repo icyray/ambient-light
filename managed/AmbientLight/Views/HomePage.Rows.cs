@@ -153,24 +153,9 @@ public partial class HomePage : Page
         return (16, 9);
     }
 
-    // ---- 模式/设备图标与名称 ------------------------------------------
-    private static SymbolRegular DevIcon(int t) => t switch
-    {
-        AmbientCore.DevScreen => SymbolRegular.Desktop24,
-        AmbientCore.DevFan => SymbolRegular.PuzzleCube24,
-        AmbientCore.DevDesk => SymbolRegular.RectangleLandscape24,
-        AmbientCore.DevSound => SymbolRegular.RectanglePortrait24,
-        _ => SymbolRegular.UsbPlug24,
-    };
-
-    private static string DevTypeName(int t) => Loc.T(t switch
-    {
-        AmbientCore.DevScreen => "Dev.Type.Screen",
-        AmbientCore.DevFan => "Dev.Type.Fan",
-        AmbientCore.DevDesk => "Dev.Type.Desk",
-        AmbientCore.DevSound => "Dev.Type.Sound",
-        _ => "Dev.Type.Unknown",
-    });
+    // ---- 设备图标与名称 ------------------------------------------------
+    // 类型号 → (显示名, 图标) 现在都在 `DeviceTypeCatalog` 一张表里 —— 以前这里是两处并列 switch,
+    // 加一种硬件要改两遍, 且"只改名字忘了图标"会静默退成 USB 图标 (看着不像 bug)。
 
     private void OnDevicesChanged() => _ = RefreshDevicesAsync();
 
@@ -512,9 +497,9 @@ public partial class HomePage : Page
         var (pillBg, pillFg) = PillBrushes(pillTone);
 
         // 名称: 会话刚起 (类型未回填) / 自己正在起 (会话未登记) 两种"读取中"变体
-        string nameText = connecting ? Loc.F("Dev.Name.Reading", DevTypeName(devType))
+        string nameText = connecting ? Loc.F("Dev.Name.Reading", DeviceTypeCatalog.Name(devType))
                           : likelyOurs ? Loc.T("Dev.Name.ReadingShort")
-                          : Loc.F("Dev.Name.WithId", DevTypeName(devType), devId);
+                          : Loc.F("Dev.Name.WithId", DeviceTypeCatalog.Name(devType), devId);
 
         // 供电口径见 PowerText (banner 端口行与设备行共用, 同一规则)
         string power = PowerText(sessState, sess?.ledStatusByte ?? 0);
@@ -535,7 +520,7 @@ public partial class HomePage : Page
         return new DeviceRowItem
         {
             Key = key,
-            Icon = DevIcon(devType),
+            Icon = DeviceTypeCatalog.Icon(devType),
             NameText = nameText,
             Selected = selected,
             PillLabel = pillLabel,

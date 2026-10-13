@@ -390,7 +390,7 @@ public partial class HomePage : Page
             : string.Join(" · ", new[]
               {
                   st.ComPort,
-                  DevTypeName(st.devType),
+                  DeviceTypeCatalog.Name(st.devType),
                   PowerText(st.state, st.ledStatusByte),
                   Loc.F("Dev.LedCount", ConfigStore.Device.LedCount),
               }.Where(s => s.Length > 0));

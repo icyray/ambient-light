@@ -2616,6 +2616,59 @@ static void Run()
         bool fallbackType = lostTexts.Any(t => t.Contains("id 3")) && !lostTexts.Any(t => t.Contains("读取中"));
         Console.WriteLine((fallbackType ? "OK   " : "FAIL ") +
                           $"会话类型未回填时退回用枚举的类型/编号 (不显示\"读取中\") = {fallbackType}");
+
+        // 设备类型表 (DeviceTypeCatalog): 名字与图标同源, 表外号显式回落 —— 以前是两处并列 switch,
+        // "只改名字忘了图标"会静默退成通用 USB 图标 (看着不像 bug)。
+        var devTypes = AmbientLight.Views.DeviceTypeCatalog.Types;
+        bool devTableOk = devTypes.Length > 0
+            && devTypes.Select(d => d.Id).Distinct().Count() == devTypes.Length
+            && devTypes.All(d => d.NameKey.Length > 0);
+        Console.WriteLine((devTableOk ? "OK   " : "FAIL ") +
+                          $"设备类型表 {devTypes.Length} 行自洽 (Id 唯一 / 名字键非空) = {devTableOk}");
+        // 字典双向: 每行名字键都在字典里, 且字典里除 Unknown 外的 Dev.Type.* 键都被表引用
+        // (防"加了翻译忘了进表" / "表里有键字典没有" —— 只查一本: 各字典键集一致已有断言)
+        var devDict = Application.Current.Resources.MergedDictionaries.FirstOrDefault(d =>
+            (d.Source?.ToString() ?? "").Contains("Localization", StringComparison.OrdinalIgnoreCase));
+        var devDictKeys = devDict?.Keys.Cast<object>().Select(o => o?.ToString() ?? "").ToHashSet() ?? [];
+        var devMissing = devTypes.Where(d => !devDictKeys.Contains(d.NameKey)).Select(d => d.NameKey).ToList();
+        var devOrphan = devDictKeys
+            .Where(k => k.StartsWith("Dev.Type.", StringComparison.Ordinal)
+                        && k != AmbientLight.Views.DeviceTypeCatalog.UnknownNameKey
+                        && !devTypes.Any(d => d.NameKey == k)).ToList();
+        Console.WriteLine((devMissing.Count == 0 && devOrphan.Count == 0 ? "OK   " : "FAIL ") +
+                          $"设备类型表 ⇄ 字典 Dev.Type.* 双向一致 = {devMissing.Count == 0 && devOrphan.Count == 0}" +
+                          (devMissing.Count > 0 ? $" 表里有字典缺: {string.Join(", ", devMissing)}" : "") +
+                          (devOrphan.Count > 0 ? $" 字典有表未用: {string.Join(", ", devOrphan)}" : ""));
+        // 接线: 真的建一行, 名字必须是表里的名字 (防模板/调用点改成写死文案)
+        var rowBad = new List<string>();
+        foreach (var d in devTypes)
+        {
+            var r = home.BuildDeviceRow(new ACDeviceInfo { devType = d.Id, devId = 7, inUse = 0 }, null, -1);
+            var txt = RowTextBlocks(r).Select(t => t.Text).ToList();
+            string want = AmbientLight.Views.DeviceTypeCatalog.Name(d.Id);
+            if (!txt.Any(t => t.Contains(want))) rowBad.Add($"#{d.Id} 行里没有「{want}」");
+        }
+        Console.WriteLine((rowBad.Count == 0 ? "OK   " : "FAIL ") +
+                          $"每种类型的设备行都显示表里的名字 ({devTypes.Length} 种) = {rowBad.Count == 0}" +
+                          (rowBad.Count > 0 ? $" 坏例: {string.Join("; ", rowBad)}" : ""));
+        // 表外类型号 (9 = 本机不存在): 名字回落「未知」+ 图标回落通用 USB
+        var unknownRow = home.BuildDeviceRow(new ACDeviceInfo { devType = 9, devId = 7, inUse = 0 }, null, -1);
+        var unknownTxt = RowTextBlocks(unknownRow).Select(t => t.Text).ToList();
+        bool unknownName = unknownTxt.Any(t => t.Contains(AmbientLight.Views.DeviceTypeCatalog.Name(9)));
+        var unknownIcons = new List<Wpf.Ui.Controls.SymbolIcon>();
+        void CollectIcons(DependencyObject d, List<Wpf.Ui.Controls.SymbolIcon> into)
+        {
+            if (d is Wpf.Ui.Controls.SymbolIcon si) into.Add(si);
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+                CollectIcons(VisualTreeHelper.GetChild(d, i), into);
+        }
+        var iconHost = new ContentControl { Content = unknownRow, Width = 700 };
+        iconHost.Measure(new Size(700, 160));
+        iconHost.Arrange(new Rect(0, 0, 700, 160));
+        CollectIcons(iconHost, unknownIcons);
+        bool unknownIcon = unknownIcons.Any(i => i.Symbol == AmbientLight.Views.DeviceTypeCatalog.UnknownIcon);
+        Console.WriteLine((unknownName && unknownIcon ? "OK   " : "FAIL ") +
+                          $"表外类型号 9 → 「未知」+ 通用 USB 图标 = {unknownName && unknownIcon}");
     }
     finally
     {
