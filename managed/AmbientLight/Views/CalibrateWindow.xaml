@@ -25,7 +25,12 @@
             <Border x:Name="QuadBR" Grid.Column="1" Grid.Row="1" Background="#FFFFFF00" />
         </Grid>
 
-        <Border HorizontalAlignment="Center" VerticalAlignment="Center" Width="520"
+        <!-- 面板宽度 = MinWidth 而不是固定 Width —— UniformGrid 是**等宽四列**、格宽 = 面板内宽/4,
+             格子自己不会长; 于是"某个语言的按钮文案比格宽还长"时文字会顶出格子 (压到邻居上)。
+             改成 MinWidth 后: 文案装得下就还是 520 (观感不变), 装不下时**面板整体变宽**把格子撑开。
+             ⚠️ 代价: 面板一旦可自适应, 里面**会折行的文本必须自己设 MaxWidth**, 否则它们会按"一整行不折"
+             去要宽度 → 把面板撑得极宽。所以下面的 Intro / Footer 都钉了 476 (= 520 − 2×22 内边距)。 -->
+        <Border HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="520"
                 Background="#E6141418" CornerRadius="12" Padding="22"
                 TextElement.Foreground="White">
             <StackPanel>
@@ -34,7 +39,7 @@
                     <ui:Button Content="{DynamicResource Common.Close}" Appearance="Secondary" HorizontalAlignment="Right"
                                Click="OnClose" KeyboardNavigation.IsTabStop="True" />
                 </Grid>
-                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Opacity="0.85"
+                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Opacity="0.85" MaxWidth="476"
                            Text="{DynamicResource Calib.Intro}" />
                 <!-- 分隔线用**本地白 alpha**而不是 ui:Separator (M5.2): Separator 的描边走主题资源,
                      浅色主题下会变成一条深色线压在 #E6141418 的深面板上。 -->
@@ -62,7 +67,7 @@
                     <ui:Button Content="{DynamicResource Calib.ChangeColors}" 
                                HorizontalAlignment="Center" MinWidth="80" Click="OnRotateColors" />
                 </UniformGrid>
-                <TextBlock Text="{DynamicResource Calib.Footer}"
+                <TextBlock Text="{DynamicResource Calib.Footer}" MaxWidth="476"
                            Opacity="0.6" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
