@@ -77,6 +77,12 @@ public partial class HomePage : Page
     private double _glowBreath;                 // 固件特效呼吸相位
     private ACStatus _lastStatus;               // 最近一次状态轮询快照 (无会话时辉光用它兜底)
 
+    /// <summary>亮度参数对这个模式有意义吗 —— **纯函数** (探针打真值表)。
+    /// MCU 特效的帧由**固件**渲染, 主机只发命令 → 亮度对我们没有落点 → UI 要禁用亮度滑块
+    /// (用户 2026-10-08 提的: 免得用户以为那能调)。追光/拾音/纯色都可用
+    /// (拾音时它是"最高亮度上限", 乘在音量包络上)。</summary>
+    public static bool BrightnessEnabled(int mode) => !AmbientCore.IsMcuMode(mode);
+
     public HomePage()
     {
         InitializeComponent();
@@ -309,8 +315,13 @@ public partial class HomePage : Page
         if (BrightnessRow.IsEnabled != brightOk)
         {
             BrightnessRow.IsEnabled = brightOk;
-            BrightnessRow.Description = Loc.T(brightOk ? "Home.Brightness.Desc" : "Home.Brightness.McuHint");
         }
+        BrightnessRow.Description = mode switch
+        {
+            1 => Loc.T("Home.Brightness.Audio"),
+            _ when AmbientCore.IsMcuMode(mode) => Loc.T("Home.Brightness.McuHint"),
+            _ => Loc.T("Home.Brightness.Desc"),
+        };
 
         if (mode != _lastHeroMode)
         {

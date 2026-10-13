@@ -17,12 +17,6 @@ namespace AmbientLight.Views;
 public partial class HomePage : Page
 {
     // ---- §5 运行指标 (双层: 标签在上 / 数值在下) ----
-    /// <summary>亮度参数对这个模式有意义吗 —— **纯函数** (探针打真值表)。
-    /// MCU 特效的帧由**固件**渲染, 主机只发命令 → 亮度对我们没有落点 → UI 要禁用亮度滑块
-    /// (用户 2026-10-08 提的: 免得用户以为那能调)。追光/拾音/纯色都可用
-    /// (拾音时它是"最高亮度上限", 乘在音量包络上)。</summary>
-    public static bool BrightnessEnabled(int mode) => !AmbientCore.IsMcuMode(mode);
-
     /// <summary>指标集随模式换。**纯函数** —— 探针用它打真值表: 这类"写错不报错、只会静默显示错指标"
     /// 的规则最该被回归网住。running=false → 空集 (显示一行灰字)。
     /// **不含 CPU**: `ACStatus.cpuPercent` 从 M1 起就标着"预留", native 侧从来没赋过值 (恒 0.0%);
