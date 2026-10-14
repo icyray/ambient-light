@@ -72,6 +72,7 @@ public partial class App : Application
         };
 
         ConfigStore.Load();
+        SanitizeMonitorConfig();
         // M5.2 主题: 必须在 new MainWindow() **之前**应用 —— 此时还没有窗口, Apply 的最后一步
         // (刷 Application.MainWindow 的 backdrop) 是空操作, 窗口创建时 OnSourceInitialized
         // 会按已经正确的主题走 backdrop 序列, 所以不会"先浅色再变深"闪一下。
@@ -101,6 +102,26 @@ public partial class App : Application
 
         if (ConfigStore.Devices.Values.Any(d => d.AutoStartCore))
             _ = StartAllAsync();
+    }
+
+    /// <summary>启动自愈: 配置的显示器不在位 (拔线/扩展转单屏后的残留) → 修正为当前主屏并落盘。
+    /// 不修的话核心每次启动都走"回退主屏" (配置永远指着一块不在位的屏): 主页的
+    /// "配置的显示器不可用, 已回退主屏"提示常驻、重启也不消失; 采集页下拉虽显示"选中主屏"
+    /// (越界被钳到可用项), 但用户点它也写不进配置 (SelectedIndex 未变化 → 选择事件不触发)。
+    /// 枚举不到任何显示器 (锁屏/驱动未就绪) 时不动配置 —— 宁可保持现状, 也别把偏好改坏。
+    /// (2026-10-14 用户报)</summary>
+    private static void SanitizeMonitorConfig()
+    {
+        try
+        {
+            var mons = Interop.AmbientCore.GetMonitors();
+            if (mons.Length == 0) return;
+            int idx = ConfigStore.Device.MonitorIndex;
+            if (idx >= 0 && idx < mons.Length) return;   // 在位, 不动
+            ConfigStore.Device.MonitorIndex = MonitorMap.PrimaryIndexOf(mons);
+            ConfigStore.SaveDevice();
+        }
+        catch { /* 校验失败不影响启动 */ }
     }
 
     // ---- 核心生命周期 (M3: 每设备一个 slot 会话) ---------------------

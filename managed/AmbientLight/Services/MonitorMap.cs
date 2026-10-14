@@ -65,4 +65,14 @@ public static class MonitorMap
         catch { /* 理论不抛; 失败时调用方回退主屏 */ }
         return list;
     }
+
+    /// <summary>枚举数组里主屏的下标 (没有主屏标记 → 0)。
+    /// 与核心 capture::CaptureSession::PickOutput 的"配置越界 → 回退主屏"目标保持同一语义 ——
+    /// UI 修正"配置的显示器已不在位"时用它, 保证 下拉显示 / 配置 / 核心实际使用 三者一致。</summary>
+    public static int PrimaryIndexOf(Interop.ACMonitorInfo[] mons)
+    {
+        for (int i = 0; i < mons.Length; i++)
+            if (mons[i].primary != 0) return i;
+        return 0;
+    }
 }

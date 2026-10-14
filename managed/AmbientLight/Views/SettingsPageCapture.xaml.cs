@@ -103,7 +103,23 @@ public partial class SettingsPageCapture : Page
                     (m.primary != 0 ? " - " + Loc.T("Cap.Monitor.PrimaryMark") : "")))
                 .ToList();
             if (mons.Length > 0)
-                MonitorCombo.SelectedIndex = Math.Clamp(select, 0, mons.Length - 1);
+            {
+                // 配置的显示器不在位 (拔线/扩展转单屏后的残留) → 选中项落到"主屏"
+                // (与核心 PickOutput 的回退目标同一语义), 并把配置**当场写实**。否则:
+                //   ① 下拉看起来已选中主屏, 配置却还是那块关闭的屏 → 核心永远 fallback,
+                //      主页"已回退主屏"提示常驻、重启不消失;
+                //   ② 用户"点唯一的主屏"也修不回来 —— SelectedIndex 早就是它, 选择事件不触发。
+                // (2026-10-14 用户报)
+                int use = select >= 0 && select < mons.Length
+                    ? select
+                    : MonitorMap.PrimaryIndexOf(mons);
+                MonitorCombo.SelectedIndex = use;
+                if (use != select)
+                {
+                    ConfigStore.Device.MonitorIndex = use;
+                    App.Instance?.ApplyConfigDebounced();   // 探针/解析期无 App 实例时静默 (防御)
+                }
+            }
             else
                 MonitorCombo.SelectedIndex = -1;
         }
