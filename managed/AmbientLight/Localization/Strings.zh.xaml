@@ -334,8 +334,7 @@
     <sys:String x:Key="Cap.Smooth.2">更平滑</sys:String>
     <sys:String x:Key="Cap.Smooth.3">最平滑</sys:String>
     <sys:String x:Key="Cap.Fps.Title">刷新率上限</sys:String>
-    <sys:String x:Key="Cap.Fps.Desc">限制核心处理帧率，降低 CPU/串口占用</sys:String>
-    <sys:String x:Key="Cap.Fps.Unlimited">不限</sys:String>
+    <sys:String x:Key="Cap.Fps.Desc">限制核心处理帧率，降低 CPU/串口占用；超过 60 可能出现轻微抖动（本灯带实测上限 144）</sys:String>
     <sys:String x:Key="Cap.Group.BlackBar">黑边</sys:String>
     <sys:String x:Key="Cap.BlackBar.Title">黑边自适应</sys:String>
     <sys:String x:Key="Cap.BlackBar.Desc">画面有黑边 (电影/宽屏) 时自动收缩取色边框</sys:String>

@@ -164,6 +164,7 @@ ACConfig DefaultConfig()
     c.direction = 0;
     c.captureRange = 15;
     c.taps = 8;
+    c.fpsCap = 60;              // 帧率上限默认 60 (>60 有轻微抖动风险; 144 为实测硬上限)
     c.blackBars = 1;
     c.blackBarLevel = 3;
     c.brightness = 1.0;
@@ -369,7 +370,13 @@ int ValidateConfig(const ACConfig* in, ACConfig* out)
     out->depthOverride = std::max(0, out->depthOverride);
     out->taps         = std::clamp(out->taps, 1, 32);
     out->smoothing    = std::max(0, out->smoothing);
-    out->fpsCap       = std::max(0, out->fpsCap);
+    // fpsCap 归一 (**与托管 FpsCapChoices 表耦合**: 表 / 设置页 XAML 项 / 这里, 改一处同步改):
+    //   >144 → 144 —— 实测硬上限: 145Hz 起 USB CDC 写阻塞 (write 1.08→6.24ms、发送被钳),
+    //     ≤144 写耗时恒定 ~1.1ms (2026-10-14 tools/LedRateProbe 扫描);
+    //   ≤0 (旧"不限") 或 1~29 (表外) → 60 —— 安全默认; "不限"已退役 (240Hz 屏上会直接放飞)。
+    //   要放开更高档位: 先用 tools/LedRateProbe 实测目标设备的阻塞点, 再同步改三处。
+    if      (out->fpsCap > 144)                  out->fpsCap = 144;
+    else if (out->fpsCap <= 0 || out->fpsCap < 30) out->fpsCap = 60;
     out->blackBars    = out->blackBars ? 1 : 0;
     out->blackBarLevel = std::clamp(out->blackBarLevel, 0, 128);
     out->outputOrder  = std::clamp(out->outputOrder, 0, 5);

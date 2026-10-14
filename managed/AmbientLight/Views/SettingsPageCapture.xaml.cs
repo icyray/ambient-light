@@ -12,7 +12,15 @@ public sealed record MonitorItem(int Index, string Label);
 
 public partial class SettingsPageCapture : Page
 {
-    public static readonly int[] FpsCapChoices = [0, 240, 165, 144, 120, 90, 60, 30];   // 序与下拉一致 (M2 起显示序为降序, 原数组升序导致选 240 实发 30)
+    // ⚠️ 上限 **144 = 本灯带实测硬上限** (2026-10-14 LedRateProbe 扫描: 145Hz 起 USB CDC 写阻塞,
+    //    write 1.08 → 6.24ms、发送被钳; ≤144 写耗时恒定 ~1.1ms)。0(不限)/240/165 已退役 ——
+    //    "不限"在 240Hz 屏上会直接放飞 (是"微光抖动"那类问题的放大器), 旧配置迁移见 LoadFromConfig。
+    // 序与下拉一致 (M2 起显示序为降序, 原数组升序导致选 240 实发 30)。
+    // **三处耦合**: ① 本表 ② 本页 XAML 的 FpsCapCombo 项 (顺序=此表顺序) ③ native ValidateConfig
+    //    的 fpsCap 归一 (AmbientCore.cpp) —— 改一处必须同步改另两处 (探针有"项数==表长 / 值⇄项
+    //    往返 / 项文本数字==值 / 表内最大值==144"四条断言兜底)。要放开更高档位: 先用
+    //    tools/LedRateProbe 实测目标设备的阻塞点, 再同步改三处。
+    public static readonly int[] FpsCapChoices = [144, 120, 90, 60, 30];
     public static readonly int[] SmoothingChoices = [0, 3, 4, 5];   // 厂商: 步长 = 2+配置值
     private bool _loading = true;   // InitializeComponent 解析期即有事件, 初值阶段一律忽略
 
@@ -48,6 +56,16 @@ public partial class SettingsPageCapture : Page
         int sm = Array.IndexOf(SmoothingChoices, dev.Smoothing);
         SmoothingCombo.SelectedIndex = sm < 0 ? 0 : sm;
         int fps = Array.IndexOf(FpsCapChoices, dev.FpsCap);
+        if (fps < 0)
+        {
+            // 旧配置残留 (0=不限 / 240 / 165 …): 表已收口到 144 上限。归一并**当场写实**配置
+            // (对齐"显示器回退提示"那次的教训: 只改显示不写配置 = 核心拿着旧值跑, 与 UI 脱节)。
+            // 语义: >144 的"要快" → 144 (合法最高); 0(不限)/非法 → 60 (安全默认)。
+            int norm = dev.FpsCap > 144 ? 144 : 60;
+            ConfigStore.Device.FpsCap = norm;
+            App.Instance?.ApplyConfigDebounced();
+            fps = Array.IndexOf(FpsCapChoices, norm);
+        }
         FpsCapCombo.SelectedIndex = fps < 0 ? 0 : fps;
         BlackBarsToggle.IsChecked = dev.BlackBars;
         BlackBarLevelSlider.Value = Math.Clamp(dev.BlackBarLevel, 0, 20);

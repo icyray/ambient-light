@@ -50,7 +50,8 @@ public sealed class DeviceSettings
     public int DepthOverride { get; set; } = 0;
     public int Taps { get; set; } = 8;
     public int Smoothing { get; set; } = 5;
-    public int FpsCap { get; set; } = 0;
+    // 默认 60 (>60 可能有轻微抖动; 144 为实测硬上限, 见 SettingsPageCapture.FpsCapChoices 注释)
+    public int FpsCap { get; set; } = 60;
     public bool BlackBars { get; set; } = true;
     public int BlackBarLevel { get; set; } = 3;
     public double Brightness { get; set; } = 1.0;

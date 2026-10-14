@@ -1900,13 +1900,18 @@ static void Run()
             {
                 string txt = (fpsBox.Items[i] as ComboBoxItem)?.Content?.ToString() ?? "";
                 var m = System.Text.RegularExpressions.Regex.Match(txt, @"\d+");
-                int got = m.Success ? int.Parse(m.Value) : 0;      // "不限/Unlimited" ↔ 值 0
+                int got = m.Success ? int.Parse(m.Value) : 0;      // 无数字文本视为 0 (历史: 已退役的"不限"就是无数字 ↔ 0)
                 int want = AmbientLight.Views.SettingsPageCapture.FpsCapChoices[i];
                 if (got != want) numBad.Add($"刷新率[{i}] 文本「{txt}」≠ 值 {want}");
             }
         Console.WriteLine((numBad.Count == 0 ? "OK   " : "FAIL ") +
                           $"项文本里的数字 == 该下标的值 (波特率/刷新率) = {numBad.Count == 0}" +
                           (numBad.Count > 0 ? $" 坏例: {string.Join("; ", numBad)}" : ""));
+        // 上限契约: 表内最大值必须 == 144 —— 与 native ValidateConfig 的钳制、实测阻塞点(145Hz)耦合。
+        // 三处耦合 (表 / XAML 项 / native) 断了任何一处, 用户就可能拿到会阻塞的档位。
+        int maxFps = AmbientLight.Views.SettingsPageCapture.FpsCapChoices.Max();
+        Console.WriteLine((maxFps == 144 ? "OK   " : "FAIL ") +
+                          $"刷新率上限 == 144 (与 native 钳制 / 实测阻塞点耦合) = {maxFps}");
     }
 
     // 系统偏好监听 (SystemEvents 是**静态**事件): 挂/摘必须幂等。

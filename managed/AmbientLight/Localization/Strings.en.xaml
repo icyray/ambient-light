@@ -331,8 +331,7 @@
     <sys:String x:Key="Cap.Smooth.2">Smoother</sys:String>
     <sys:String x:Key="Cap.Smooth.3">Smoothest</sys:String>
     <sys:String x:Key="Cap.Fps.Title">Frame rate cap</sys:String>
-    <sys:String x:Key="Cap.Fps.Desc">Limits the core's frame rate to reduce CPU and serial usage</sys:String>
-    <sys:String x:Key="Cap.Fps.Unlimited">Unlimited</sys:String>
+    <sys:String x:Key="Cap.Fps.Desc">Limits the core's frame rate to reduce CPU and serial usage; above 60 may show slight flicker (measured device limit: 144)</sys:String>
     <sys:String x:Key="Cap.Group.BlackBar">Black bars</sys:String>
     <sys:String x:Key="Cap.BlackBar.Title">Black bar detection</sys:String>
     <sys:String x:Key="Cap.BlackBar.Desc">Automatically shrinks the sampling border when the image has black bars (movies/ultrawide)</sys:String>

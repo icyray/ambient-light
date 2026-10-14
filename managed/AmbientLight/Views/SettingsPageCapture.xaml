@@ -87,9 +87,8 @@
                              Description="{DynamicResource Cap.Fps.Desc}">
             <ComboBox x:Name="FpsCapCombo" MinWidth="160" VerticalAlignment="Center"
                       SelectionChanged="OnFpsCapChanged">
-                <ComboBoxItem Content="{DynamicResource Cap.Fps.Unlimited}" />
-                <ComboBoxItem Content="240 fps" />
-                <ComboBoxItem Content="165 fps" />
+                <!-- 项与 .cs 的 FpsCapChoices 一一对应 (顺序=值顺序); 上限 144 是实测硬上限,
+                     改这里必须同步改 FpsCapChoices 与 native ValidateConfig (详见 .cs 根的注释) -->
                 <ComboBoxItem Content="144 fps" />
                 <ComboBoxItem Content="120 fps" />
                 <ComboBoxItem Content="90 fps" />
