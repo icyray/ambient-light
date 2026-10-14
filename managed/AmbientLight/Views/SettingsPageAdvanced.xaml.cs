@@ -327,6 +327,12 @@ public partial class SettingsPageAdvanced : Page
         // 开机自启的快捷方式也要跟着回到默认 (与 App.OnStartup 的自愈规则一致, 否则会残留)
         if (!ConfigStore.App.AutoStart && AutoStart.IsActive()) AutoStart.Disable();
         App.Instance.ApplyConfig();     // 默认值立即下发给当前会话 (灯带随之变化)
+        // **派生状态重放**: 主题/语言是"字典级"状态, ApplyConfig 覆盖不到它们 —— 必须让两个
+        // Service 按**重置后的配置**再 Apply 一次; 否则"选了 English 后恢复默认", 界面会停在
+        // English / 旧主题 (用户 2026-10-14 报)。两个 Apply 都幂等 (同字典/同主题原地替换),
+        // 且必须放在 RestoreDefaults() **之后** —— 它们的 Current 读的就是重置后的 ConfigStore.App。
+        ThemeService.ApplyAtStartup();
+        LanguageService.ApplyAtStartup();
         ReloadFromConfig();             // 本页控件回到默认值。其余页面未做导航缓存, 切过去时会重读
     }
 
