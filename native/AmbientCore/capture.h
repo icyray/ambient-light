@@ -71,6 +71,16 @@ public:
     void GetMargins(int m[4]) const { for (int i = 0; i < 4; i++) m[i] = margins_[i]; }
     bool LastFrameAllBlack() const { return allBlack_; }
     bool LastFrameHadUpdate() const { return hadUpdate_; }
+    // 帧元信息 (帧分类/诊断): "仅指针更新"帧 = LastPresentTime==0 且 AccumulatedFrames>0
+    // (DDA 在指针移动但桌面内容未变时也送帧; 此类帧的纹理内容语义见 capture.cpp Step)
+    uint64_t LastPresentTime() const { return lastPresent_; }
+    uint32_t LastAccumFrames() const { return lastAccum_; }
+    uint32_t LastMetaBytes()   const { return lastMetaBytes_; }
+    bool     LastPtrVisible()  const { return lastPtrVisible_; }
+    int      LastPtrX()        const { return lastPtrX_; }
+    int      LastPtrY()        const { return lastPtrY_; }
+    // 累计跳过的"无桌面内容更新"帧数 (纯指针/空呈现; 见 Step 的跳过分支)
+    uint64_t SkippedEmptyFrames() const { return skippedEmpty_; }
     int  Width() const { return W_; }
     int  Height() const { return H_; }
 
@@ -104,6 +114,14 @@ private:
     std::vector<Float4> rects_;
     bool allBlack_ = false;
     bool hadUpdate_ = false;
+    // 最近一帧的 DDA 元信息
+    uint64_t lastPresent_ = 0;
+    uint32_t lastAccum_ = 0;
+    uint32_t lastMetaBytes_ = 0;
+    bool     lastPtrVisible_ = false;
+    int      lastPtrX_ = 0, lastPtrY_ = 0;
+    uint64_t skippedEmpty_ = 0;   // 累计跳过的"无桌面内容更新"帧
+    bool     delivered_ = false;  // 本会话是否已交付过帧 (空帧直通保护: 上电首帧必出)
 };
 
 } // namespace capture

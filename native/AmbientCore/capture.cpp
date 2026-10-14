@@ -396,6 +396,13 @@ void CaptureSession::Destroy()
     W_ = H_ = 0;
     allBlack_ = false;
     hadUpdate_ = false;
+    lastPresent_ = 0;
+    lastAccum_ = 0;
+    lastMetaBytes_ = 0;
+    lastPtrVisible_ = false;
+    lastPtrX_ = lastPtrY_ = 0;
+    skippedEmpty_ = 0;
+    delivered_ = false;
 }
 
 void CaptureSession::UpdateLayout(const Params& p)
@@ -416,6 +423,9 @@ void CaptureSession::UpdateLayout(const Params& p)
         ComputeTaps(p_);
         PushRects();
     }
+    // 布局/参数变更后放行下一帧 (含"无更新帧"): 静态桌面上用户拖动采样深度/位置等滑条时,
+    // 必须立即有一帧用新参数重算, 否则要等下一个内容帧才可见 (回归防护, 见 Step 的跳过分支)。
+    delivered_ = false;
     (void)old;
 }
 
@@ -429,6 +439,30 @@ CaptureSession::StepResult CaptureSession::Step(uint32_t timeoutMs, Float4* cols
     if (hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_INVALID_CALL) return STEP_ACCESS_LOST;
     if (hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)) return STEP_ACCESS_DENIED;
     if (FAILED(hr)) return STEP_ERROR;
+
+    // ---- 帧元信息 (诊断/帧分类; 先记, 跳过路径也要如实反映)
+    lastPresent_    = (uint64_t)info.LastPresentTime.QuadPart;
+    lastAccum_      = info.AccumulatedFrames;
+    lastMetaBytes_  = info.TotalMetadataBufferSize;
+    lastPtrVisible_ = info.PointerPosition.Visible != 0;
+    lastPtrX_       = info.PointerPosition.Position.x;
+    lastPtrY_       = info.PointerPosition.Position.y;
+
+    // ---- 跳过"无桌面内容更新"的帧 (纯指针移动/指针形状/空呈现) —— 2026-10-14
+    // 判据: 无 present 时间 且 无脏区元数据 ⇒ DDA 明确报告"桌面图像未变"。
+    //   · 鼠标移动时此类帧以指针更新率 (实测数百 Hz) 涌入: 若照常采样+重发, 串口写频率从
+    //     静态桌面的 5Hz (200ms 保活) 飙至数百 Hz —— 固件在高频帧重渲染下出现微弱闪烁
+    //     ("微光下鼠标微晃→灯弱闪" 的根因; 电影/拖拽只产生 24~60fps 内容帧, 无此问题;
+    //     附加调试器时单帧处理变慢、DDA 侧自动合并帧 → 发送频率下降 → 现象消失 ✓)。
+    //   · 无损性: 实测此类帧的采样输出与上一帧位级一致 (探针: nd=0 md=0 od=0), 跳过不改
+    //     字节流, 只把发送频率拉回内容事件的本征速率。
+    //   · 首个交付帧 (delivered_ 尚未置位) 例外: 保证通电/重连后上电必出画面。
+    if (delivered_ && info.LastPresentTime.QuadPart == 0 && info.TotalMetadataBufferSize == 0) {
+        dup_->ReleaseFrame();
+        hadUpdate_ = false;
+        skippedEmpty_++;
+        return STEP_TIMEOUT;      // 语义 = "桌面无更新" → 调用方走静态桌面保活路径
+    }
 
     {
         ComPtr<ID3D11Texture2D> tex;
@@ -465,6 +499,7 @@ CaptureSession::StepResult CaptureSession::Step(uint32_t timeoutMs, Float4* cols
         ctx_->Unmap(stageBuf_.Get(), 0);
     }
     dup_->ReleaseFrame();
+    delivered_ = true;            // 已交付帧 (此后"无更新帧"才允许走跳过路径)
     hadUpdate_ = info.LastPresentTime.QuadPart != 0 || info.AccumulatedFrames > 0;
 
     // 全黑判定 (链前原始采样, 独占全屏/MPO 提示用)

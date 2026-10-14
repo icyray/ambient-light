@@ -1268,8 +1268,9 @@ void CoreLoopInner(Sess* g)
                             abNow = g->st.allBlackFrames;
                         }
                         ACLOGD("status(trace): phase=%d monitorPower=%d fps=%.1f frames=%llu "
-                               "allBlack=%u lastFrameAgo=%.0fms",
+                               "allBlack=%u emptySkips=%llu lastFrameAgo=%.0fms",
                                phase, mpNow, fpsNow, fcNow, abNow,
+                               (unsigned long long)cap.SkippedEmptyFrames(),
                                lastFrameAt > 0 ? nowL - lastFrameAt : -1.0);
                     }
                 }
