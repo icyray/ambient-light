@@ -13,6 +13,12 @@ public sealed class PollingService : IDisposable
     private int _lastState = -1;
     private bool _disposed;
 
+    /// <summary>最近一次轮询的"选中设备"快照 —— 页面**重建后借它"首帧就位"** (见 HomePage.OnLoaded):
+    /// 导航切换会重建页面, 若只等下一个 250ms tick, banner 会在构造期的"已停止"外观上闪一帧
+    /// (2026-10-14 用户报)。重复喂幂等。</summary>
+    public ACStatus LastSelected { get; private set; }
+    public bool HasPolled { get; private set; }
+
     /// <summary>每次轮询 (250ms) 触发, 携带选中设备的最新状态快照</summary>
     public event Action<ACStatus>? Polled;
 
@@ -78,6 +84,8 @@ public sealed class PollingService : IDisposable
             StateChanged?.Invoke(_lastState, selected.state);
         _lastState = selected.state;
 
+        LastSelected = selected;
+        HasPolled = true;
         Polled?.Invoke(selected);
     }
 

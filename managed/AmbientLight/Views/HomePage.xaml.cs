@@ -133,6 +133,11 @@ public partial class HomePage : Page
         SatSlider.ValueChanged += OnHsvChanged;
         _loaded = true;
 
+        // 重建后"首帧就位": 立刻用最近一次轮询快照刷一遍 —— 否则 banner 停在构造期的"已停止"外观,
+        // 要等下一次 250ms tick 才刷 (切回主页时可见一帧"已停止", 2026-10-14 用户报)。
+        // 喂入幂等, 下一次 tick 照常覆盖; 页面仍每次重建 (资源回收策略不变)。
+        if (App.Instance?.Poller is { HasPolled: true } poller0)
+            OnPolled(poller0.LastSelected);
         StartGlowTimer();                   // 辉光自带 10Hz 刷新 (主状态轮询仍是 4Hz)
         _ = RefreshDevicesAsync();
         _ = SettleDeviceRowsAsync();        // 应用刚启动时 StartAllAsync 可能还在飞, 落地后要再刷一次
