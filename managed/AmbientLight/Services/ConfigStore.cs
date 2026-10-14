@@ -7,7 +7,7 @@ namespace AmbientLight.Services;
 
 public sealed class AppOptions
 {
-    public string Lang { get; set; } = "zh";
+    public string Lang { get; set; } = "system";
     public bool StartMinimized { get; set; } = false;
     public bool AutoStart { get; set; } = false;   // shell:startup 快捷方式 (M4)
     public string SelectedDevice { get; set; } = "0_1";   // 当前编辑的设备 key (M3)
