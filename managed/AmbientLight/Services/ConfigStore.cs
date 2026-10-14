@@ -54,30 +54,50 @@ public sealed class DeviceSettings
     public int FpsCap { get; set; } = 60;
     public bool BlackBars { get; set; } = true;
     public int BlackBarLevel { get; set; } = 3;
-    public double Brightness { get; set; } = 1.0;
-    public double Vibrance { get; set; } = 9.0;
-    public double Hue { get; set; } = 1.0;
-    public double Gamma { get; set; } = 0.65;
-    public double RGain { get; set; } = 1.0;
-    public double GGain { get; set; } = 1.0;
-    public double BGain { get; set; } = 1.0;
+
+    // ---- JSON 落盘的浮点收敛 (纯存储美化, 2026-10-14 用户提议) ----
+    // 拖滑条会存出 0.20925925925925845 这类 17 位长尾 (double 往返保真序列化的结果) ——
+    // 读回/内存/计算全程不受本机制影响, 只收敛**写进 json 的文本**。
+    // 位数按字段用途逐个定 (见各 [Round(n)] 旁注): 量程小或会被 UI 取整的字段位数给足,
+    // 否则会出现"AUDIO 门限 0.003 被 2 位归零"这类失真。
+    [AttributeUsage(AttributeTargets.Property)]
+    private sealed class RoundAttribute(int digits) : JsonConverterAttribute
+    {
+        public override JsonConverter? CreateConverter(Type typeToConvert)
+            => new RoundDoubleConverter(digits);
+    }
+    private sealed class RoundDoubleConverter(int digits) : JsonConverter<double>
+    {
+        public override double Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            => reader.GetDouble();   // 读不收敛 (写时已量化)
+        public override void Write(Utf8JsonWriter writer, double value, JsonSerializerOptions options)
+            => writer.WriteNumberValue(Math.Round(value, digits));
+    }
+
+    [Round(3)] public double Brightness { get; set; } = 1.0;   // 3 位: UI 按整数百分比显示, 2 位会出现"重启后 +1%"跳变
+    [Round(2)] public double Vibrance { get; set; } = 9.0;     // 主观强度, 0.01 步进不可感
+    [Round(3)] public double Hue { get; set; } = 1.0;          // 乘数: 2 位步进 ≈2° 色相, 边缘可见
+    [Round(3)] public double Gamma { get; set; } = 0.65;       // 曲线校准: 0.01 差 ≈1.5% 中间调, 校准想更细
+    [Round(3)] public double RGain { get; set; } = 1.0;        // 通道增益: 1% 步进在大面积色块可能可见
+    [Round(3)] public double GGain { get; set; } = 1.0;
+    [Round(3)] public double BGain { get; set; } = 1.0;
     public int ColorCut { get; set; } = 1;
     public int MinBrightness { get; set; } = 1;
     public int OutputOrder { get; set; } = 0;
     public string SolidColor { get; set; } = "#FFE1D6";
     public int WaitDispPolicy { get; set; } = 2;
     public bool Colorfix { get; set; } = false;
-    public double Sfloor { get; set; } = 24.0;
+    [Round(2)] public double Sfloor { get; set; } = 24.0;      // 8bit 门限语义, 整数即可
 
     // v1.3 拾音 (M3): 对齐 ACConfig.audio* 字段
     public int AudioSource { get; set; } = 0;          // 0=系统声音(主机拾音) 1=MCU 自拾音
-    public double AudioGain { get; set; } = 1.0;       // 灵敏度 0.1..5.0
-    public double AudioRelease { get; set; } = 0.30;   // 回落时间常数 s 0.05..1.0
-    public double AudioGate { get; set; } = 0.003;     // 底噪门限 0..0.1
-    public double AudioBass { get; set; } = 0.35;      // 低频加权 0..1
+    [Round(2)] public double AudioGain { get; set; } = 1.0;       // 灵敏度 0.1..5.0, 主观参数
+    [Round(3)] public double AudioRelease { get; set; } = 0.30;   // 低端 (0.05~0.1) 2 位相对误差达 10~20%
+    [Round(4)] public double AudioGate { get; set; } = 0.003;     // 量程 0..0.1: 2 位会把默认 0.003 归零!
+    [Round(2)] public double AudioBass { get; set; } = 0.35;      // 低频加权 0..1, 主观
     public bool AudioAgc { get; set; } = true;         // 慢速峰值自动增益
     public bool AudioFollowVolume { get; set; } = false; // 音量字节跟随系统主音量
-    public double AudioSoft { get; set; } = 0.5;       // 律动柔和度 0..1 (0=硬包络 1=最平滑)
+    [Round(2)] public double AudioSoft { get; set; } = 0.5;       // 律动柔和度 0..1, 主观
     public string AudioDevId { get; set; } = "";       // 麦克风源端点 ID, 空=跟随系统默认输入
     public string AudioOutDevId { get; set; } = "";    // 回环源端点 ID, 空=跟随系统默认输出
 
