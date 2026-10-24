@@ -63,22 +63,41 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           pattern: AmbientLight-*-win-x64-*
           path: dist
-          merge-multiple: true
 
-      - name: Check assets
+      # artifact 里是目录 (解压即用); 这里打成 Release 用的 zip, 只保留一层目录名。
+      - name: Package assets
         run: |
-          ls -lh dist
-          count=$(find dist -maxdepth 1 -name '*.zip' | wc -l)
+          cd dist
+          count=0
+          for d in AmbientLight-*-win-x64-*/; do
+            name="${d%/}"
+            # 兼容 artifact 里又多套了一层同名目录的情况
+            if [ ! -f "$name/AmbientLight.exe" ] && [ -f "$name/$name/AmbientLight.exe" ]; then
+              echo "::notice::$name 内多套了一层, 已拉平"
+              mv "$name" "$name.tmp"
+              mv "$name.tmp/$name" "$name"
+              rm -rf "$name.tmp"
+            fi
+            if [ ! -f "$name/AmbientLight.exe" ]; then
+              echo "::error::$name 里找不到 AmbientLight.exe (artifact 目录结构变了?)"
+              find "$name" -maxdepth 3 | head -20
+              exit 1
+            fi
+            zip -qr "${name}.zip" "$name"
+            count=$((count + 1))
+          done
           if [ "$count" -ne 2 ]; then
-            echo "::error::期望 2 个 zip, 实际 $count 个"
+            echo "::error::期望 2 个构建目录, 实际 $count 个"
+            ls -la
             exit 1
           fi
-          ( cd dist && sha256sum *.zip > SHA256SUMS.txt )
-          cat dist/SHA256SUMS.txt
+          sha256sum *.zip > SHA256SUMS.txt
+          ls -lh *.zip SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: Create release
         env:

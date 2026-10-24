@@ -1,8 +1,10 @@
 name: Build
 
-# 构建两个发布形态并打包上传 artifact:
+# 构建两个发布形态并上传 artifact:
 #   · framework-dependent —— 依赖目标机器已安装 .NET 10 Desktop Runtime
 #   · self-contained      —— 自带运行时, 解压即用 (以往的发布形态)
+# artifact 里就是可直接运行的目录 (GitHub 只会再包一层 zip), Release 用的 zip 在 publish.yml 里打,
+# 这样从 Actions 下载和从 Release 下载都只需要解压一次。
 # 发布流程见 publish.yml (它会以 workflow_call 复用本文件)。
 
 on:
@@ -56,13 +58,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: "${{ inputs.ref != '' && inputs.ref || github.ref }}"
           fetch-depth: 1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
 
@@ -116,7 +118,9 @@ jobs:
             if (-not (Test-Path $dst)) { throw "$dir 里没有 AmbientCore.dll" }
           }
 
-      - name: Package
+      # 只整理目录, 不在这里打 zip —— 打成 zip 再当 artifact 上传, 下载下来就是"zip 里套 zip";
+      # Release 用的 zip 由 publish.yml 从这些目录生成 (同样只有一层)。
+      - name: Stage
         shell: pwsh
         run: |
           $version = "${{ steps.meta.outputs.version }}"
@@ -130,22 +134,22 @@ jobs:
             New-Item -ItemType Directory -Force -Path $stage | Out-Null
             Copy-Item "$($forms[$form])/*" $stage -Recurse -Force
             Copy-Item LICENSE $stage -Force
-            Compress-Archive -Path $stage -DestinationPath "dist/AmbientLight-$version-win-x64-$form.zip" -Force
+            if (-not (Test-Path (Join-Path $stage "AmbientLight.exe"))) { throw "$stage 里没有 AmbientLight.exe" }
           }
-          Get-ChildItem dist -Filter *.zip | Format-Table Name, Length
+          Get-ChildItem dist -Directory | Format-Table Name
 
       - name: Upload self-contained
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AmbientLight-${{ steps.meta.outputs.version }}-win-x64-self-contained
-          path: dist/*-self-contained.zip
+          path: dist/AmbientLight-${{ steps.meta.outputs.version }}-win-x64-self-contained
           if-no-files-found: error
           retention-days: 14
 
       - name: Upload framework-dependent
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AmbientLight-${{ steps.meta.outputs.version }}-win-x64-framework-dependent
-          path: dist/*-framework-dependent.zip
+          path: dist/AmbientLight-${{ steps.meta.outputs.version }}-win-x64-framework-dependent
           if-no-files-found: error
           retention-days: 14
