@@ -14,5 +14,5 @@ native/AmbientCore/test_enum.exe
 tools/LedRateProbe/led_rate_probe.exe
 tools/LedRateProbe/*.txt
 
-# 设计稿 / 截图 / 对照图 (只在本地看, 不进库; 原 tools/mockups 已挪到这里并解除跟踪)
-docs/mockups/
+# 本地开发文档 / 设计稿 / 截图 / 进展记录 / 里程碑 —— 不进库, 只在本地看
+dev-docs/
