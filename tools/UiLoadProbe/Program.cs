@@ -645,6 +645,14 @@ static void Run()
     bool hasUpdateRow = advanced.FindName("UpdateRow") != null;
     Console.WriteLine((hasUpdateRow ? "OK   " : "FAIL ") + $"「版本更新」行存在 = {hasUpdateRow}");
 
+    // 页脚版本行: 「AmbientLight x.y.z」应当是指向仓库的链接 (后半段核心版本不可点)
+    advanced.BuildForProbe();
+    var verText = advanced.FindName("VersionText") as TextBlock;
+    var verLink = verText?.Inlines.OfType<System.Windows.Documents.Hyperlink>().FirstOrDefault();
+    bool verLinkOk = verLink?.NavigateUri?.AbsoluteUri == AmbientLight.Services.UpdateChecker.RepoUrl;
+    Console.WriteLine((verLinkOk ? "OK   " : "FAIL ") +
+                      $"页脚版本号可点到仓库 = {verLinkOk} ({verLink?.NavigateUri})");
+
     bool restoreInExpander = false;
     if (advanced.FindName("RestoreDefaultsBtn") is FrameworkElement restoreBtn)
         restoreInExpander = LogicalDescendants(advanced).OfType<Wpf.Ui.Controls.CardExpander>()

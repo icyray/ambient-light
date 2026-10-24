@@ -133,10 +133,26 @@ public partial class SettingsPageAdvanced : Page
         int bi = Array.IndexOf(BaudChoices, dev.BaudRate);
         BaudCombo.SelectedIndex = bi >= 0 ? bi : 0;                 // 非候选值 (手改过 json) 落回默认
 
-        string appVer = CurrentVersion;
-        uint core = AmbientCore.Version();
-        VersionText.Text = $"AmbientLight {appVer} · AmbientCore {(core >> 16) & 0xFF}.{(core >> 8) & 0xFF}.{core & 0xFF}";
+        BuildVersionLine(CurrentVersion, AmbientCore.Version());
         _loading = false;
+    }
+
+    /// <summary>页脚版本行: 「AmbientLight x.y.z」指向仓库 (可点), 后半段原生核心版本不可点。
+    /// 用 Inlines 而不是拼一整串 —— 只有前半段是链接。</summary>
+    private void BuildVersionLine(string appVer, uint core)
+    {
+        string coreVer = $"{(core >> 16) & 0xFF}.{(core >> 8) & 0xFF}.{core & 0xFF}";
+        VersionText.Inlines.Clear();
+
+        var link = new Hyperlink(new Run($"AmbientLight {appVer}"))
+        {
+            NavigateUri = new Uri(UpdateChecker.RepoUrl),
+        };
+        // 跟随主题的正文色: 整行本来就是压暗的说明文字, 不给它另配一套蓝
+        link.SetResourceReference(TextElement.ForegroundProperty, "TextFillColorPrimaryBrush");
+        link.RequestNavigate += (_, args) => { OpenInBrowser(args.Uri); args.Handled = true; };
+        VersionText.Inlines.Add(link);
+        VersionText.Inlines.Add(new Run($" · AmbientCore {coreVer}"));
     }
 
     private static string CurrentVersion => typeof(SettingsPageAdvanced).Assembly
@@ -320,15 +336,15 @@ public partial class SettingsPageAdvanced : Page
             {
                 case UpdateStatus.Newer:
                     await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Update.Title"),
-                        BuildUpdateContent(r), closeText: Loc.T("Common.GotIt"));
+                        BuildUpdateContent(r), closeText: Loc.T("Common.GotIt"), minWidth: 420);
                     break;
                 case UpdateStatus.UpToDate:
                     await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Update.Title"),
-                        Loc.F("Adv.Update.Latest", CurrentVersion), closeText: Loc.T("Common.GotIt"));
+                        Loc.F("Adv.Update.Latest", CurrentVersion), closeText: Loc.T("Common.GotIt"), minWidth: 420);
                     break;
                 default:
                     await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Update.Title"),
-                        Loc.T("Adv.Update.Failed"), closeText: Loc.T("Common.GotIt"));
+                        Loc.T("Adv.Update.Failed"), closeText: Loc.T("Common.GotIt"), minWidth: 420);
                     break;
             }
         }

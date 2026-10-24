@@ -15,25 +15,29 @@ public static class AppDialogs
 {
     /// <summary>在主窗口的 ContentDialogHost 上弹一个 ContentDialog。
     /// 返回 true = 用户点了主按钮 (需要确认的场景才给主按钮)。
-    /// 拿不到主窗/宿主时 (无窗口宿主, 例如探针里) 直接返回 false, 不做任何动作。</summary>
+    /// 拿不到主窗/宿主时 (无窗口宿主, 例如探针里) 直接返回 false, 不做任何动作。
+    /// <paramref name="minWidth"/> &gt; 0 时给弹窗一个宽度下限 (短文案不至于挤成一条窄缝)。</summary>
     public static Task<bool> ShowAsync(string title, string content,
-        string? primaryText = null, bool primaryDanger = false, string? closeText = null)
-        => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText);
+        string? primaryText = null, bool primaryDanger = false, string? closeText = null,
+        double minWidth = 0)
+        => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText, minWidth);
 
     /// <summary>同上, 但正文是控件 (例如带超链接的一段文字)。</summary>
     public static Task<bool> ShowAsync(string title, FrameworkElement content,
-        string? primaryText = null, bool primaryDanger = false, string? closeText = null)
-        => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText);
+        string? primaryText = null, bool primaryDanger = false, string? closeText = null,
+        double minWidth = 0)
+        => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText, minWidth);
 
     private static async Task<bool> ShowCoreAsync(string title, object content,
-        string? primaryText = null, bool primaryDanger = false, string? closeText = null)
+        string? primaryText = null, bool primaryDanger = false, string? closeText = null,
+        double minWidth = 0)
     {
         var app = Application.Current;
         if (app is null) return false;
         // 可能从托盘菜单 / 非 UI 线程进来 → 先切回 UI 线程
         if (!app.Dispatcher.CheckAccess())
             return await app.Dispatcher.InvokeAsync(
-                () => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText)).Task.Unwrap();
+                () => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText, minWidth)).Task.Unwrap();
 
         if (App.Instance?.MainWin is not { } win) return false;
         if (ContentDialogHost.GetForWindow(win) is not { } host) return false;
@@ -51,6 +55,12 @@ public static class AppDialogs
         {
             dlg.PrimaryButtonText = primaryText;
             if (primaryDanger) dlg.PrimaryButtonAppearance = ControlAppearance.Danger;
+        }
+        if (minWidth > 0)
+        {
+            // 两个都设: MinWidth 是语义, DialogWidth 才是 WPF-UI 模板真正照着布局的那个
+            dlg.MinWidth = minWidth;
+            dlg.DialogWidth = minWidth;
         }
         return await dlg.ShowAsync() == ContentDialogResult.Primary;
     }

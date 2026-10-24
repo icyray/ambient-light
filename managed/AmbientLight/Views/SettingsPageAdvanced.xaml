@@ -181,7 +181,7 @@
             </StackPanel>
         </ui:CardExpander>
 
-        <TextBlock x:Name="VersionText" Text="" Opacity="0.4" FontSize="11"
+        <TextBlock x:Name="VersionText" Opacity="0.4" FontSize="11"
                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                    HorizontalAlignment="Center" Margin="0,14,0,0" />
     </StackPanel>

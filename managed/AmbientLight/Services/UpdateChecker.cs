@@ -37,6 +37,9 @@ public static class UpdateChecker
     /// <summary>Releases 列表页 (查不到时给用户的兜底入口)。</summary>
     public const string ReleasesUrl = "https://github.com/icyray/ambient-light/releases";
 
+    /// <summary>仓库首页 (高级页页脚的版本号指向这里)。</summary>
+    public const string RepoUrl = "https://github.com/icyray/ambient-light";
+
     private static readonly Uri LatestApi =
         new($"https://api.github.com/repos/{Owner}/{Repo}/releases/latest");
 
