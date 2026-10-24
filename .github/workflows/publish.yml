@@ -1,0 +1,134 @@
+name: Publish
+
+# 手动发布: 填 tag / 分支 / Release Note → 复用 build.yml 构建 → 建 Release 并挂上两个 zip。
+# 两种发布形态见 build.yml 顶部说明。
+#
+# 命令行触发示例:
+#   gh workflow run publish.yml -f tag=v0.5.5 -f branch=main \
+#     -f notes="$(cat notes.md)" -f draft=true
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (例如 v0.5.5); 不存在时会在被构建的提交上创建"
+        required: true
+        type: string
+      branch:
+        description: "从哪个分支构建 (分支名 / 标签 / SHA)"
+        required: true
+        default: main
+        type: string
+      title:
+        description: "Release 标题 (留空 = 用 tag)"
+        required: false
+        type: string
+        default: ""
+      notes:
+        description: "Release Note (Markdown; 留空 = 自动生成)"
+        required: false
+        type: string
+        default: ""
+      draft:
+        description: "存为草稿"
+        required: false
+        default: false
+        type: boolean
+      prerelease:
+        description: "标记为预发布"
+        required: false
+        default: false
+        type: boolean
+
+# 发布要写 Release / 建 tag
+permissions:
+  contents: write
+
+# 同一时间只跑一个发布, 避免两个 Release 互相覆盖
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ inputs.branch }}
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: AmbientLight-*-win-x64-*
+          path: dist
+          merge-multiple: true
+
+      - name: Check assets
+        run: |
+          ls -lh dist
+          count=$(find dist -maxdepth 1 -name '*.zip' | wc -l)
+          if [ "$count" -ne 2 ]; then
+            echo "::error::期望 2 个 zip, 实际 $count 个"
+            exit 1
+          fi
+          ( cd dist && sha256sum *.zip > SHA256SUMS.txt )
+          cat dist/SHA256SUMS.txt
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          BRANCH: ${{ inputs.branch }}
+          TITLE: ${{ inputs.title }}
+          NOTES: ${{ inputs.notes }}
+          DRAFT: ${{ inputs.draft }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          TARGET: ${{ needs.build.outputs.sha }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release $TAG 已存在 (tag 不可复用; 换一个 tag, 或先删除旧 Release)"
+            exit 1
+          fi
+
+          # tag 与 csproj 版本不一致时只警告, 不拦 —— 允许 v0.5.5-rc1 这类后缀
+          if [ -n "${VERSION:-}" ] && [ "v$VERSION" != "$TAG" ]; then
+            echo "::warning::tag ($TAG) 与 AmbientLight.csproj 的版本 (v$VERSION) 不一致"
+          fi
+          if [ -z "${TARGET:-}" ]; then
+            echo "::error::没拿到构建产物对应的提交 (build 的 sha 输出为空)"
+            exit 1
+          fi
+
+          args=(--repo "$GITHUB_REPOSITORY" --target "$TARGET")
+          if [ -n "${TITLE:-}" ]; then args+=(--title "$TITLE"); else args+=(--title "$TAG"); fi
+          if [ "$DRAFT" = "true" ]; then args+=(--draft); fi
+          if [ "$PRERELEASE" = "true" ]; then args+=(--prerelease); fi
+          if [ -n "${NOTES:-}" ]; then
+            printf '%s\n' "$NOTES" > release-notes.md
+            args+=(--notes-file release-notes.md)
+          else
+            args+=(--generate-notes)
+          fi
+
+          gh release create "$TAG" "${args[@]}" dist/*.zip dist/SHA256SUMS.txt
+
+          {
+            echo "### Release $TAG"
+            echo ""
+            echo "- 构建提交: \`$TARGET\` (分支 \`$BRANCH\`)"
+            echo "- 版本: \`$VERSION\`"
+            echo "- 形态: self-contained / framework-dependent"
+            echo ""
+            echo '```'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

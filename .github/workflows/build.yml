@@ -1,0 +1,151 @@
+name: Build
+
+# 构建两个发布形态并打包上传 artifact:
+#   · framework-dependent —— 依赖目标机器已安装 .NET 10 Desktop Runtime
+#   · self-contained      —— 自带运行时, 解压即用 (以往的发布形态)
+# 发布流程见 publish.yml (它会以 workflow_call 复用本文件)。
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "assets/**"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "assets/**"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "要构建的 ref (分支 / 标签 / SHA); 留空 = 触发本次运行的那个 ref"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      sha:
+        description: "实际构建的提交"
+        value: ${{ jobs.build.outputs.sha }}
+      version:
+        description: "AmbientLight.csproj 里的版本号"
+        value: ${{ jobs.build.outputs.version }}
+
+permissions:
+  contents: read
+
+concurrency:
+  # 带 workflow 名: 发布流程复用的这次构建, 不会被 main 上同时触发的构建取消
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build win-x64
+    runs-on: windows-latest
+    timeout-minutes: 45
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      version: ${{ steps.meta.outputs.version }}
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: "${{ inputs.ref != '' && inputs.ref || github.ref }}"
+          fetch-depth: 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # 版本号与提交 SHA 供后续步骤和 publish 复用
+      - name: Read version
+        id: meta
+        shell: pwsh
+        run: |
+          $csproj  = [xml](Get-Content -Raw managed/AmbientLight/AmbientLight.csproj)
+          $version = @($csproj.Project.PropertyGroup.Version | Where-Object { $_ }) | Select-Object -First 1
+          if (-not $version) { throw "找不到 <Version> ( managed/AmbientLight/AmbientLight.csproj )" }
+          $sha = (git rev-parse HEAD).Trim()
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "sha=$sha"         | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "version=$version sha=$sha"
+
+      # Release 构建会自动触发 native/AmbientCore/build.cmd (见 csproj 的 BuildNativeCore 目标),
+      # 所以这里不需要单独装 MSVC —— windows-latest 自带 VS 与 C++ 工作负载。
+      - name: Publish (framework-dependent)
+        shell: pwsh
+        run: |
+          dotnet publish managed/AmbientLight/AmbientLight.csproj `
+            -c Release -r win-x64 `
+            -p:SelfContained=false `
+            -p:PublishSingleFile=false `
+            -p:PublishReadyToRun=false `
+            -o out/framework-dependent
+          if ($LASTEXITCODE -ne 0) { throw "framework-dependent 发布失败" }
+
+      - name: Publish (self-contained)
+        shell: pwsh
+        run: |
+          dotnet publish managed/AmbientLight/AmbientLight.csproj `
+            -c Release -r win-x64 `
+            -p:SelfContained=true `
+            -p:PublishSingleFile=false `
+            -p:PublishReadyToRun=false `
+            -o out/self-contained
+          if ($LASTEXITCODE -ne 0) { throw "self-contained 发布失败" }
+
+      # 原生核心是裸放在 exe 旁边的, 两种形态都必须有它 —— 缺了就在打包前直接失败,
+      # 不让"能启动但灯不亮"的包流到 release。
+      - name: Add native core
+        shell: pwsh
+        run: |
+          $nativeDll = "native/AmbientCore/bin/AmbientCore.dll"
+          if (-not (Test-Path $nativeDll)) { throw "原生核心没编译出来: $nativeDll" }
+          foreach ($dir in @("out/framework-dependent", "out/self-contained")) {
+            $dst = Join-Path $dir "AmbientCore.dll"
+            if (-not (Test-Path $dst)) { Copy-Item $nativeDll $dst -Force; Write-Host "补拷 $dst" }
+            if (-not (Test-Path $dst)) { throw "$dir 里没有 AmbientCore.dll" }
+          }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.meta.outputs.version }}"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $forms = @{
+            "self-contained"      = "out/self-contained"
+            "framework-dependent" = "out/framework-dependent"
+          }
+          foreach ($form in $forms.Keys) {
+            $stage = "dist/AmbientLight-$version-win-x64-$form"
+            New-Item -ItemType Directory -Force -Path $stage | Out-Null
+            Copy-Item "$($forms[$form])/*" $stage -Recurse -Force
+            Copy-Item LICENSE $stage -Force
+            Compress-Archive -Path $stage -DestinationPath "dist/AmbientLight-$version-win-x64-$form.zip" -Force
+          }
+          Get-ChildItem dist -Filter *.zip | Format-Table Name, Length
+
+      - name: Upload self-contained
+        uses: actions/upload-artifact@v4
+        with:
+          name: AmbientLight-${{ steps.meta.outputs.version }}-win-x64-self-contained
+          path: dist/*-self-contained.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload framework-dependent
+        uses: actions/upload-artifact@v4
+        with:
+          name: AmbientLight-${{ steps.meta.outputs.version }}-win-x64-framework-dependent
+          path: dist/*-framework-dependent.zip
+          if-no-files-found: error
+          retention-days: 14
