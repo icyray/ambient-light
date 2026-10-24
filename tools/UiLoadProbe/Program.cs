@@ -32,6 +32,20 @@ using LangDef = AmbientLight.Services.LangDef;
 Console.OutputEncoding = Encoding.UTF8;
 // `--dump-ring <输出.png>`: 只把 LedRingView 渲染成图片 (设计评审用), 不跑断言。
 // 无头宿主里 RenderTargetBitmap 可用 (只要先 Measure/Arrange) —— 这样改视觉之前能先看一眼。
+//
+// `--check-update [本地版本]`: 真连一次 GitHub 的 releases/latest 并打印比较结果
+// (发版后自检 / 排障用; 本地版本省略时取程序集版本, 传旧版本号可验证"有新版本"分支)。
+if (args.Length >= 1 && args[0] == "--check-update")
+{
+    string local = args.Length >= 2
+        ? args[1]
+        : typeof(AmbientLight.Views.SettingsPageAdvanced).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    var ur = await AmbientLight.Services.UpdateChecker.CheckAsync(local);
+    Console.WriteLine($"local={local} status={ur.Status} latest={ur.LatestVersion ?? "-"} " +
+                      $"url={ur.Url ?? "-"} detail={ur.Detail ?? "-"}");
+    return;
+}
+
 if (args.Length >= 2 && args[0] == "--dump-slider")
 {
     var ts = new Thread(() => DumpSlider(args[1]));
@@ -890,7 +904,7 @@ static void Run()
     // 空格 (静默失效 —— 对话框里两段话挤成一行)。实测与复现工具 .workbuddy/tmp/nl-probe。
     var multilineKeys = new[] { "Dev.List.NotFound", "App.Launch.TooMany", "App.Launch.Failed",
                                 "App.Crash.UiException", "App.Start.NotFound.Detail",
-                                "Adv.Update.Body", "Adv.Restore.Body", "Calib.NeedSession" };
+                                "Adv.Update.Available", "Adv.Restore.Body", "Calib.NeedSession" };
     var nlBad = multilineKeys.Where(k => !AmbientLight.Localization.Loc.T(k).Contains('\n')).ToList();
     Console.WriteLine((nlBad.Count == 0 ? "OK   " : "FAIL ") +
                       $"多行文案含真换行 {multilineKeys.Length} 条 (&#10; 配 xml:space=preserve): " +
@@ -2771,6 +2785,27 @@ static void Run()
     Console.WriteLine((hintHiddenWhenEmpty && hintHiddenWhenBlank ? "OK   " : "FAIL ") +
                       $"SetHint(\"\") / 全空白 → 收起 = {hintHiddenWhenEmpty && hintHiddenWhenBlank}");
     Console.WriteLine((hintShownWhenSet ? "OK   " : "FAIL ") + $"SetHint(\"60灯·4边\") → 显示 = {hintShownWhenSet}");
+
+    Console.WriteLine();
+    Console.WriteLine("---- 检查更新: 版本解析与比较 (纯函数) ----");
+    static bool Parsed(string text, int a, int b, int c) =>
+        AmbientLight.Services.UpdateChecker.TryParse(text, out var v) && v == new Version(a, b, c);
+    static void Ver(string desc, bool ok) => Console.WriteLine((ok ? "OK   " : "FAIL ") + desc);
+
+    Ver("解析 v0.5.5 = 0.5.5", Parsed("v0.5.5", 0, 5, 5));
+    Ver("解析 0.6 = 0.6.0 (缺段补零)", Parsed("0.6", 0, 6, 0));
+    Ver("解析 0.5.5-rc1 = 0.5.5 (忽略后缀)", Parsed("0.5.5-rc1", 0, 5, 5));
+    Ver("解析 latest 失败", !AmbientLight.Services.UpdateChecker.TryParse("latest", out _));
+    Ver("解析空白串失败", !AmbientLight.Services.UpdateChecker.TryParse("  ", out _));
+
+    Ver("0.5.6 > 0.5.5 → 有新版", AmbientLight.Services.UpdateChecker.IsNewer("v0.5.6", "0.5.5"));
+    Ver("0.5.5 = 0.5.5 → 已最新", !AmbientLight.Services.UpdateChecker.IsNewer("v0.5.5", "0.5.5"));
+    Ver("0.5.10 > 0.5.9 → 按数字比而非字符串", AmbientLight.Services.UpdateChecker.IsNewer("0.5.10", "0.5.9"));
+    Ver("0.6 > 0.5.99 → 有新版", AmbientLight.Services.UpdateChecker.IsNewer("0.6", "0.5.99"));
+    Ver("0.5.4 < 0.5.5 → 无新版", !AmbientLight.Services.UpdateChecker.IsNewer("0.5.4", "0.5.5"));
+    Ver("远端比本地旧时不提示 (0.5.5 vs 1.0.0)", !AmbientLight.Services.UpdateChecker.IsNewer("0.5.5", "1.0.0"));
+    Ver("Releases 地址是 https + github",
+        AmbientLight.Services.UpdateChecker.ReleasesUrl.StartsWith("https://github.com/", StringComparison.Ordinal));
 
     app.Shutdown();
 }

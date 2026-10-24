@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using AmbientLight.Interop;
 using AmbientLight.Localization;
 using AmbientLight.Services;
@@ -304,14 +305,80 @@ public partial class SettingsPageAdvanced : Page
     }
 
     // ---- 版本更新 -------------------------------------------------
-    // 现状: 软件还没发布到 GitHub, 这里先把 UI 与对话框通道跑通。
-    // 接入点 (发布后): GET https://api.github.com/repos/<owner>/<repo>/releases/latest
-    //   → 取 JSON 的 tag_name, 与 CurrentVersion 做版本比较;
-    //   有新版 → 同一对话框里给出新版号 + Release 页面链接; 无新版 → "已是最新版本"。
+    // 手动检查: 只比版本号, 有新版本给一个 Releases 页面链接; 不下载、不静默更新。
     private async void OnCheckUpdate(object sender, RoutedEventArgs e)
     {
-        await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Update.Title"),
-            Loc.F("Adv.Update.Body", CurrentVersion), closeText: Loc.T("Common.GotIt"));
+        // SetCurrentValue 而不是赋 Content: 后者会把 XAML 里的 DynamicResource 顶掉,
+        // 之后切语言这个按钮就不再跟着变了。结束时用 SetResourceReference 接回资源。
+        UpdateButton.IsEnabled = false;
+        UpdateButton.SetCurrentValue(System.Windows.Controls.ContentControl.ContentProperty,
+            Loc.T("Adv.Update.Checking"));
+        try
+        {
+            var r = await UpdateChecker.CheckAsync(CurrentVersion);
+            switch (r.Status)
+            {
+                case UpdateStatus.Newer:
+                    await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Update.Title"),
+                        BuildUpdateContent(r), closeText: Loc.T("Common.GotIt"));
+                    break;
+                case UpdateStatus.UpToDate:
+                    await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Update.Title"),
+                        Loc.F("Adv.Update.Latest", CurrentVersion), closeText: Loc.T("Common.GotIt"));
+                    break;
+                default:
+                    await Controls.AppDialogs.ShowAsync(Loc.T("Adv.Update.Title"),
+                        Loc.T("Adv.Update.Failed"), closeText: Loc.T("Common.GotIt"));
+                    break;
+            }
+        }
+        finally
+        {
+            UpdateButton.SetResourceReference(System.Windows.Controls.ContentControl.ContentProperty,
+                "Adv.Update.Check");
+            UpdateButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>有新版本时的正文: 一段说明 + 可点的 Releases 链接。</summary>
+    private static FrameworkElement BuildUpdateContent(UpdateResult r)
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = Loc.F("Adv.Update.Available", r.LatestVersion ?? "?", CurrentVersion),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10),
+        });
+
+        var link = new Hyperlink(new Run(Loc.T("Adv.Update.Open")))
+        {
+            NavigateUri = new Uri(r.Url ?? UpdateChecker.ReleasesUrl),
+        };
+        // 链接用强调色 (与模式卡选中色同一个刷子), 深浅主题下都能读
+        if (Application.Current?.TryFindResource("AccentFillColorDefaultBrush")
+            is System.Windows.Media.Brush accent) link.Foreground = accent;
+        link.RequestNavigate += (_, args) =>
+        {
+            OpenInBrowser(args.Uri);
+            args.Handled = true;            // 不置 Handled 会继续去找 NavigationService
+        };
+        var line = new System.Windows.Controls.TextBlock();
+        line.Inlines.Add(link);
+        panel.Children.Add(line);
+        return panel;
+    }
+
+    private static void OpenInBrowser(Uri uri)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch
+        {
+            // 没有默认浏览器这类极端情况: 静默失败, 用户可以自己复制链接
+        }
     }
 
     // ---- 恢复默认配置: 藏在「配置目录」折叠内。破坏性操作, 先确认再动手 ----

@@ -223,7 +223,11 @@
     <sys:String x:Key="Adv.Port.Auto">Auto-detect</sys:String>
     <sys:String x:Key="Adv.Port.NotPresent">(not present)</sys:String>
     <sys:String x:Key="Adv.Update.Title">Version update</sys:String>
-    <sys:String x:Key="Adv.Update.Body" xml:space="preserve">Current version {0}.&#10;&#10;This app has not been released yet, so updates cannot be checked.</sys:String>
+    <sys:String x:Key="Adv.Update.Checking">Checking…</sys:String>
+    <sys:String x:Key="Adv.Update.Latest">You are on the latest version ({0}).</sys:String>
+    <sys:String x:Key="Adv.Update.Available" xml:space="preserve">Version {0} is available.&#10;&#10;You are on {1}.</sys:String>
+    <sys:String x:Key="Adv.Update.Failed">Couldn't check for updates. Check your network and try again.</sys:String>
+    <sys:String x:Key="Adv.Update.Open">Open the releases page</sys:String>
     <sys:String x:Key="Adv.Restore.Title">Restore default settings</sys:String>
     <sys:String x:Key="Adv.Restore.Body" xml:space="preserve">All settings will be reset to factory defaults and cannot be undone.&#10;&#10;Are you sure?</sys:String>
     <sys:String x:Key="Adv.Restore.Confirm">Restore defaults</sys:String>

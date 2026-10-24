@@ -139,12 +139,13 @@
         <!-- 关于 -->
         <TextBlock Style="{StaticResource GroupLabel}" Text="{DynamicResource Adv.Group.About}" />
 
-        <!-- 版本更新: UI 先就位, 检查逻辑待软件发布到 GitHub Release 后接入
-             (拉 /repos/<owner>/<repo>/releases/latest 的 tag_name 与当前版本比对)。
+        <!-- 版本更新: 手动检查 —— 拉 releases/latest 的 tag_name 与当前版本比大小,
+             有新版本只给一个 Release 页面链接, 不下载、不静默更新 (便携软件)。
              说明文案已去掉, 版本号看页脚那一行。 -->
         <controls:SettingRow x:Name="UpdateRow" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}"
                              Title="{DynamicResource Adv.Update.Title}">
-            <ui:Button Content="{DynamicResource Adv.Update.Check}" Appearance="Secondary" VerticalAlignment="Center"
+            <ui:Button x:Name="UpdateButton" Content="{DynamicResource Adv.Update.Check}"
+                       Appearance="Secondary" VerticalAlignment="Center"
                        Click="OnCheckUpdate" />
         </controls:SettingRow>
 

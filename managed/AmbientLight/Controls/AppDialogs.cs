@@ -16,7 +16,16 @@ public static class AppDialogs
     /// <summary>在主窗口的 ContentDialogHost 上弹一个 ContentDialog。
     /// 返回 true = 用户点了主按钮 (需要确认的场景才给主按钮)。
     /// 拿不到主窗/宿主时 (无窗口宿主, 例如探针里) 直接返回 false, 不做任何动作。</summary>
-    public static async Task<bool> ShowAsync(string title, string content,
+    public static Task<bool> ShowAsync(string title, string content,
+        string? primaryText = null, bool primaryDanger = false, string? closeText = null)
+        => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText);
+
+    /// <summary>同上, 但正文是控件 (例如带超链接的一段文字)。</summary>
+    public static Task<bool> ShowAsync(string title, FrameworkElement content,
+        string? primaryText = null, bool primaryDanger = false, string? closeText = null)
+        => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText);
+
+    private static async Task<bool> ShowCoreAsync(string title, object content,
         string? primaryText = null, bool primaryDanger = false, string? closeText = null)
     {
         var app = Application.Current;
@@ -24,7 +33,7 @@ public static class AppDialogs
         // 可能从托盘菜单 / 非 UI 线程进来 → 先切回 UI 线程
         if (!app.Dispatcher.CheckAccess())
             return await app.Dispatcher.InvokeAsync(
-                () => ShowAsync(title, content, primaryText, primaryDanger, closeText)).Task.Unwrap();
+                () => ShowCoreAsync(title, content, primaryText, primaryDanger, closeText)).Task.Unwrap();
 
         if (App.Instance?.MainWin is not { } win) return false;
         if (ContentDialogHost.GetForWindow(win) is not { } host) return false;
