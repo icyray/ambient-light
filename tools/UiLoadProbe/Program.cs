@@ -638,7 +638,7 @@ static void Run()
     Console.WriteLine((restoreInExpander ? "OK   " : "FAIL ") +
                       $"「恢复默认配置」按钮在 CardExpander 折叠内 = {restoreInExpander}");
 
-    // ================= M5.1 主页构件重设计 (docs/M5.1_HOME_REDESIGN_PLAN.md §2~§7) =================
+    // ================= 主页构件与观感约束 (docs/PROJECT.md §7.6) =================
     // 无头宿主里 Loaded 不触发, 所以先让页面自己做一次"不依赖 App/核心"的界面装配,
     // 才有真实的磁贴/指标条结构可断言。
     home.BuildForProbe();

@@ -2,7 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:AmbientLight.Controls">
     <!-- ============================================================================
-         Slider 皮肤 (本地魔改) —— 完整说明与**升级迁移指南**见 docs/SLIDER_TEMPLATE.md
+         Slider 皮肤 (本地魔改) —— 完整说明与**升级迁移指南**见 docs/PROJECT.md §7.4
          ============================================================================
          来源: WPF-UI **4.3.0** `src/Wpf.Ui/Controls/Slider/Slider.xaml` 的 `UiHorizontalSlider`。
          为什么自己抄一份: 上游缺两样, 而且**从外部改不了** ——

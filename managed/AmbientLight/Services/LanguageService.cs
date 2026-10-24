@@ -1,4 +1,4 @@
-// LanguageService.cs — M5.3 i18n: 语言切换 (设计见 docs/M5.3_I18N_SELECTION.md §4)。
+// LanguageService.cs — M5.3 i18n: 语言切换 (契约见 docs/PROJECT.md §7.3)。
 //
 // ⚠️ **加一种语言 = 加枚举成员 + 表里加一行 + 放一个 Localization/Strings.<key>.xaml**
 //    (枚举那一步不能省 —— 它给调用点编译期安全; 但探针有断言"枚举每个非 System 成员都有表行",

@@ -3,7 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:AmbientLight.Controls">
-    <!-- 主页结构 (M5.1 主页构件重设计, 依据 docs/M5.1_HOME_REDESIGN_PLAN.md §2~§7):
+    <!-- 主页结构 (依据 docs/PROJECT.md §7.6「主页」):
          §4 banner 底边辉光 (LightsLayer 内的 GlowBand: Blur + 上透下实 OpacityMask, 圆角自持);
          §2 固件特效改图标磁贴网格 (FxTileTemplate), 折叠头右侧「当前 XX」胶囊;
          §3 纯色拾色器改 HSV (H/S 两根, V = 主页「亮度」行; 删 RGB 滑块);

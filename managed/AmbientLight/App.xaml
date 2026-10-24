@@ -19,7 +19,7 @@
                 <ui:ControlsDictionary />
                 <!-- ⚠️ 必须排在 `ui:ControlsDictionary` **之后**: 这是本地魔改的滑块皮肤
                      (进度填充 + 禁用态, 上游 4.3.0 都没有), 靠"隐式样式后加载者优先"覆盖它。
-                     说明与迁移指南见 Styles/SliderStyle.xaml 头部 + docs/SLIDER_TEMPLATE.md -->
+                     说明与迁移指南见 Styles/SliderStyle.xaml 头部 + docs/PROJECT.md §7.4 -->
                 <ResourceDictionary Source="Styles/SliderStyle.xaml" />
                 <!-- M5.3 i18n: 文案字典 (唯一文案源; C# 走 Loc.T/Loc.F, XAML 走 {DynamicResource}).
                      这里只合并**中文**那本 —— 语言切换 = Services/LanguageService 运行时把这一项

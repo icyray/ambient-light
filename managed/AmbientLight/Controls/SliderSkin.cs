@@ -1,4 +1,4 @@
-// SliderSkin.cs — 滑块皮肤的**页面侧声明** (配套 Styles/SliderStyle.xaml, 见 docs/SLIDER_TEMPLATE.md)
+// SliderSkin.cs — 滑块皮肤的**页面侧声明** (配套 Styles/SliderStyle.xaml, 见 docs/PROJECT.md §7.4)
 //
 // 为什么需要这两个附加属性: 模板要按"这个滑块该画哪种填充"分流, 而 WPF-UI 的滑块没有这个开关。
 // 三种模式与各自的理由 (四种画法只有一种: WPF 官方的 `PART_SelectionRange`):
@@ -13,7 +13,7 @@
 // ⚠️ 第四轮的重要修正: `Fill` 现在**纯声明式** —— 只在 SliderStyle.xaml 的 DataTrigger 里被读,
 //    没有任何"C# 去模板里改元素"的代码了。前三轮用 `ApplyFill()` 代码钩子 (Loaded / LayoutUpdated /
 //    IsEnabledChanged) 去藏那条填充, 实测在真实页面里根本不生效 (折叠容器里模板都没应用; 主题切换
-//    重建重复按钮还会把状态丢掉) → 用户看到的"色带轨道仍被盖"。改法见 docs/SLIDER_TEMPLATE.md §7。
+//    重建重复按钮还会把状态丢掉) → 用户看到的"色带轨道仍被盖"。改法见 docs/PROJECT.md §7.4。
 using System;
 using System.Globalization;
 using System.Windows;

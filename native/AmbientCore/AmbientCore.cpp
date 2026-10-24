@@ -53,7 +53,7 @@ constexpr uint32_t kVersion = (1u << 16) | (6u << 8) | 0u;   // 1.6.0 (ACConfig 
 
 // ================= 淡入淡出 / 平滑参数 (要微调就改这一块) =================
 // 观感含义: 淡入 = 灯"亮起来"的过程, 淡出 = 灯"灭下去"的过程。调大 = 更慢更柔, 调小 = 更干脆。
-// 详见 docs/FADE_PLAN.md §4 (含"调大调小会怎样"的对照表)。
+// 详见 docs/PROJECT.md §6 (输出包络与追光平滑)。
 constexpr double kFadeInMs        = 400.0;   // 开灯: 0 → 目标亮度
 constexpr double kFadeOutMs       = 300.0;   // 关灯: 当前 → 0 (会计入 Stop 的等待时间)
 constexpr double kSuspendFadeMs   = 150.0;   // 系统睡眠/待机前: 更短! 进程随时可能被冻结,
@@ -584,7 +584,7 @@ void CoreLoopInner(Sess* g)
         memcpy(g->st.ledRgb, f.data() + 3, (size_t)n);
     };
 
-    // ==== 输出包络 + 亮度限幅 (S1/S2; 见 docs/FADE_PLAN.md §2) ====
+    // ==== 输出包络 + 亮度限幅 (S1/S2; 见 docs/PROJECT.md §6) ====
     // 只缩放"写出去的字节", **绝不写回配置** —— 配置里的 brightness 永远是用户意图。
     Envelope env;
     env.Snap(0.0);                                    // 会话起步 = 全黑, 握手成功后淡入
@@ -599,7 +599,7 @@ void CoreLoopInner(Sess* g)
     ULONGLONG tickLoop = GetTickCount64();            // S0 唤醒自愈用 (含睡眠时间的墙钟)
 
     /// 把一整帧/一条命令**写完**才返回 true; 写超时(设备一时没收)不判掉线, 只补写剩余部分。
-    /// 为什么必须这么写 (2026-10-09 定案, 见 docs/PROGRESS.md):
+    /// 为什么必须这么写 (见 docs/PROJECT.md §5 串口不变式):
     ///   · 固件**按定长 `serial::kFrameLen`(543) 给帧定界** ⇒ 半帧被丢掉 = 它把下一帧的帧头当成这帧的
     ///     尾巴, 之后**永久错位** (只有握手能复位) ✗ —— 所以"写不进去就丢帧"是禁止的, 必须补写;
     ///   · 串口写超时只有 100ms (`ConfigurePort` 的 WriteTotalTimeoutConstant), 而**从 MCU 特效切回
@@ -926,7 +926,7 @@ void CoreLoopInner(Sess* g)
             if (nc.modeIndex != applied.modeIndex) {
                 ACLOGI("config: mode %d -> %d", applied.modeIndex, nc.modeIndex);
                 InvalidateChaseSmooth();             // 切模式: 内容完全不同了, 平滑状态清零
-                // ---- S3: 切模式淡入淡出 (docs/FADE_PLAN.md §3.3 / §3.4) ----
+                // ---- S3: 切模式淡入淡出 (docs/PROJECT.md §6) ----
                 // 内容模式 = 追光(0) / 拾音(1) / 纯色(11) —— 亮度语义连续, 只是内容变;
                 // MCU 特效的帧由固件渲染, 我们只能"进出"两端淡 (淡的是**我们自己**的颜色帧) ✓
                 // ⚠️ 同模式内改参数 (采样深度/边数/灯数…) **不淡** —— 用户正在看"改了会怎样",

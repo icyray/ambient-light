@@ -1,4 +1,4 @@
-// ThemeService.cs — M5.2 浅色/深色主题 (设计契约: docs/M5.2_THEME_PLAN.md)
+// ThemeService.cs — M5.2 浅色/深色主题 (契约见 docs/PROJECT.md §7.2)
 //
 // 机制要点 (全部按 WPF-UI 4.3.0 tag 源码查证, 不是凭记忆):
 //   1) ApplicationThemeManager.Apply(theme, backdrop, updateAccent) 内部是用

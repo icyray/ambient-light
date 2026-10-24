@@ -1,5 +1,5 @@
-// AmbientCore.h — 公共 C ABI (v1.5, x64 cdecl, 未修饰导出)
-// 合同来源: docs/AmbientCore_API.md。规则:
+// AmbientCore.h — 公共 C ABI (v1.6, x64 cdecl, 未修饰导出)
+// 合同来源: docs/AmbientCore_API.md (规范定义以**本头文件**为准)。规则:
 //   - 结构体以 structSize 开头, 新增字段只能追加在末尾
 //     (v1.1 增补: ACConfig.colorfix/sfloor; v1.2 增补: ACStatus.ledRgb;
 //      v1.3 增补: ACConfig.audio* 7 字段, ACStatus.audioLevel/audioOk/audioDev;
