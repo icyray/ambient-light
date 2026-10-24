@@ -88,15 +88,22 @@ ambient-light/
 # 全量构建（原生 DLL 会在托管 Build 前自动重建，源码未变则跳过）
 dotnet build AmbientLight.slnx -c Debug
 
-# 发布（便携目录）
-dotnet publish managed/AmbientLight/AmbientLight.csproj -c Release -r win-x64
+# 发布 A：self-contained（自带运行时，解压即用）
+dotnet publish managed/AmbientLight/AmbientLight.csproj -c Release -r win-x64 \
+  -p:SelfContained=true -p:PublishSingleFile=false -o out/self-contained
+
+# 发布 B：framework-dependent（目标机器需先装 .NET 10 Desktop Runtime）
+dotnet publish managed/AmbientLight/AmbientLight.csproj -c Release -r win-x64 \
+  -p:SelfContained=false -p:PublishSingleFile=false -o out/framework-dependent
 ```
 
 - 原生部分由 `native/AmbientCore/build.cmd` 独立编译（`vswhere` 定位 MSVC，版本无关），也可单独执行。
 - 托管工程用两个 MSBuild Target 串起来：`BuildNativeCore`（源码变化才重编）+ `CopyNativeCore`
   （把 DLL 复制到 exe 旁）。
-- 发布形态：`AmbientLight.exe` + **`AmbientCore.dll` 裸放旁边** + `config/`；
-  `SelfContained=true`、`PublishSingleFile=false`、不裁剪（WPF 不支持 `TrimMode=full`）。
+- 两种形态的产物都是 `AmbientLight.exe` + **`AmbientCore.dll` 裸放旁边**（`config/` 运行时生成）；
+  均不做单文件、不裁剪（WPF 不支持 `TrimMode=full`）。
+- CI：`.github/workflows/build.yml` 一次构建两种形态并上传 artifact；`publish.yml` 手动填 tag /
+  分支 / Release Note 后复用 build 并创建 Release（附两个 zip 与 `SHA256SUMS.txt`）。
 
 ### 配置与日志
 
