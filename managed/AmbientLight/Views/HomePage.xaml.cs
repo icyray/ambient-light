@@ -142,7 +142,7 @@ public partial class HomePage : Page
         _ = RefreshDevicesAsync();
         _ = SettleDeviceRowsAsync();        // 应用刚启动时 StartAllAsync 可能还在飞, 落地后要再刷一次
         // 指标卡首帧就位 (默认收起; 已自动连上时立刻展开), 免得先闪一下占位行
-        AnimatedVisibility.SetExpanded(MetricsCard, App.Instance.CoreRunning);
+        AnimatedVisibility.SetExpanded(MetricsCard, App.Instance?.CoreRunning == true);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)

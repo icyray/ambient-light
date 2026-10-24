@@ -101,7 +101,7 @@ public partial class HomePage : Page
     private void UpdateRing(ACStatus st)
     {
         var dev = ConfigStore.Device;
-        long sig = dev.ModeIndex | ((long)dev.LedCount << 5) | ((long)dev.Sides << 15)
+        long sig = (long)dev.ModeIndex | ((long)dev.LedCount << 5) | ((long)dev.Sides << 15)
                 | ((long)dev.Direction << 18) | ((long)st.state << 20)
                 | (((long)dev.LedRotate + 256) << 24);
         if (sig != _lastRingSig)

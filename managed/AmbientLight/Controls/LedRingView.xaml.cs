@@ -240,7 +240,7 @@ public partial class LedRingView : UserControl
                           int screenW = 0, int screenH = 0)
     {
         double aspect = screenW > 0 && screenH > 0 ? (double)screenW / screenH : 16.0 / 9.0;
-        long sig = ledCount | ((long)sides << 12) | ((long)direction << 16)
+        long sig = (long)ledCount | ((long)sides << 12) | ((long)direction << 16)
                  | (((long)Math.Clamp(rotate, -255, 255) + 256) << 18)
                  | ((long)Math.Round(aspect * 100) << 30);
         if (sig == _signature) return;
@@ -374,7 +374,7 @@ public partial class LedRingView : UserControl
     /// 空边跳过; 仅在 Configure 之后有意义。</summary>
     public string DescribeIndices()
     {
-        static string Range(List<Ellipse> strip, string name)
+        static string? Range(List<Ellipse> strip, string name)
         {
             if (strip.Count == 0) return null;
             var idx = strip.Select(e => (int)e.Tag).ToList();
